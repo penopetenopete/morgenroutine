@@ -3,11 +3,7 @@
  "short_name": "Routine",
  "start_url": "./",
  "scope": "./",
- "display": "fullscreen",
- "display_override": [
-  "fullscreen",
-  "standalone"
- ],
+ "display": "standalone",
  "orientation": "portrait",
  "background_color": "#0B0F14",
  "theme_color": "#0B0F14",
