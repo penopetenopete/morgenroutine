@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Morgenroutine</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0B0F14">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Test-Player für die Morgenroutine. Dark-only by design (App-Look). */
+:root{
+  --bg:#0B0F14; --card:#121922; --line:#223040; --fg:#E6EDF3; --muted:#8D9BAB; --accent:#00E5FF; --rest:#FFB547; --ok:#5BE38C;
+  --f-display:"Chakra Petch","Rajdhani","Segoe UI",system-ui,sans-serif;
+  --f-body:"Barlow","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg)}
+body{color:var(--fg);font-family:var(--f-body);margin:0;font-size:16px;line-height:1.45}
+button{font:inherit;color:inherit}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:16px 40px;display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--f-display);font-size:1.7rem;margin:0;line-height:1.15;text-wrap:balance}
+h2{font-family:var(--f-display);font-size:1.1rem;margin:0}
+.small{font-size:.85rem;color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.btn{min-height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-family:var(--f-display);font-weight:600;letter-spacing:.04em;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#03141A}
+.btn.big{min-height:60px;font-size:1.15rem;width:100%}
+.btn.ghost{background:transparent}
+.btn:focus-visible,.row:focus-visible,.ic:focus-visible,.sbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Übersicht */
+.list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
+.row{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px;padding:10px 14px;min-height:58px;border:0;border-top:1px solid var(--line);background:none;text-align:left;cursor:pointer;width:100%}
+.row:first-child{border-top:0}
+.row .n{font-family:var(--f-display);color:var(--muted);font-size:.9rem}
+.row .nm{font-weight:600;line-height:1.2}
+.row .val{font-family:var(--f-display);font-size:.85rem;text-align:right;color:var(--muted);line-height:1.2}
+.row .val.changed{color:var(--accent)}
+.row .def{display:block;font-size:.72rem;color:var(--muted);font-family:var(--f-body)}
+.row.off{opacity:.42}
+.row.off .nm{text-decoration:line-through}
+.sg{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:44px}
+.stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg);flex:none}
+.stepper button{width:46px;min-height:44px;font-size:1.25rem;color:var(--accent);background:none;border:0;cursor:pointer}
+.stepper span{min-width:62px;text-align:center;font-family:var(--f-display)}
+.defline{font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:8px}
+.defline button{border:1px solid var(--line);background:none;border-radius:8px;min-height:32px;padding:0 10px;color:var(--accent);cursor:pointer;font-size:.78rem}
+.seg{display:flex;gap:6px}
+.sbtn{flex:1;min-height:42px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-family:var(--f-display);font-size:.85rem;cursor:pointer}
+.sbtn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.08)}
+.toggle{display:flex;justify-content:space-between;align-items:center;min-height:44px;gap:10px}
+.toggle input{width:22px;height:22px;accent-color:var(--accent)}
+details summary{cursor:pointer;font-family:var(--f-display);min-height:32px;display:flex;align-items:center}
+
+/* Player */
+.player{position:fixed;inset:0;background:var(--bg);overflow-y:auto;z-index:5}
+.pwrap{max-width:560px;margin:0 auto;padding:12px 16px 24px;display:flex;flex-direction:column;gap:10px;min-height:100%}
+.ptop{display:flex;align-items:center;gap:10px}
+.ic{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);cursor:pointer;display:grid;place-items:center;flex:none}
+.ic svg{width:20px;height:20px}
+.ptitle{flex:1;min-width:0}
+.ptitle .nm{font-family:var(--f-display);font-weight:700;font-size:1.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{height:4px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.stage{position:relative;width:min(100%,50vh);aspect-ratio:1/1;margin:0 auto;border-radius:18px;overflow:hidden;border:1px solid var(--line);background:radial-gradient(circle at 50% 45%,#122030,var(--bg) 72%);touch-action:none;cursor:grab}
+.stage canvas{display:block;width:100%;height:100%;transition:transform .45s cubic-bezier(.6,0,.3,1)}
+.stage.trans{border-color:var(--rest)}
+.hud{position:absolute;left:10px;right:10px;top:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(11,15,20,.75);font-family:var(--f-display);font-size:.8rem;letter-spacing:.04em;color:var(--muted)}
+.chip.on{border-color:var(--accent);color:var(--accent)}
+.chip.warn{border-color:var(--rest);color:var(--rest)}
+.hint{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-family:var(--f-display);font-size:.85rem;color:var(--accent);pointer-events:none;text-shadow:0 0 10px #000}
+.err{color:var(--rest)}
+.readout{text-align:center;display:flex;flex-direction:column;gap:2px;align-items:center}
+.phase{font-family:var(--f-display);font-size:1.05rem;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.phase.trans{color:var(--rest)}
+.clock{font-family:var(--f-display);font-weight:700;font-size:clamp(2.6rem,8vh,4.2rem);line-height:1;font-variant-numeric:tabular-nums}
+.target{border:1px dashed var(--line);background:none;border-radius:999px;padding:4px 12px;min-height:34px;color:var(--muted);font-size:.85rem;cursor:pointer}
+.target b{color:var(--fg);font-weight:600}
+.cue{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:1.05rem;line-height:1.45}
+.cue li{padding-left:22px;position:relative;flex:none}
+.cue li::before{content:"";position:absolute;left:3px;top:.55em;width:8px;height:8px;border:1.5px solid var(--accent);transform:rotate(45deg)}
+.pctrl{display:grid;grid-template-columns:56px 1fr 56px;gap:10px;align-items:center;margin-top:auto;flex:none}
+/* Player passt immer auf einen Bildschirm: Figur nimmt den Rest, Tipps klappen aus und schieben die Figur kleiner */
+.pwrap.fit{height:100vh;height:100dvh;min-height:0;overflow:hidden;padding-bottom:max(14px,env(safe-area-inset-bottom));gap:8px}
+.pwrap.fit>*{flex:none}
+.stagebox{flex:1 1 0!important;min-height:90px;display:flex;align-items:center;justify-content:center}
+.stagebox .stage{width:300px;height:300px;aspect-ratio:auto;margin:0}
+.tips{border:1px solid var(--line);border-radius:14px;background:var(--card);cursor:pointer;text-align:left;padding:10px 40px 10px 14px;position:relative;width:100%}
+.tips .chev{position:absolute;right:12px;top:12px;width:18px;height:18px;color:var(--accent);transition:transform .3s}
+.tips.open .chev{transform:rotate(180deg)}
+.tips .cue{max-height:1.55em;overflow:hidden;transition:max-height .35s ease;margin:0}
+.tips.open .cue{max-height:42vh;overflow-y:auto}
+.tips:not(.open) .cue li:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ptop .ic.off{color:var(--muted)}
+.pctrl .ic{width:56px;height:56px}
+.done-btn{background:var(--ok)!important;border-color:var(--ok)!important;color:#05200F!important}
+.trans-btn{background:var(--rest)!important;border-color:var(--rest)!important;color:#241500!important}
+.subctrl{display:flex;gap:8px;justify-content:center}
+.subctrl .btn{min-height:40px;font-size:.85rem}
+
+/* Sheet */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:560px;background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;padding:16px 16px 24px;display:flex;flex-direction:column;gap:12px;max-height:88vh;overflow-y:auto}
+.res{display:flex;flex-direction:column;gap:6px}
+.res div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:6px 0}
+.res div span:last-child{font-family:var(--f-display);color:var(--muted)}
+.big-ok{font-family:var(--f-display);font-size:3rem;color:var(--ok);line-height:1}
+</style>
+</head>
+<body>
+<!-- ÜBERSICHT -->
+<div class="wrap" id="home">
+  <div>
+    <div class="eyebrow">Testversion · Morgenroutine</div>
+    <h1>Daily Mobility Flow</h1>
+    <div class="small" id="sum"></div>
+  </div>
+  <button class="btn primary big" id="start">Routine starten</button>
+  <div class="list" id="list"></div>
+  <div class="small">Tippe eine Übung an, um Zeit oder Wiederholungen zu ändern. Geänderte Werte bleiben gespeichert und zeigen den Standard aus dem Video daneben.</div>
+  <div class="card">
+    <div class="eyebrow">Ablauf</div>
+    <div id="globals"></div>
+  </div>
+  <div class="card">
+    <div class="eyebrow">Darstellung</div>
+    <div class="seg" role="group" aria-label="Schattierung">
+      <button class="sbtn" data-shade="2">Gegenlicht</button>
+      <button class="sbtn" data-shade="1">Comic</button>
+      <button class="sbtn" data-shade="0">Flach</button>
+    </div>
+    <label class="toggle"><span>Töne</span><input type="checkbox" id="snd"></label>
+    <label class="toggle"><span>Vibration</span><input type="checkbox" id="vib"></label>
+  </div>
+  <div class="small" id="last"></div>
+</div>
+
+<!-- PLAYER -->
+<div class="player" id="player" hidden>
+  <div class="pwrap fit">
+    <div class="ptop">
+      <button class="ic" id="close" aria-label="Routine beenden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="ptitle"><div class="eyebrow" id="pEyebrow"></div><div class="nm" id="pName"></div></div>
+      <button class="ic" id="mute" aria-label="Töne aus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" id="muteIco"></svg></button>
+      <button class="ic" id="pause" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor" id="pauseIco"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+    </div>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="stagebox" id="stagebox"><div class="stage" id="stage">
+      <div class="hud"><span class="chip on" id="sideChip">Seite 1</span><span class="chip" id="repChip"></span></div>
+      <div class="hint" id="hint"></div>
+    </div></div>
+    <div class="readout">
+      <div class="phase" id="phase"></div>
+      <div class="clock num" id="clock">0:00</div>
+      <button class="target" id="target"></button>
+    </div>
+    <button class="tips" id="tips" aria-expanded="false"><ul class="cue" id="cue"></ul><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 15l6-6 6 6"/></svg></button>
+    <div class="pctrl">
+      <button class="ic" id="prev" aria-label="Zurück"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button class="btn big" id="main"></button>
+      <button class="ic" id="next" aria-label="Überspringen"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<!-- Ende -->
+<div class="player" id="done" hidden>
+  <div class="pwrap">
+    <div class="big-ok">✓</div>
+    <h1>Morgenroutine erledigt</h1>
+    <div class="small" id="doneSum"></div>
+    <div class="res" id="doneList"></div>
+    <button class="btn primary big" id="doneOk">Fertig</button>
+  </div>
+</div>
+
+<!-- Editor -->
+<div class="scrim" id="scrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="edTitle">
+    <div><div class="eyebrow" id="edEyebrow"></div><h2 id="edTitle"></h2></div>
+    <div id="edFields" style="display:flex;flex-direction:column;gap:12px"></div>
+    <label class="toggle" id="edOnWrap"><span>In der Routine</span><input type="checkbox" id="edOn"></label>
+    <button class="btn primary big" id="edOk">Fertig</button>
+  </div>
+</div>
+
+<script src="three.min.js"></script>
+<script>
+(function(){
+
+if(!window.THREE){document.getElementById("hint").innerHTML='<span class="err">3D konnte nicht geladen werden.</span>';return}
+const T=THREE, V=(x,y,z)=>new T.Vector3(x,y,z), D=(x,y,z)=>V(x,y,z).normalize();
+const stage=document.getElementById("stage");
+const renderer=new T.WebGLRenderer({antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+stage.prepend(renderer.domElement);
+const scene=new T.Scene();
+const cam=new T.PerspectiveCamera(35,1,0.05,50);
+
+/* ---------- Materialien: dunkle Füllung (3 Schattierungen) + Cyan-Kontur ---------- */
+const fillMat=new T.ShaderMaterial({uniforms:{uMode:{value:2}},
+  vertexShader:`varying vec3 vN;varying vec3 vV;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);vN=normalize(normalMatrix*normal);vV=-mv.xyz;gl_Position=projectionMatrix*mv;}`,
+  fragmentShader:`uniform int uMode;varying vec3 vN;varying vec3 vV;void main(){
+    vec3 n=normalize(vN),v=normalize(vV),l=normalize(vec3(.4,.8,.6));float d=max(dot(n,l),0.);vec3 c;
+    if(uMode==0){c=vec3(.063,.094,.125);}
+    else if(uMode==1){float b=d<.25?0.:d<.65?.5:1.;c=mix(vec3(.05,.07,.09),vec3(.17,.2,.24),b);}
+    else{float f=pow(1.-max(dot(n,v),0.),3.);c=vec3(.05,.065,.085)+vec3(0.,.55,.65)*f*.55;}
+    gl_FragColor=vec4(c,1.);}`});
+const outlineMat=new T.ShaderMaterial({side:T.BackSide,
+  vertexShader:`void main(){vec4 mv=modelViewMatrix*vec4(position,1.);vec3 n=normalize(normalMatrix*normal);mv.xyz+=n*.009;gl_Position=projectionMatrix*mv;}`,
+  fragmentShader:`void main(){gl_FragColor=vec4(0.,.9,1.,1.);}`});
+
+/* Boden */
+const grid=new T.PolarGridHelper(1.2,12,5,48,0x00E5FF,0x00E5FF);
+grid.material.transparent=true;grid.material.opacity=.12;scene.add(grid);
+const shadow=new T.Mesh(new T.CircleGeometry(.6,48),new T.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.35}));
+shadow.rotation.x=-Math.PI/2;shadow.position.y=.002;scene.add(shadow);
+
+/* ---------- Körper ---------- */
+const bones={};
+function bone(name,parent,offset,len){const g=new T.Group();g.position.copy(offset);(parent?bones[parent].g:scene).add(g);bones[name]={g,parent,len};return g}
+function part(g,geo,pos,scale){
+  const m=new T.Mesh(geo,fillMat);m.position.copy(pos);m.scale.copy(scale);g.add(m);
+  const o=new T.Mesh(geo,outlineMat);o.position.copy(pos);o.scale.copy(scale);g.add(o);
+}
+const SPH=new T.SphereGeometry(1,32,22);
+const ell=(g,sx,sy,sz,y=0)=>part(g,SPH,V(0,y,0),V(sx,sy,sz));
+function limb(g,len,r1,r2){part(g,new T.CylinderGeometry(r1,r2,len,32,1,true),V(0,-len/2,0),V(1,1,1));ell(g,r1,r1,r1,0);ell(g,r2,r2,r2,-len)}
+const L=n=>bones[n].len;
+const pel=bone("pelvis",null,V(0,0,0),0);ell(pel,.165,.105,.115,0);
+const sp=bone("spine","pelvis",V(0,.02,0),.24);ell(sp,.135,.14,.1,-.12);
+const ch=bone("chest","spine",V(0,-.24,0),.26);ell(ch,.17,.15,.105,-.12);ell(ch,.185,.06,.09,-.22);
+const nk=bone("neck","chest",V(0,-.26,0),.09);limb(nk,.09,.045,.048);
+const hd=bone("head","neck",V(0,-.09,0),.22);ell(hd,.085,.11,.095,-.1);
+for(const s of [1,-1]){const k=s>0?"L":"R";
+  limb(bone("uarm"+k,"chest",V(.19*s,-.23,0),.3),.3,.056,.042);
+  limb(bone("farm"+k,"uarm"+k,V(0,-.3,0),.27),.27,.044,.032);
+  ell(bone("hand"+k,"farm"+k,V(0,-.27,0),.1),.028,.055,.042,-.05);
+  limb(bone("thigh"+k,"pelvis",V(.1*s,0,0),.44),.44,.085,.058);
+  const sh=bone("shin"+k,"thigh"+k,V(0,-.44,0),.42);limb(sh,.42,.058,.038);ell(sh,.06,.12,.06,-.14);
+  ell(bone("foot"+k,"shin"+k,V(0,-.42,0),.22),.042,.11,.03,-.1);
+}
+/* Requisite: gerolltes Handtuch unter den Fersen */
+const towel=new T.Group();part(towel,new T.CapsuleGeometry(.045,.42,6,18),V(0,0,0),V(1,1,1));towel.rotation.z=Math.PI/2;scene.add(towel);
+
+
+/* Requisiten: Stuhl (Sitzhöhe ca. 42 cm) und Wand */
+const BOX=new T.BoxGeometry(1,1,1);
+const chair=new T.Group();
+part(chair,BOX,V(0,.4,0),V(.46,.05,.44));                 // Sitzfläche
+part(chair,BOX,V(0,.66,-.2),V(.46,.48,.05));              // Lehne (lokal hinten = -Z)
+for(const [x,z] of [[-.2,-.19],[.2,-.19],[-.2,.19],[.2,.19]])part(chair,BOX,V(x,.19,z),V(.035,.38,.035));
+scene.add(chair);
+const wall=new T.Group();part(wall,BOX,V(0,.6,0),V(1.5,1.2,.04));scene.add(wall);
+const ORDER=["pelvis","spine","chest","neck","head","uarmL","farmL","handL","uarmR","farmR","handR","thighL","shinL","footL","thighR","shinR","footR"];
+const DOWN=V(0,-1,0);
+
+/* ---------- Pose anwenden (Richtungen in Weltkoordinaten; Figur schaut nach +Z, links = +X) ---------- */
+function orient(dir,side){
+  const y=dir.clone().normalize().negate();
+  let x=side.clone().sub(y.clone().multiplyScalar(side.dot(y)));
+  if(x.lengthSq()<1e-6)x=Math.abs(y.x)<.9?V(1,0,0):V(0,0,1);
+  x.normalize();const z=new T.Vector3().crossVectors(x,y).normalize();
+  return new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(x,y,z));
+}
+function apply(p){
+  const world={};
+  bones.pelvis.g.position.copy(p.pelvisPos);
+  for(const n of ORDER){
+    const b=bones[n], parentQ=b.parent?world[b.parent]:new T.Quaternion();
+    let q;
+    if(n==="pelvis")q=orient(p.pelvisDir||DOWN,p.pelvisSide);
+    else{const side=(p.side&&p.side[n])?p.side[n]:V(1,0,0).applyQuaternion(parentQ);q=orient(p.dir[n]||DOWN,side)}
+    world[n]=q;b.g.quaternion.copy(parentQ.clone().invert().multiply(q));
+  }
+  scene.updateMatrixWorld(true);
+}
+const wp=n=>bones[n].g.getWorldPosition(V(0,0,0));
+function along(n,t){const q=bones[n].g.getWorldQuaternion(new T.Quaternion());return wp(n).add(DOWN.clone().applyQuaternion(q).multiplyScalar(L(n)*t))}
+/* Auf den Boden setzen: tiefster Kontaktpunkt (Knie, Knöchel, Zehen, Gesäß) kommt auf y=0 */
+function ground(skip=[]){
+  const pts=[["shinL",wp("shinL"),.058],["shinR",wp("shinR"),.058],["footL",wp("footL"),.04],["footR",wp("footR"),.04],["toeL",along("footL",.95),.03],["toeR",along("footR",.95),.03],["pelvis",wp("pelvis"),.1]];
+  let m=1e9;for(const [n,p,r] of pts){if(skip.includes(n))continue;m=Math.min(m,p.y-r)}
+  bones.pelvis.g.position.y-=m;scene.updateMatrixWorld(true);
+}
+/* Arme per 2-Gelenk-IK zu Zielpunkten */
+function chestAxes(){const q=bones.chest.g.getWorldQuaternion(new T.Quaternion());return {fwd:V(0,0,-1).applyQuaternion(q),down:V(0,1,0).applyQuaternion(q),side:V(1,0,0).applyQuaternion(q)}}
+function clasp(dist=.53,low=.12){const a=chestAxes(),top=wp("neck").add(a.fwd.multiplyScalar(dist)).add(a.down.multiplyScalar(low));return {L:top.clone().add(a.side.clone().multiplyScalar(.035)),R:top.clone().add(a.side.clone().multiplyScalar(-.035))}}
+function armIK(p,targets){
+  const a=chestAxes();
+  for(const [k,sg] of [["L",1],["R",-1]]){
+    const sh=wp("uarm"+k), A=L("uarm"+k), B=L("farm"+k);
+    const d=targets[k].clone().sub(sh), dist=Math.min(d.length(),A+B-.005), dn=d.normalize();
+    const cosA=(A*A+dist*dist-B*B)/(2*A*dist), sinA=Math.sqrt(Math.max(0,1-cosA*cosA));
+    let pole=(p.pole&&p.pole[k])?p.pole[k].clone():a.down.clone().add(a.side.clone().multiplyScalar(.6*sg));pole.sub(dn.clone().multiplyScalar(pole.dot(dn))).normalize();
+    const elbow=sh.clone().add(dn.clone().multiplyScalar(cosA*A)).add(pole.multiplyScalar(sinA*A));
+    const end=sh.clone().add(dn.clone().multiplyScalar(dist));
+    p.dir["uarm"+k]=elbow.clone().sub(sh).normalize();
+    p.dir["farm"+k]=end.clone().sub(elbow).normalize();
+    p.dir["hand"+k]=p.dir["farm"+k].clone();
+  }
+  const y=bones.pelvis.g.position.y;apply(p);bones.pelvis.g.position.y=y;scene.updateMatrixWorld(true);
+}
+function mix(a,b,t){
+  const o={pelvisPos:a.pelvisPos.clone().lerp(b.pelvisPos,t),pelvisSide:a.pelvisSide.clone().lerp(b.pelvisSide,t).normalize(),pelvisDir:(a.pelvisDir||DOWN).clone().lerp(b.pelvisDir||DOWN,t).normalize(),side:{},dir:{}};
+  for(const k in a.dir)o.dir[k]=a.dir[k].clone().lerp(b.dir[k]||a.dir[k],t).normalize();
+  for(const k of new Set([...Object.keys(a.side||{}),...Object.keys(b.side||{})])){const x=(a.side||{})[k]||V(1,0,0),y=(b.side||{})[k]||V(1,0,0);o.side[k]=x.clone().lerp(y,t).normalize()}
+  o.hands=t<.5?a.hands:b.hands;o.handsA=a.hands;o.handsB=b.hands;o.t=t;
+  return o;
+}
+const P=(o)=>{o.pelvisPos=o.pelvisPos||V(0,0,0);o.pelvisSide=o.pelvisSide||V(1,0,0);o.dir.neck=o.dir.neck||o.dir.chest;o.dir.head=o.dir.head||o.dir.chest;return o};
+
+/* ---------- Übungen ---------- */
+const HEEL=P({hands:()=>({L:wp("footL").add(V(.08,.03,.03)),R:wp("footR").add(V(-.08,.03,.03))}),dir:{
+  thighL:D(.12,-.28,1),thighR:D(-.12,-.28,1),shinL:D(.14,.02,-1),shinR:D(-.14,.02,-1),footL:D(-.6,-.08,-.8),footR:D(.6,-.08,-.8),
+  spine:D(0,1,-.05),chest:D(0,1,.02),head:D(0,1,.06)}});
+const HEEL2=P({hands:HEEL.hands,dir:{...HEEL.dir,spine:D(0,1,-.02),chest:D(0,1,.06),neck:D(0,1,.07),head:D(0,1,.1)}});
+
+const GRASS=P({hands:()=>{const p=wp("pelvis");return {L:V(p.x+.3,.03,p.z-.05),R:wp("footR").add(V(-.02,.08,.02))}},dir:{
+  thighL:D(.12,-.28,1),shinL:D(.14,.02,-1),footL:D(-.6,-.08,-.8),
+  thighR:D(-.5,-.28,.85),shinR:D(-.2,.22,-.95),footR:D(.08,-.75,-.65),
+  spine:D(.1,1,-.05),chest:D(.14,1,0),head:D(.06,1,.1)}});
+const GRASS2=P({hands:GRASS.hands,dir:{...GRASS.dir,spine:D(.14,1,-.05),chest:D(.2,1,.02),neck:D(.2,1,.02),head:D(.1,1,.12)}});
+
+const CAMEL_HUG=P({pelvisPos:V(0,0,-.05),hands:()=>({L:along("shinR",.4).add(V(.08,0,.06)),R:along("shinR",.4).add(V(-.1,0,.03))}),dir:{
+  thighL:D(.35,-.35,.85),shinL:D(.05,.02,-1),footL:D(-.15,-.08,-.98),
+  thighR:D(-.1,.6,.8),shinR:D(0,-1,-.1),footR:D(0,-.15,1),
+  spine:D(0,.75,.65),chest:D(-.05,.45,.9),neck:D(-.05,.4,.92),head:D(-.05,.3,.95)}});
+const CAMEL_ROCK=P({pelvisPos:V(0,0,0),hands:CAMEL_HUG.hands,dir:{...CAMEL_HUG.dir,thighR:D(-.1,.55,.85),shinR:D(0,-1,.05),spine:D(0,.7,.72),chest:D(-.05,.35,.95),neck:D(-.05,.3,.96),head:D(-.05,.25,.97)}});
+const CAMEL_STAND=P({pelvisPos:V(0,0,.05),hands:()=>{const p=wp("pelvis");return {L:p.clone().add(V(.25,-.22,.1)),R:p.clone().add(V(-.25,-.22,.12))}},dir:{
+  thighR:D(-.05,-1,.85),shinR:D(0,-1,-.45),footR:D(0,-.15,1),
+  thighL:D(.05,-1,.05),shinL:D(0,-.75,-1),footL:D(-.05,-.05,-1),
+  spine:D(0,1,.08),chest:D(0,1,.12),head:D(0,1,.1)}});
+
+const SQUAT=P({hands:()=>clasp(.4,.24),dir:{
+  thighL:D(.3,.25,.92),thighR:D(-.3,.25,.92),shinL:D(-.05,-.75,-.66),shinR:D(.05,-.75,-.66),footL:D(.08,-.3,1),footR:D(-.08,-.3,1),
+  spine:D(0,.85,.5),chest:D(0,.95,.32),head:D(0,1,.3)}});
+const SQUAT2=P({hands:SQUAT.hands,dir:{...SQUAT.dir,spine:D(0,.83,.54),chest:D(0,.95,.36),neck:D(0,.95,.36),head:D(0,1,.34)}});
+
+const FLOSS_UP=P({hands:()=>({L:along("thighR",.72).add(V(.06,.05,.05)),R:along("thighR",.72).add(V(-.08,.05,.03))}),dir:{
+  thighR:D(-.04,-1,.42),shinR:D(0,-1,.3),footR:D(0,.5,1),
+  thighL:D(.04,-1,.15),shinL:D(0,-1,-.2),footL:D(.05,-.1,1),
+  spine:D(0,.7,.72),chest:D(0,.62,.78),neck:D(0,.45,.89),head:D(0,.22,.97)}});
+const FLOSS_DOWN=P({hands:FLOSS_UP.hands,dir:{...FLOSS_UP.dir,footR:D(0,-.25,1),neck:D(0,.75,.66),head:D(0,.9,.45)}});
+
+const PIG_LEGS={thighR:D(-.25,-.15,1),shinR:D(1,0,-.35),footR:D(.75,0,-.55),thighL:D(.8,-.15,.35),shinL:D(-.45,.38,-.8),footL:D(.05,-.95,-.3)};
+const PIG_UP=P({pelvisSide:V(1,0,-.05),side:{spine:V(.6,0,-.8),chest:V(.6,0,-.8)},hands:()=>clasp(),dir:{...PIG_LEGS,spine:D(0,1,0),chest:D(0,1,0),head:D(0,1,0)}});
+const PIG_DOWN=P({pelvisPos:V(-.01,0,0),pelvisSide:V(1,-.06,-.05),side:{spine:V(.42,.71,-.57),chest:V(.22,.93,-.3)},hands:()=>clasp(),dir:{...PIG_LEGS,spine:D(-.42,.71,.57),chest:D(-.56,.37,.74),head:D(-.56,.37,.74)}});
+
+
+/* Hip CARs im Vierfüßlerstand: rechtes Bein arbeitet, Knie bleibt 90° */
+const QUAD_BASE={pelvisDir:D(0,0,-1),hands:()=>({L:wp("uarmL").setY(.03).add(V(0,0,.04)),R:wp("uarmR").setY(.03).add(V(0,0,.04))}),dir:{
+  thighL:D(0,-1,0),shinL:D(0,0,-1),footL:D(0,-.25,-1),
+  spine:D(0,.04,1),chest:D(0,0,1),neck:D(0,-.15,1),head:D(0,-.45,1)}};
+const quad=(th,sh,ft)=>P({...QUAD_BASE,dir:{...QUAD_BASE.dir,thighR:th,shinR:sh,footR:ft}});
+const HQ=quad(D(0,-1,0),D(0,0,-1),D(0,-.25,-1));          // Vierfüßlerstand
+const HS=quad(D(-1,.05,-.12),D(0,.05,-1),D(0,-.2,-1));    // seitlich angehoben
+const HB=quad(D(-.1,.15,-1),D(0,1,-.12),D(0,.1,-1));      // nach hinten angehoben
+function hipSeq(x){
+  const s=[];
+  // Kreis im Uhrzeigersinn: Vierfüßler → Seite → hinten → zurück
+  for(let i=1;i<=x;i++)s.push([`Uhrzeigersinn ${i}/${x}`,1.1,HQ,HS],[`Uhrzeigersinn ${i}/${x}`,1.2,HS,HB],[`Uhrzeigersinn ${i}/${x}`,1.1,HB,HQ]);
+  s.push(["Pause",.6,HQ,HQ]);
+  // gegen den Uhrzeigersinn: Vierfüßler → hinten → Seite → zurück
+  for(let i=1;i<=x;i++)s.push([`Gegen Uhrzeigersinn ${i}/${x}`,1.1,HQ,HB],[`Gegen Uhrzeigersinn ${i}/${x}`,1.2,HB,HS],[`Gegen Uhrzeigersinn ${i}/${x}`,1.1,HS,HQ]);
+  s.push(["Pause",.6,HQ,HQ]);
+  // zur Seite und zurück
+  for(let i=1;i<=x;i++)s.push([`Zur Seite ${i}/${x}`,1.1,HQ,HS],[`Zur Seite ${i}/${x}`,.3,HS,HS],[`Zur Seite ${i}/${x}`,1.1,HS,HQ]);
+  s.push(["Pause",.6,HQ,HQ]);
+  // oben bleiben: Seite → hinten → Seite
+  s.push(["Bein zur Seite",1.1,HQ,HS]);
+  for(let i=1;i<=x;i++)s.push([`Seite → hinten ${i}/${x}`,1.2,HS,HB],[`Seite → hinten ${i}/${x}`,1.2,HB,HS]);
+  s.push(["absetzen",1.1,HS,HQ],["Pause",.8,HQ,HQ]);
+  return s;
+}
+
+/* ---------- 90/90 auf dem Ellbogen (vorderes Bein rechts, hinteres Bein links) ---------- */
+const ELBOW_TORSO={pelvisSide:V(1,.12,0),side:{spine:V(.45,.88,0),chest:V(.42,.9,0)},dir:{spine:D(-.8,.55,.08),chest:D(-.85,.45,.12),neck:D(-.7,.7,.15),head:D(-.55,.8,.2)}};
+const elbowHands=(left)=>()=>({R:wp("uarmR").setY(.03).add(V(-.02,0,.26)),L:left?left():along("thighL",.25).add(V(0,.1,.06))});
+const FRONT90={thighR:D(-.25,-.15,1),shinR:D(1,0,-.1),footR:D(.95,-.05,-.3)};
+const B90=P({...ELBOW_TORSO,hands:elbowHands(),dir:{...ELBOW_TORSO.dir,...FRONT90,thighL:D(1,-.15,.05),shinL:D(0,.15,-1),footL:D(0,-.1,-1)}});
+const HEELS=P({...ELBOW_TORSO,hands:elbowHands(),dir:{...ELBOW_TORSO.dir,...FRONT90,thighL:D(.25,.35,.15),shinL:D(-.1,-.4,.15),footL:D(.3,-.2,.9)}});
+
+/* Outer Hip Drop Set: hinteres (linkes) Knie auf dem Handtuch, hinteres Bein arbeitet */
+const OUT_BASE={...ELBOW_TORSO,skip:["shinL"],hands:elbowHands(),dir:{...ELBOW_TORSO.dir,...FRONT90,thighL:D(1,0,.05),shinL:D(0,.12,-1),footL:D(0,-.1,-1)}};
+const OUT1=P({...OUT_BASE,dir:{...OUT_BASE.dir,shinL:D(0,.6,-.8),footL:D(0,.35,-1)}});
+const OUT2=P({...OUT_BASE,dir:{...OUT_BASE.dir,thighL:D(1,.22,.05),shinL:D(0,.55,-.85),footL:D(0,.3,-1)}});
+const OUT3=P({...OUT_BASE,dir:{...OUT_BASE.dir,thighL:D(.98,.15,-.08),shinL:D(.98,.15,-.08),footL:D(.3,-.5,-.8)}});
+
+/* Pigeon-Halten: hinteres Knie vom Boden, aus der Hüfte nach vorne */
+const PHOLD=P({hands:()=>clasp(.2,.15),dir:{thighR:D(-.25,-.3,.92),shinR:D(.85,.02,-.55),footR:D(.6,0,-.8),
+  thighL:D(.1,-.18,-1),shinL:D(.03,-.15,-1),footL:D(0,-.25,-1),spine:D(0,.85,.5),chest:D(0,.75,.65),neck:D(0,.75,.65),head:D(0,.75,.65)}});
+const PHOLD2=P({hands:PHOLD.hands,dir:{...PHOLD.dir,spine:D(0,.83,.54),chest:D(0,.72,.69),neck:D(0,.72,.69),head:D(0,.72,.69)}});
+
+/* Inner Hip Drop Set: vorderes (rechtes) Knie auf dem Handtuch, vorderes Bein arbeitet */
+const IN_BASE={...ELBOW_TORSO,skip:["shinR"],hands:elbowHands(),dir:{...ELBOW_TORSO.dir,thighR:D(-.25,0,1),shinR:D(1,0,-.1),footR:D(.95,-.05,-.3),thighL:D(1,-.15,.05),shinL:D(0,.1,-1),footL:D(0,-.1,-1)}};
+const IN1=P({...IN_BASE,dir:{...IN_BASE.dir,shinR:D(.85,.45,-.1),footR:D(.8,.4,-.3)}});
+const IN2=P({...IN_BASE,dir:{...IN_BASE.dir,thighR:D(-.25,.22,1),shinR:D(.85,.42,-.1),footR:D(.8,.4,-.3)}});
+const IN3=P({pelvisDir:D(1,0,0),pelvisSide:V(0,1,.05),side:{spine:V(0,1,0),chest:V(0,1,0)},
+  pole:{R:V(0,.5,1)},hands:()=>({R:wp("head").add(V(.02,-.1,.06)),L:wp("uarmL").setY(.03).add(V(0,0,.3))}),
+  dir:{spine:D(-1,.12,0),chest:D(-1,.1,.05),neck:D(-.95,.25,.05),head:D(-.92,.35,.1),
+  thighR:D(.95,.15,.1),shinR:D(.95,.15,.1),footR:D(.3,-.1,.95),
+  thighL:D(.3,.55,.78),shinL:D(0,-1,.05),footL:D(.1,-.2,1)}});
+
+
+/* ---------- 12a Kick-out im Sitzen ---------- */
+const SEAT_BASE={hands:()=>{const p=wp("pelvis");return {L:p.clone().add(V(.24,-.02,.04)),R:p.clone().add(V(-.24,-.02,.04))}},dir:{
+  thighL:D(.06,0,1),shinL:D(0,-1,.02),footL:D(.05,-.1,1),spine:D(0,1,-.2),chest:D(0,1,-.14),head:D(0,1,0)}};
+const SEAT=P({...SEAT_BASE,dir:{...SEAT_BASE.dir,thighR:D(-.06,0,1),shinR:D(0,-1,.02),footR:D(-.05,-.1,1)}});
+const KICK=P({...SEAT_BASE,dir:{...SEAT_BASE.dir,thighR:D(-.04,0,1),shinR:D(-.04,0,1),footR:D(-.02,.45,.9)}});
+const KICK2=P({...SEAT_BASE,dir:{...SEAT_BASE.dir,thighR:D(-.04,.02,1),shinR:D(-.04,.02,1),footR:D(-.02,.5,.87)}});
+const seatChair=()=>{const p=wp("pelvis");return {x:p.x,z:p.z-.04,ry:0}};
+
+/* ---------- 12b Hüftbeuger-Dehnung: vorderer Fuß auf dem Stuhl ---------- */
+const STR_BASE={skip:["footL","toeL","shinL"],hands:()=>({L:along("thighL",.78).add(V(.06,.05,.02)),R:along("thighL",.78).add(V(-.08,.05,0))}),dir:{
+  thighL:D(.05,.22,1),shinL:D(0,-1,-.15),footL:D(0,-.1,1),
+  thighR:D(-.05,-.8,-.6),shinR:D(-.05,-.8,-.6),footR:D(0,-.5,-.85),
+  spine:D(0,1,.05),chest:D(0,1,.03),head:D(0,1,.05)}};
+const STR=P({...STR_BASE});
+const STR2=P({...STR_BASE,dir:{...STR_BASE.dir,spine:D(0,1,0),chest:D(0,1,-.03),neck:D(0,1,-.02),head:D(0,1,0)}});
+const stretchChair=()=>{const a=wp("footL");return {x:a.x,z:a.z+.06,ry:Math.PI}};
+
+/* ---------- 13a Hamstring-Curl im Stand ---------- */
+const STAND_L={thighL:D(.03,-1,.02),shinL:D(0,-1,-.02),footL:D(.05,-.12,1),spine:D(0,1,0),chest:D(0,1,.02),head:D(0,1,.05)};
+const curlHands=()=>{const p=wp("neck");return {L:V(p.x+.2,p.y-.12,wallZ()-.04),R:wp("pelvis").add(V(-.2,.02,0))}};
+const wallZ=()=>wp("pelvis").z+.42;
+const HC0=P({skip:["shinR","footR","toeR"],hands:curlHands,dir:{...STAND_L,thighR:D(-.03,-1,-.12),shinR:D(0,-.8,-.6),footR:D(0,-.6,-.8)}});
+const HC1=P({skip:["shinR","footR","toeR"],hands:curlHands,dir:{...STAND_L,thighR:D(-.03,-1,-.1),shinR:D(0,.05,-1),footR:D(0,-.35,-1)}});
+
+/* ---------- 13b Waden-/Hamstring-Dehnung an der Wand ---------- */
+const WS_BASE={hands:()=>({L:along("thighR",.62).add(V(.07,.04,.03)),R:along("thighR",.62).add(V(-.07,.04,.03))}),dir:{
+  thighR:D(-.03,-1,.5),shinR:D(-.03,-1,.5),footR:D(0,.8,.6),
+  thighL:D(.05,-1,-.15),shinL:D(.05,-1,-.15),footL:D(.05,-.15,1)}};
+const WS0=P({...WS_BASE,dir:{...WS_BASE.dir,spine:D(0,1,.08),chest:D(0,1,.08),head:D(0,1,.1)}});
+const WS1=P({...WS_BASE,dir:{...WS_BASE.dir,spine:D(0,.85,.52),chest:D(0,.8,.6),neck:D(0,.78,.62),head:D(0,.78,.62)}});
+const wallAtToe=()=>({z:along("footR",1).z+.04});
+const EX=[
+  {n:1,name:"Heel Sit",de:"Fersensitz",mode:"Halten · ca. 1 min",cam:{y:.6,d:3,yaw:.55,p:.3},seq:[["halten",2.5,HEEL,HEEL2],["halten",2.5,HEEL2,HEEL]],
+   tips:["Auf die Fußrücken setzen","Fersen nach außen, große Zehen nach innen","Nicht nur auf den Fersenknochen sitzen – im Sprunggelenk drehen"]},
+  {n:2,name:"Grasshopper",de:"Großzehen-Stretch",mode:"Halten · 30 s pro Seite",cam:{y:.45,d:3,yaw:.25,p:.3},seq:[["halten",2.5,GRASS,GRASS2],["halten",2.5,GRASS2,GRASS]],
+   tips:["Ein Fuß bleibt flach unter dir","Anderes Bein seitlich raus, auf die große Zehe","Zu intensiv: Gewicht wegnehmen, mit der Hand abstützen"]},
+  {n:3,name:"Camel",de:"Knie umarmen + Aufstehen",mode:"Bewegung · 5–8 pro Seite",cam:{y:.85,d:4.4,yaw:1.05,p:.22},towel:false,seq:[["Knie umarmen",1.4,CAMEL_HUG,CAMEL_HUG],["hochdrücken",2.4,CAMEL_HUG,CAMEL_STAND],["oben",.8,CAMEL_STAND,CAMEL_STAND],["zurück runter",2.4,CAMEL_STAND,CAMEL_HUG]],
+   tips:["Knie eng umarmen, Bauch Richtung Oberschenkel","Mit beiden Beinen hochdrücken","Der hintere Fuß bleibt mit dem Fußrücken am Boden","Stuhl als Hilfe ist ok"],},
+  {n:4,name:"Deep Squat",de:"Tiefe Hocke",mode:"Halten · ca. 1 min",cam:{y:.5,d:3.2,yaw:.6,p:.25},towel:true,seq:[["halten",2.5,SQUAT,SQUAT2],["halten",2.5,SQUAT2,SQUAT]],
+   tips:["Fersen erhöht (gerolltes Handtuch)","Ellbogen über die Knie, passiv halten","Aufrecht – kein Abrunden im unteren Rücken"]},
+  {n:5,name:"Nerve Floss",de:"Nerve Flossing",mode:"Bewegung · 10 pro Seite",cam:{y:.75,d:4,yaw:1.35,p:.15},seq:[["Zehen hoch · Kopf runter",1.3,FLOSS_DOWN,FLOSS_UP],["halten",.35,FLOSS_UP,FLOSS_UP],["Zehen runter · Kopf hoch",1.3,FLOSS_UP,FLOSS_DOWN],["halten",.35,FLOSS_DOWN,FLOSS_DOWN]],
+   tips:["Vorderer Fuß nur mit der Ferse am Boden","Flacher Rücken, leicht aus der Hüfte nach vorne","Gegengleich: Zehen hoch = Kopf runter, Zehen runter = Kopf hoch","Gleiten statt dehnen – nicht in den Zug gehen"]},
+  {n:6,name:"Pigeon",de:"Taube nach Kadoriani",mode:"Bewegung · 10 pro Seite",cam:{y:.33,d:3.1,yaw:.93,p:.32},seq:[["oben",.7,PIG_UP,PIG_UP],["runter",1.9,PIG_UP,PIG_DOWN],["unten",.5,PIG_DOWN,PIG_DOWN],["hoch",1.75,PIG_DOWN,PIG_UP]],
+   tips:["Vorderes Knie am Boden, Fuß am hinteren Knie","Hinterer Fuß auf der großen Zehe","Seitlich runter wie ein Brett – vordere Schulter ans Knie","Hoch durch Druck des vorderen Knies in den Boden"]},
+  {n:7,name:"Hip CARs",de:"Hüftkreisen im Vierfüßlerstand",mode:"4 Teile × Wdh.",reps:3,cam:{y:.42,d:3.5,yaw:-.8,p:.38},seq:hipSeq(3),
+   tips:["Knie bleibt die ganze Zeit 90° gebeugt","Kreise: nach jeder Runde zurück in den Vierfüßlerstand","Seite → hinten: Bein bleibt oben und pendelt zwischen Seite und hinten","Oberkörper und Becken bleiben still – nur die Hüfte bewegt sich","Sehr langsam, Radius so groß wie möglich"]},
+  {n:8,name:"90/90-Rotation",de:"auf dem Ellbogen",mode:"Bewegung · 10 pro Seite",cam:{y:.3,d:3.2,yaw:.15,p:.35},seq:[["Fersen zusammen",2.2,B90,HEELS],["kurz halten",.4,HEELS,HEELS],["zurück in den 90/90",2.2,HEELS,B90],["Knie am Boden",.5,B90,B90]],
+   tips:["Langsam und kontrolliert rotieren","Unten: Knie berührt den Boden, der Fuß nicht","Gerade Linie hinteres Knie – Hüfte – Schulter","Klicken oder Blockade: Radius kleiner machen"]},
+  {n:9,name:"Outer Hip Drop Set",de:"3 Stufen à 30 s",mode:"Halten · 3 × 30 s pro Seite",towel:"shinL",cam:{y:.3,d:3.2,yaw:.15,p:.35},seq:[["Stufe 1 · Fuß hoch (30 s)",1.2,OUT1,OUT1],["Stufe 1 · Fuß hoch (30 s)",2.2,OUT1,OUT1],["Stufe 2 · Fuß + Knie hoch (30 s)",1.2,OUT1,OUT2],["Stufe 2 · Fuß + Knie hoch (30 s)",2.2,OUT2,OUT2],["Stufe 3 · Bein gestreckt hoch (30 s)",1.4,OUT2,OUT3],["Stufe 3 · Bein gestreckt hoch (30 s)",2.4,OUT3,OUT3],["absetzen",1.4,OUT3,OUT1]],
+   tips:["Handtuch unter das hintere Knie","Hinteres Knie nicht zu nah am Körper – gerade Linie Knie, Hüfte, Schulter","Stufe 3: Bein gestreckt in Verlängerung des Körpers heben – der Oberkörper bleibt ruhig","In der App: jede Stufe 30 s mit eigenem Timer"]},
+  {n:10,name:"Pigeon-Halten",de:"Kraft-Halten",mode:"Halten · 30 s pro Seite",cam:{y:.35,d:3.2,yaw:-1.25,p:.25},seq:[["halten",2.5,PHOLD,PHOLD2],["halten",2.5,PHOLD2,PHOLD]],
+   tips:["Vorderes Schienbein liegt am Boden, Knie stark gebeugt","Hinteres Knie vom Boden – nur Zehen hinten","Hände an die Brust","Aus der Hüfte nach vorne, Rücken flach","Gewicht auf dem vorderen Gesäß, vorderes Knie in den Boden drücken"]},
+  {n:11,name:"Inner Hip Drop Set",de:"3 Stufen à 30 s",mode:"Halten · 3 × 30 s pro Seite",towel:"shinR",cam:{y:.3,d:3.3,yaw:.35,p:.35},seq:[["Stufe 1 · vorderen Fuß heben (30 s)",1.2,IN1,IN1],["Stufe 1 · vorderen Fuß heben (30 s)",2.2,IN1,IN1],["Stufe 2 · Fuß + Knie heben (30 s)",1.2,IN1,IN2],["Stufe 2 · Fuß + Knie heben (30 s)",2.2,IN2,IN2],["Stufe 3 · hinlegen, Bein gestreckt heben (30 s)",2,IN2,IN3],["Stufe 3 · hinlegen, Bein gestreckt heben (30 s)",2.4,IN3,IN3],["zurück",2,IN3,IN1]],
+   tips:["Stufe 1–2: vorderes Knie auf der Erhöhung","Stufe 1: Fuß muss nicht hoch – Hauptsache vom Boden","Stufe 3: hinteres Bein drüber, ganz hinlegen, unteres Bein gestreckt heben – ohne Erhöhung","In der App: jede Stufe 30 s mit eigenem Timer"]},
+  {n:"12a",name:"Kick-out",de:"Hüftbeuger anspannen",mode:"Halten · 15 s pro Bein",props:{chair:seatChair},cam:{y:.55,d:3.6,yaw:-1.2,p:.2},seq:[["Bein strecken",1.2,SEAT,KICK],["halten (15 s)",2.2,KICK,KICK2],["halten (15 s)",2.2,KICK2,KICK],["absetzen",1.2,KICK,SEAT],["Pause",.6,SEAT,SEAT]],
+   tips:["Aufrecht sitzen – zurücklehnen ist ok","Knie absolut gestreckt, Oberschenkel fest anspannen – darf krampfen","Wie hoch das Bein ist, ist egal","Ischias-Gefühl: Zehen nach unten strecken"]},
+  {n:"12b",name:"Hüftbeuger-Dehnung",de:"am Stuhl",mode:"Halten · 30 s pro Seite",props:{chair:stretchChair},cam:{y:.65,d:3.9,yaw:-1.35,p:.15},seq:[["dehnen (30 s)",2.6,STR,STR2],["tief in den Bauch atmen",2.6,STR2,STR]],
+   tips:["Vorderer Fuß auf dem Stuhl, hinteres Bein gestreckt, auf den Zehen","Oberkörper aufrecht","Mehr Dehnung: hinteren Oberschenkel anspannen","Tief in den Bauch atmen – die Dehnung nimmt zu","Knie unangenehm: vorderes Knie nur ca. 90° beugen"]},
+  {n:"13a",name:"Hamstring-Curl",de:"im Stand",mode:"30 s Wiederholungen pro Seite",props:{wall:()=>({z:wallZ()})},cam:{y:.8,d:4.2,yaw:-1.45,p:.12},seq:[["Ferse hoch",1,HC0,HC1],["3 s halten",1.6,HC1,HC1],["ablassen",1,HC1,HC0],["Zehe hinten am Boden",.4,HC0,HC0]],
+   tips:["An der Wand festhalten","Knie bleiben zusammen, Hüfte nach vorne, Rippen runter, Gesäß fest","Ferse mit dem hinteren Oberschenkel hochziehen, 3 s halten, ablassen","Krampft – das ist gewollt. Zu krampfig: Hüftstreckung etwas lockern"]},
+  {n:"13b",name:"Wanddehnung",de:"Wade + Hamstring",mode:"Halten · 30 s pro Seite",props:{wall:wallAtToe},cam:{y:.65,d:4,yaw:-1.4,p:.15},seq:[["Wade dehnen",1.6,WS0,WS0],["leicht vorbeugen, Rücken flach",2,WS0,WS1],["halten (30 s)",2.4,WS1,WS1],["aufrichten",1.6,WS1,WS0]],
+   tips:["Fußballen an die Wand, Ferse am Boden","Erst nur Wade, dann mit flachem Rücken leicht vorbeugen","Nur 70–80 % Dehnung","Kribbeln Richtung Rücken: aufrichten, nur Wade dehnen"]}
+];
+/* =================== PLAYER =================== */
+const $=id=>document.getElementById(id);
+const EXB={};EX.forEach(e=>EXB[String(e.n)]=e);
+const easeIO=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+const strip=s=>(s||"").replace(/\s*\(\d+\s*s\)/g,"");
+const seqDur=s=>s.reduce((a,x)=>a+x[1],0);
+
+/* ---- Routine: Standardwerte aus dem Video ---- */
+const R=[
+  {id:"1", ex:"1", kind:"once", secs:60},
+  {id:"2", ex:"2", kind:"hold", secs:30},
+  {id:"3", ex:"3", kind:"reps", reps:6},
+  {id:"4", ex:"4", kind:"once", secs:60},
+  {id:"5", ex:"5", kind:"reps", reps:10},
+  {id:"6", ex:"6", kind:"reps", reps:10},
+  {id:"7", ex:"7", kind:"reps", reps:3, hip:true},
+  {id:"8", ex:"8", kind:"reps", reps:10},
+  {id:"9", ex:"9", kind:"drop", secs:30},
+  {id:"10",ex:"10",kind:"hold", secs:30},
+  {id:"11",ex:"11",kind:"drop", secs:30},
+  {id:"12",ex:"12a",ex2:"12b",kind:"pair", secs:15, secs2:30, name:"Kick-out + Hüftbeuger-Dehnung", umbau:"Fuß auf den Stuhl"},
+  {id:"13",ex:"13a",ex2:"13b",kind:"pair", secs:30, secs2:30, name:"Hamstring-Curl + Wanddehnung", umbau:"Fußballen an die Wand"}
+];
+const G_DEF={umbau:10,wechsel:15,shade:2,sound:true,vib:true,speed:1};
+const FIELDS={
+  once:[{k:"secs",l:"Dauer",u:"s",st:5,min:10,max:300}],
+  hold:[{k:"secs",l:"Dauer pro Seite",u:"s",st:5,min:5,max:180}],
+  reps:[{k:"reps",l:"Wiederholungen pro Seite",u:"",st:1,min:1,max:30}],
+  drop:[{k:"secs",l:"Sekunden pro Stufe",u:"s",st:5,min:5,max:120}]
+};
+function fieldsOf(it){
+  if(it.kind==="pair")return [{k:"secs",l:EXB[it.ex].name+" pro Seite",u:"s",st:5,min:5,max:120},{k:"secs2",l:EXB[it.ex2].name+" pro Seite",u:"s",st:5,min:5,max:120}];
+  if(it.hip)return [{k:"reps",l:"Wiederholungen pro Teil",u:"",st:1,min:1,max:10}];
+  return FIELDS[it.kind];
+}
+
+/* ---- gespeicherte Änderungen ---- */
+const KEY="morgenroutine_v1";
+let store={items:{},g:{},log:[]};
+try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s)store=Object.assign(store,s)}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(store))}catch(e){}}
+const val=(it,k)=>{const o=store.items[it.id];return o&&o[k]!=null?o[k]:it[k]};
+const isOn=it=>{const o=store.items[it.id];return !(o&&o.off)};
+const changed=(it,k)=>{const o=store.items[it.id];return !!(o&&o[k]!=null&&o[k]!==it[k])};
+function setVal(it,k,v){store.items[it.id]=store.items[it.id]||{};if(v===it[k])delete store.items[it.id][k];else store.items[it.id][k]=v;save()}
+const gv=k=>store.g[k]!=null?store.g[k]:G_DEF[k];
+function setG(k,v){if(v===G_DEF[k])delete store.g[k];else store.g[k]=v;save()}
+
+const fmt=s=>{s=Math.max(0,Math.round(s));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")};
+const fmtU=(v,u)=>u==="s"?(v>=60&&v%60===0?(v/60)+" min":v+" s"):String(v);
+function valText(it){
+  const v=k=>val(it,k);
+  switch(it.kind){
+    case"once":return fmtU(v("secs"),"s");
+    case"hold":return v("secs")+" s pro Seite";
+    case"reps":return it.hip?v("reps")+" pro Teil · pro Seite":v("reps")+" pro Seite";
+    case"drop":return "3 × "+v("secs")+" s pro Seite";
+    case"pair":return v("secs")+" s + "+v("secs2")+" s pro Seite";
+  }
+}
+function defText(it){
+  switch(it.kind){
+    case"once":return fmtU(it.secs,"s");
+    case"hold":return it.secs+" s";
+    case"reps":return it.reps+(it.hip?" pro Teil":"");
+    case"drop":return "3 × "+it.secs+" s";
+    case"pair":return it.secs+" s + "+it.secs2+" s";
+  }
+}
+const anyChanged=it=>fieldsOf(it).some(f=>changed(it,f.k));
+const itName=it=>it.name||EXB[it.ex].name;
+const itNum=it=>it.id;
+
+/* ---- Animations-Clips ---- */
+function repSeq(it){const e=EXB[it.ex];return it.hip?hipSeq(val(it,"reps")):e.seq}
+function clipFor(step){
+  const e=EXB[step.ex];
+  if(step.mode==="reps"){
+    const one=repSeq(step.item);const n=step.item.hip?1:val(step.item,"reps");
+    let loop=[];for(let i=0;i<n;i++)loop=loop.concat(one);
+    return {pre:[],loop,alt:true,repDur:seqDur(one),reps:n};
+  }
+  if(step.stage!=null){ // Drop-Set-Stufe
+    const i=step.stage,P=[e.seq[1][2],e.seq[3][2],e.seq[5][2]],lab=strip(e.seq[[1,3,5][i]][0]);
+    const pre=i===0?[]:[[lab,e.seq[[2,4][i-1]][1],P[i-1],P[i]]];
+    return {pre,loop:[[lab,2.2,P[i],P[i]]]};
+  }
+  if(e.n==="12a")return {pre:[e.seq[0]],loop:[e.seq[1],e.seq[2]]};
+  if(e.n==="13b")return {pre:[e.seq[0],e.seq[1]],loop:[e.seq[2]]};
+  return {pre:[],loop:e.seq};
+}
+function firstPose(clip){return (clip.pre[0]||clip.loop[0])[2]}
+
+/* ---- Ablauf aufbauen ---- */
+let steps=[];
+function build(){
+  steps=[];
+  const act=R.filter(isOn);
+  const W=(it,ex,o)=>Object.assign({type:"work",item:it,ex},o);
+  const TR=(label,o)=>Object.assign({type:"trans",label},o);
+  act.forEach((it,ii)=>{
+    const st0=steps.length;
+    steps.push(TR(ii===0?"Mach dich bereit":"Nächste Übung",{dur:ii===0?gv("umbau"):gv("wechsel"),big:true}));
+    const sw=(label)=>steps.push(TR(label||"Seitenwechsel",{dur:gv("umbau")}));
+    switch(it.kind){
+      case"once":steps.push(W(it,it.ex,{side:0,dur:val(it,"secs")}));break;
+      case"hold":steps.push(W(it,it.ex,{side:0,dur:val(it,"secs")}));sw();steps.push(W(it,it.ex,{side:1,dur:val(it,"secs")}));break;
+      case"reps":steps.push(W(it,it.ex,{side:0,mode:"reps"}));break;
+      case"drop":[0,1].forEach(s=>{if(s)sw();[0,1,2].forEach(k=>steps.push(W(it,it.ex,{side:s,stage:k,dur:val(it,"secs")})))});break;
+      case"pair":[0,1].forEach(s=>{
+        if(s)sw("Seitenwechsel");
+        steps.push(W(it,it.ex,{side:s,dur:val(it,"secs")}));
+        sw("Umbau · "+it.umbau);
+        steps.push(W(it,it.ex2,{side:s,dur:val(it,"secs2")}));
+      });break;
+    }
+    steps.slice(st0).forEach(s=>s.itemIdx=ii);
+  });
+  steps.forEach((s,i)=>{s.key=[s.type,s.item?s.item.id:"",s.ex||"",s.side,s.stage,s.label].join("|")+"#"+i;if(s.type==="work")s.clip=clipFor(s)});
+  // Übergänge zeigen die Startposition des nächsten Schritts (schon gespiegelt)
+  steps.forEach((s,i)=>{if(s.type==="trans"){const n=steps[i+1];s.next=n;s.item=n.item;s.ex=n.ex;s.side=n.side}});
+  return act.length;
+}
+
+/* ---- Übersicht ---- */
+function estimate(){
+  let t=0;const act=R.filter(isOn);
+  act.forEach((it,i)=>{
+    t+=i?gv("wechsel"):gv("umbau");const v=k=>val(it,k);
+    if(it.kind==="once")t+=v("secs");
+    if(it.kind==="hold")t+=2*v("secs")+gv("umbau");
+    if(it.kind==="reps")t+=2*(it.hip?seqDur(hipSeq(v("reps"))):v("reps")*seqDur(EXB[it.ex].seq))*1.15;
+    if(it.kind==="drop")t+=6*v("secs")+gv("umbau");
+    if(it.kind==="pair")t+=2*(v("secs")+v("secs2"))+3*gv("umbau");
+  });
+  return t;
+}
+function renderHome(){
+  const act=R.filter(isOn).length;
+  $("sum").textContent=`${act} von ${R.length} Übungen · ca. ${Math.round(estimate()/60)} min`;
+  $("list").innerHTML=R.map((it,i)=>{
+    const ch=anyChanged(it);
+    return `<button class="row${isOn(it)?"":" off"}" data-i="${i}"><span class="n">${itNum(it)}</span><span class="nm">${itName(it)}</span><span class="val${ch?" changed":""}">${valText(it)}${ch?`<span class="def">Standard: ${defText(it)}</span>`:""}</span></button>`;
+  }).join("");
+  document.querySelectorAll(".row").forEach(b=>b.onclick=()=>openEditor(R[+b.dataset.i]));
+  const gRow=(k,l,st,min,max)=>`<div class="sg"><span>${l}${gv(k)!==G_DEF[k]?`<span class="defline">Standard: ${G_DEF[k]} s <button data-gr="${k}">zurück</button></span>`:""}</span><div class="stepper"><button data-g="${k}" data-d="${-st}" data-min="${min}" data-max="${max}" aria-label="weniger">−</button><span class="num">${gv(k)} s</span><button data-g="${k}" data-d="${st}" data-min="${min}" data-max="${max}" aria-label="mehr">+</button></div></div>`;
+  $("globals").innerHTML=gRow("umbau","Umbauzeit / Seitenwechsel",5,0,60)+gRow("wechsel","Pause zur nächsten Übung",5,0,90);
+  document.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{const k=b.dataset.g;setG(k,Math.max(+b.dataset.min,Math.min(+b.dataset.max,gv(k)+(+b.dataset.d))));renderHome()});
+  document.querySelectorAll("[data-gr]").forEach(b=>b.onclick=()=>{setG(b.dataset.gr,G_DEF[b.dataset.gr]);renderHome()});
+  document.querySelectorAll("[data-shade]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.shade===gv("shade")));
+  $("snd").checked=gv("sound");$("vib").checked=gv("vib");
+  const lg=store.log[store.log.length-1];
+  $("last").textContent=lg?`Zuletzt erledigt: ${new Date(lg.d).toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"})} · ${fmt(lg.t)} min`:"";
+}
+document.querySelectorAll("[data-shade]").forEach(b=>b.onclick=()=>{setG("shade",+b.dataset.shade);fillMat.uniforms.uMode.value=gv("shade");renderHome()});
+$("snd").onchange=e=>{setG("sound",e.target.checked);muteIcon()};
+$("vib").onchange=e=>setG("vib",e.target.checked);
+function muteIcon(){const on=gv("sound");$("muteIco").innerHTML=on?'<path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>':'<path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M17 9l5 6M22 9l-5 6"/>';$("mute").classList.toggle("off",!on);$("mute").setAttribute("aria-label",on?"Töne aus":"Töne an")}
+$("mute").onclick=()=>{setG("sound",!gv("sound"));muteIcon()};
+$("tips").onclick=()=>{const o=!$("tips").classList.contains("open");$("tips").classList.toggle("open",o);$("tips").setAttribute("aria-expanded",o)};
+muteIcon();
+
+/* ---- Editor ---- */
+let edItem=null,edFromPlayer=false;
+function openEditor(it,fromPlayer){
+  edItem=it;edFromPlayer=!!fromPlayer;
+  $("edEyebrow").textContent="Übung "+itNum(it);$("edTitle").textContent=itName(it);
+  $("edOnWrap").hidden=!!fromPlayer;$("edOn").checked=isOn(it);
+  renderFields();$("scrim").hidden=false;$("edOk").focus();
+  if(fromPlayer)setPaused(true,true);
+}
+function renderFields(){
+  const it=edItem;
+  $("edFields").innerHTML=fieldsOf(it).map(f=>{
+    const v=val(it,f.k),ch=changed(it,f.k);
+    return `<div><div class="sg"><span>${f.l}</span><div class="stepper"><button data-k="${f.k}" data-d="${-f.st}" aria-label="weniger">−</button><span class="num">${fmtU(v,f.u)}</span><button data-k="${f.k}" data-d="${f.st}" aria-label="mehr">+</button></div></div>
+      ${ch?`<div class="defline">Standard aus dem Video: ${fmtU(it[f.k],f.u)} <button data-r="${f.k}">Zurücksetzen</button></div>`:`<div class="defline">Standard aus dem Video</div>`}</div>`;
+  }).join("");
+  $("edFields").querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>{const f=fieldsOf(it).find(x=>x.k===b.dataset.k);setVal(it,f.k,Math.max(f.min,Math.min(f.max,val(it,f.k)+(+b.dataset.d))));renderFields()});
+  $("edFields").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{setVal(it,b.dataset.r,it[b.dataset.r]);renderFields()});
+}
+$("edOn").onchange=e=>{store.items[edItem.id]=store.items[edItem.id]||{};if(e.target.checked)delete store.items[edItem.id].off;else store.items[edItem.id].off=true;save()};
+function closeEditor(){
+  $("scrim").hidden=true;
+  if(edFromPlayer){rebuildKeep();setPaused(false,true)}
+  renderHome();
+}
+$("edOk").onclick=closeEditor;
+$("scrim").onclick=e=>{if(e.target===$("scrim"))closeEditor()};
+
+/* ---- Ton, Vibration, Wachhalten ---- */
+let actx=null,wake=null;
+// Audio nur kurz aktiv: Kontext vor dem Ton wecken und danach wieder schlafen legen,
+// damit laufende Musik (Spotify) möglichst nicht pausiert wird.
+let sleepT=null;
+function tone(f,d,v){const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.type="sine";g.gain.setValueAtTime(v,actx.currentTime);g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+d);o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+d)}
+function beep(f=880,d=.12,v=.25){if(!gv("sound")||!actx)return;try{
+  clearTimeout(sleepT);
+  const go=()=>{try{tone(f,d,v)}catch(e){}sleepT=setTimeout(()=>{try{actx.suspend()}catch(e){}},Math.max(600,d*1000+400))};
+  if(actx.state!=="running")actx.resume().then(go,()=>{});else go();
+}catch(e){}}
+function buzz(p){if(gv("vib")&&navigator.vibrate)try{navigator.vibrate(p)}catch(e){}}
+async function lockScreen(){try{if(navigator.wakeLock)wake=await navigator.wakeLock.request("screen")}catch(e){}}
+
+/* ---- Laufzeit ---- */
+let idx=0,el=0,animT=0,paused=false,running=false,lastSec=-1,shownEx=null,mirrored=false,runStart=0,itemTimes={},cueI=-1;
+function setPaused(p,silent){paused=p;$("pauseIco").innerHTML=p?'<path d="M7 5v14l12-7z"/>':'<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';$("pause").setAttribute("aria-label",p?"Weiter":"Pause");if(!silent)updateMain()}
+function setMirror(m){if(m===mirrored)return;mirrored=m;renderer.domElement.style.transform=m?"scaleX(-1)":"none"}
+function setupEx(e){
+  shownEx=e;resetCam(e);
+  towel.visible=!!e.towel;chair.visible=!!(e.props&&e.props.chair);wall.visible=!!(e.props&&e.props.wall);
+  if(typeof e.towel==="string"){const p0=e.seq[0][2];apply(p0);ground(p0.skip||[]);const k=wp(e.towel);towel.rotation.set(Math.PI/2,0,0);towel.position.set(k.x,.045,k.z)}
+}
+function startRun(){
+  if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
+  if(actx){actx.resume().then(()=>{sleepT=setTimeout(()=>{try{actx.suspend()}catch(e){}},300)},()=>{})}
+  if(!build()){return}
+  lockScreen();
+  idx=0;itemTimes={};runStart=performance.now();running=true;setPaused(false,true);
+  $("home").hidden=true;$("player").hidden=false;$("done").hidden=true;
+  size();enter(0);
+}
+function enter(i){
+  idx=i;el=0;animT=0;lastSec=-1;cueI=-1;
+  const s=steps[idx],e=EXB[s.ex];
+  if(shownEx!==e)setupEx(e);
+  setMirror(s.side===1);
+  $("stage").classList.toggle("trans",s.type==="trans");
+  const it=s.item,n=R.filter(isOn).indexOf(it)+1,tot=R.filter(isOn).length;
+  $("pEyebrow").textContent=`Übung ${it.id} · ${n} von ${tot}`;
+  $("pName").textContent=s.type==="trans"&&s.big?"Gleich: "+itName(it):(e.name);
+  $("bar").style.width=(100*idx/steps.length)+"%";
+  // Ziel / Info
+  let tgt;
+  if(s.mode==="reps")tgt=`Ziel: <b>${valText(it)}</b> ✎`;
+  else if(s.type==="trans")tgt=`${s.next.mode==="reps"?"Wiederholungen":"Halten"} · <b>${valText(it)}</b> ✎`;
+  else tgt=`<b>${valText(it)}</b> ✎`+(anyChanged(it)?` <span style="color:var(--accent)">· geändert</span>`:"");
+  $("target").innerHTML=tgt;
+  const tl=EXB[s.ex].tips.filter(x=>!x.startsWith("In der App"));
+  if($("cue").dataset.ex!==s.ex){$("cue").dataset.ex=s.ex;$("cue").innerHTML=tl.map(x=>`<li>${x}</li>`).join("")}
+  if(s.type==="work"){beep(1046,.18,.3);buzz(60)}
+  updateMain();
+}
+function updateMain(){
+  const s=steps[idx],m=$("main");m.className="btn big";
+  if(paused){m.textContent="Weiter";m.classList.add("primary");return}
+  if(s.type==="trans"){m.textContent="Jetzt starten";m.classList.add("trans-btn")}
+  else if(s.mode==="reps"){m.textContent="Fertig – beide Seiten ✓";m.classList.add("done-btn")}
+  else{m.textContent="Pause";}
+}
+function logTime(){const s=steps[idx];if(s.type==="work"){itemTimes[s.item.id]=(itemTimes[s.item.id]||0)+el}}
+function advance(){
+  logTime();
+  if(idx+1>=steps.length){finish();return}
+  const s=steps[idx];
+  if(s.type==="work"){beep(660,.15);setTimeout(()=>beep(990,.2),170);buzz([80,60,80])}
+  enter(idx+1);
+}
+function back(){
+  const s=steps[idx];
+  if(el>3&&s.type==="work"){enter(idx);return}
+  let j=idx-1;while(j>0&&steps[j].type==="trans")j--;
+  if(j<0)j=0;enter(Math.max(0,j));
+}
+function finish(){
+  running=false;try{wake&&wake.release()}catch(e){}
+  const tot=(performance.now()-runStart)/1000;
+  store.log.push({d:Date.now(),t:tot});store.log=store.log.slice(-60);save();
+  $("player").hidden=true;$("done").hidden=false;
+  $("doneSum").textContent=`Gesamtzeit ${fmt(tot)} min`;
+  $("doneList").innerHTML=R.filter(isOn).map(it=>`<div><span>${it.id} · ${itName(it)}</span><span>${itemTimes[it.id]!=null?fmt(itemTimes[it.id]):"übersprungen"}</span></div>`).join("");
+  beep(784,.15);setTimeout(()=>beep(988,.15),160);setTimeout(()=>beep(1318,.3),320);
+}
+function rebuildKeep(){
+  const s=steps[idx],oldEl=el,oldT=animT,key=s.key.split("#")[0];
+  build();
+  let j=steps.findIndex(x=>x.key.split("#")[0]===key);if(j<0)j=Math.min(idx,steps.length-1);
+  enter(j);el=oldEl;animT=oldT;
+}
+$("start").onclick=startRun;
+$("main").onclick=()=>{
+  if(paused){setPaused(false);return}
+  const s=steps[idx];
+  if(s.type==="trans"||s.mode==="reps")advance();
+  else setPaused(true);
+};
+$("pause").onclick=()=>setPaused(!paused);
+$("next").onclick=advance;
+$("prev").onclick=back;
+$("target").onclick=()=>openEditor(steps[idx].item,true);
+$("close").onclick=()=>{running=false;try{wake&&wake.release()}catch(e){}$("player").hidden=true;$("home").hidden=false;renderHome()};
+$("doneOk").onclick=()=>{$("done").hidden=true;$("home").hidden=false;renderHome()};
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&running)lockScreen()});
+
+/* ---- Kamera ---- */
+let yaw=0,pitch=.3,dist=3,target=V(0,.5,.1);
+function resetCam(e){yaw=e.cam.yaw;pitch=e.cam.p;dist=e.cam.d;target=V(0,e.cam.y,.1)}
+function placeCam(){cam.position.set(target.x+dist*Math.cos(pitch)*Math.sin(yaw),target.y+dist*Math.sin(pitch),target.z+dist*Math.cos(pitch)*Math.cos(yaw));cam.lookAt(target)}
+function size(){const b=$("stagebox"),w=Math.max(80,Math.floor(Math.min(b.clientWidth,b.clientHeight)))||300;stage.style.width=stage.style.height=w+"px";renderer.setSize(w,w,false);cam.aspect=1;cam.updateProjectionMatrix()}
+if(window.ResizeObserver)new ResizeObserver(()=>size()).observe($("stagebox"));
+window.addEventListener("resize",size);
+let drag=null;
+stage.addEventListener("pointerdown",e=>{drag={x:e.clientX,y:e.clientY,yaw,pitch};stage.setPointerCapture(e.pointerId)});
+stage.addEventListener("pointermove",e=>{if(!drag)return;const dx=(e.clientX-drag.x)*(mirrored?-1:1);yaw=drag.yaw-dx*.01;pitch=Math.max(-.1,Math.min(1.35,drag.pitch+(e.clientY-drag.y)*.008))});
+stage.addEventListener("pointerup",()=>drag=null);stage.addEventListener("pointercancel",()=>drag=null);
+
+/* ---- eine Pose zeichnen ---- */
+function drawSeg(ph,k){
+  const e=shownEx,pose=mix(ph[2],ph[3],k);
+  apply(pose);ground(ph[2].skip||ph[3].skip||[]);
+  const ta=(ph[2].hands||(()=>clasp()))(), tb=(ph[3].hands||(()=>clasp()))();
+  pose.pole=(k<.5?ph[2]:ph[3]).pole;
+  armIK(pose,{L:ta.L.clone().lerp(tb.L,k),R:ta.R.clone().lerp(tb.R,k)});
+  if(e.towel===true){const a=wp("footL"),b=wp("footR");towel.rotation.set(0,0,Math.PI/2);towel.position.set((a.x+b.x)/2,.045,(a.z+b.z)/2-.02)}
+  if(e.props){
+    if(e.props.chair){const c=e.props.chair();chair.position.set(c.x,0,c.z);chair.rotation.y=c.ry||0}
+    if(e.props.wall){const w=e.props.wall();wall.position.set(w.x||0,0,w.z)}
+  }
+}
+function segAt(list,t){let c=t,ph=list[0];for(const s of list){if(c<=s[1]){ph=s;break}c-=s[1]}return [ph,easeIO(Math.min(1,Math.max(0,c/ph[1])))]}
+
+/* ---- Hauptschleife ---- */
+const SIDE=["Seite 1","Seite 2"];
+let lastNow=performance.now();
+function frame(now){
+  const dt=Math.min(.05,(now-lastNow)/1000);lastNow=now;
+  if(running){
+    const s=steps[idx];
+    if(!paused){el+=dt;animT+=dt*gv("speed")}
+    let label="",hint="",side=s.side||0;
+    if(s.type==="trans"){
+      const P=firstPose(s.next.clip);drawSeg(["",1,P,P],1);
+      const left=s.dur-el;
+      $("clock").textContent=fmt(Math.ceil(left));
+      $("phase").textContent=s.label;$("phase").className="phase trans";
+      $("sideChip").textContent=s.item.kind==="once"?"beidseitig":(s.next.mode==="reps"?"beginnt mit ":"")+SIDE[side];$("sideChip").className="chip warn";
+      $("repChip").hidden=true;
+      const sec=Math.ceil(left);if(!paused&&sec!==lastSec&&sec<=3&&sec>0){beep(740,.09,.18)}lastSec=sec;
+      if(left<=0&&!paused)advance();
+    }else{
+      const c=s.clip,pre=seqDur(c.pre);
+      if(animT<pre){const [ph,k]=segAt(c.pre,animT);drawSeg(ph,k);label=ph[0]}
+      else{
+        const lt=animT-pre,cyc=seqDur(c.loop);
+        if(c.alt){
+          const half=Math.floor(lt/cyc);side=half%2;setMirror(side===1);
+          const ct=lt-half*cyc;const [ph,k]=segAt(c.loop,ct);drawSeg(ph,k);label=ph[0];
+          const rep=Math.min(c.reps,Math.floor(ct/c.repDur)+1);
+          $("repChip").hidden=false;$("repChip").className="chip on";
+          $("repChip").textContent=s.item.hip?"Animation":"Wdh "+rep+"/"+c.reps;
+        }else{
+          const [ph,k]=segAt(c.loop,lt%cyc);drawSeg(ph,k);label=ph[0];$("repChip").hidden=true;
+        }
+      }
+      $("sideChip").textContent=s.item.kind==="once"?"beidseitig":(s.mode==="reps"?"zeigt "+SIDE[side]:SIDE[side]);
+      $("sideChip").className="chip on";
+      if(s.mode==="reps"){
+        $("clock").textContent=fmt(el);
+        $("phase").textContent="Wiederholungen · beide Seiten";
+      }else{
+        const left=s.dur-el;$("clock").textContent=fmt(Math.ceil(left));
+        $("phase").textContent=s.stage!=null?`Stufe ${s.stage+1} von 3`:(s.item.kind==="once"?"Halten":(s.ex==="13a"?"Wiederholungen · ":"Halten · ")+SIDE[side]);
+        const sec=Math.ceil(left);if(!paused&&sec!==lastSec&&sec<=3&&sec>0)beep(880,.09,.2);lastSec=sec;
+        if(left<=0&&!paused)advance();
+      }
+      $("phase").className="phase";
+    }
+    $("hint").textContent=paused?"Pausiert":"";
+    placeCam();renderer.render(scene,cam);
+  }
+  requestAnimationFrame(frame);
+}
+fillMat.uniforms.uMode.value=gv("shade");
+renderHome();
+requestAnimationFrame(frame);
+})();
+</script>
+<script>if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script>
+</body>
+</html>
