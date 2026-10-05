@@ -52,7 +52,7 @@ ol{margin:6px 0 0;padding-left:20px;font-size:14px;color:var(--dim)}
 
 <div class="card">
   <h2>2 · Quellen</h2>
-  <label>Playlist-Link (Spotify → Teilen → Link kopieren)</label>
+  <label>Start-Playlist (läuft, solange noch keine Musik gemerkt ist)</label>
   <input id="inPl" placeholder="https://open.spotify.com/playlist/…">
   <label>Podcast-Link (Folge oder ganze Sendung)</label>
   <input id="inPod" placeholder="https://open.spotify.com/episode/… oder /show/…">
@@ -171,8 +171,8 @@ async function snapshot(){
   const p=await api('GET','/me/player?additional_types=episode');
   if(!p||!p.item)return null;
   if(p.device&&p.device.id&&!S.device)S.device={id:p.device.id,name:p.device.name};
-  if(p.item.type==='track'&&S.pl&&p.context&&p.context.uri===S.pl.uri){
-    S.music={track:p.item.uri,name:p.item.name,pos:p.progress_ms,at:Date.now()};
+  if(p.item.type==='track'){ // jede Musik merken, egal woher (Playlist, Album, Suche …)
+    S.music={track:p.item.uri,name:p.item.name,pos:p.progress_ms,at:Date.now(),ctx:p.context?p.context.uri:null,ctxType:p.context?p.context.type:null};
   }else if(p.item.type==='episode'){
     S.pod={episode:p.item.uri,name:p.item.name,pos:p.progress_ms,at:Date.now()};
   }
@@ -207,9 +207,12 @@ async function switchTo(target,why){
     if(!S.pl||!S.podSrc)throw new Error('Erst Playlist und Podcast in Schritt 2 speichern.');
     try{await snapshot()}catch(e){if(e.status!==404)log('Stand lesen fehlgeschlagen: '+e.message,'w')}
     if(target==='music'){
-      if(S.music&&S.music.track){
-        try{await play({context_uri:S.pl.uri,offset:{uri:S.music.track},position_ms:S.music.pos||0})}
-        catch(e){if(e.status===404||e.status===403)throw e;log('Springen zum Song ging nicht, starte Playlist neu','w');await play({context_uri:S.pl.uri})}
+      const m=S.music;
+      if(m&&m.track&&m.ctx){ // Song in seiner Quelle (Playlist/Album …) fortsetzen → Quelle läuft danach weiter
+        try{await play({context_uri:m.ctx,offset:{uri:m.track},position_ms:m.pos||0})}
+        catch(e){if(e.status===404||e.status===403)throw e;log('Quelle ('+(m.ctxType||'?')+') nicht fortsetzbar – spiele nur den Song','w');await play({uris:[m.track],position_ms:m.pos||0})}
+      }else if(m&&m.track){ // einzelner Song ohne Quelle → danach übernimmt Spotify-Autoplay
+        await play({uris:[m.track],position_ms:m.pos||0});
       }else await play({context_uri:S.pl.uri});
     }else{
       const ep=await podcastEpisode();
@@ -218,7 +221,7 @@ async function switchTo(target,why){
     }
     S.active=target;save();
     const ms=Math.round(performance.now()-t0);
-    log(`→ ${target==='music'?'Musik':'Podcast'} (${ms} ms)${why?' · '+why:''}`,'o');msg('swMsg','');
+    log(`→ ${target==='music'?'Musik'+(S.music&&S.music.ctxType?' ['+S.music.ctxType+']':''):'Podcast'} (${ms} ms)${why?' · '+why:''}`,'o');msg('swMsg','');
   }catch(e){log('Umschalten fehlgeschlagen: '+explain(e),'e');msg('swMsg',explain(e),'err')}
   busy=false;renderSwitch();renderSaved();
 }
@@ -230,14 +233,15 @@ function renderSwitch(pending){
   $('bPod').className=(S.active==='podcast'?'on':'')+(pending==='podcast'?' busy':'');
 }
 function renderSaved(){
-  const m=S.music?`<b>${esc(S.music.name)}</b> bei ${fmt(S.music.pos)}`:'noch nichts';
+  const src={playlist:'Playlist',album:'Album',artist:'Künstler',collection:'Lieblingssongs',show:'Sendung'};
+  const m=S.music?`<b>${esc(S.music.name)}</b> bei ${fmt(S.music.pos)} · ${S.music.ctx?'aus '+(src[S.music.ctxType]||S.music.ctxType):'Einzelsong'}`:'noch nichts (startet Playlist)';
   const p=S.pod?`<b>${esc(S.pod.name)}</b> bei ${fmt(S.pod.pos)}`:'noch nichts';
   $('saved').innerHTML=`Gemerkt – Musik: ${m}<br>Gemerkt – Podcast: ${p}`;
   $('btnShuf').textContent=S.shuffle?'Shuffle ist AN → ausschalten':'Shuffle aus';
 }
 async function showNow(){
   try{const p=await snapshot();
-    $('now').innerHTML=p&&p.item?`Läuft: <b>${esc(p.item.name)}</b> (${fmt(p.progress_ms)}) auf ${esc(p.device?p.device.name:'?')} · ${p.is_playing?'spielt':'pausiert'} · Shuffle ${p.shuffle_state?'an':'aus'}`:'Gerade läuft nichts.';
+    $('now').innerHTML=p&&p.item?`Läuft: <b>${esc(p.item.name)}</b> (${fmt(p.progress_ms)}) auf ${esc(p.device?p.device.name:'?')} · ${p.is_playing?'spielt':'pausiert'} · Shuffle ${p.shuffle_state?'an':'aus'} · Quelle: ${p.context?esc(p.context.type):'keine (Einzelsong)'}`:'Gerade läuft nichts.';
     renderSaved();
   }catch(e){$('now').textContent=explain(e)}
 }
