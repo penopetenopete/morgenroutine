@@ -57,7 +57,7 @@ ol{margin:6px 0 0;padding-left:20px;font-size:14px;color:var(--dim)}
   <label>Podcast – optional (Folge oder Sendung; sonst die zuletzt gehörte Folge)</label>
   <input id="inPod" placeholder="https://open.spotify.com/episode/… oder /show/…">
   <label>Podcast beim Zurückkommen zurückspulen (Sekunden)</label>
-  <input id="inRew" type="number" min="0" max="30" value="4">
+  <input id="inRew" type="number" min="0" max="30" value="2">
   <button id="btnSave">Speichern</button>
   <div id="srcMsg" class="msg"></div>
 </div>
@@ -108,7 +108,7 @@ const $=id=>document.getElementById(id);
 
 // ---------- Speicher ----------
 let S=load();
-function load(){try{return Object.assign({log:[],rewind:4,every:30},JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){return {log:[],rewind:4,every:30}}}
+function load(){try{return Object.assign({log:[],rewind:2,every:30},JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){return {log:[],rewind:2,every:30}}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 // ---------- Protokoll ----------
