@@ -211,13 +211,30 @@ async function play(body){
     }else throw e;
   }
 }
+function dq(sep){return S.device?(sep||'?')+'device_id='+encodeURIComponent(S.device.id):''}
+const wait=ms=>new Promise(x=>setTimeout(x,ms));
+// Eigene Playlists und Alben kann die App neu starten. Spotify-Mixe, Radio, Lieblingssongs usw. nicht –
+// dort wird der Podcast nur "dazwischengeschoben" und Spotifys eigene Wiedergabe läuft darunter weiter.
+function resumable(ctx){return !!ctx&&(ctx.type==='album'||(ctx.type==='playlist'&&!/^spotify:playlist:37i9/.test(ctx.uri)))}
+async function seekTo(ms){if(ms>2000){await wait(700);await api('PUT','/me/player/seek?position_ms='+Math.round(ms)+dq('&'))}}
 let busy=false;
 async function switchTo(target,why){
   if(busy)return;busy=true;renderSwitch(target);
   const t0=performance.now();
   try{
-    try{await snapshot()}catch(e){if(e.status!==404)log('Stand lesen fehlgeschlagen: '+e.message,'w')}
-    if(target==='music'){
+    let p=null;try{p=await snapshot()}catch(e){if(e.status!==404)log('Stand lesen fehlgeschlagen: '+e.message,'w')}
+    if(target==='music'&&S.mode==='queue'&&p&&p.item&&p.item.type==='episode'&&S.music){
+      // Zurück zur Musik: Folge überspringen → der eingereihte Song kommt, dann läuft Mix/Radio normal weiter
+      await api('POST','/me/player/next'+dq());await seekTo(S.music.pos||0);S.mode=null;
+    }else if(target==='podcast'&&p&&p.item&&p.item.type==='track'&&!resumable(p.context)){
+      const ep=await podcastEpisode();
+      const pos=S.pod&&S.pod.episode===ep?Math.max(0,(S.pod.pos||0)-S.rewind*1000):0;
+      await api('POST','/me/player/queue?uri='+encodeURIComponent(ep)+dq('&'));
+      await api('POST','/me/player/queue?uri='+encodeURIComponent(p.item.uri)+dq('&'));
+      await api('POST','/me/player/next'+dq());await seekTo(pos);S.mode='queue';
+      log('Musikquelle ('+(p.context?p.context.type:'Einzelsong/Radio')+') bleibt erhalten – Podcast dazwischengeschoben');
+    }else if(target==='music'){
+      S.mode=null;
       const m=S.music;
       if(m&&m.track&&m.ctx){ // Song in seiner Quelle (Playlist/Album …) fortsetzen → Quelle läuft danach weiter
         try{await play({context_uri:m.ctx,offset:{uri:m.track},position_ms:m.pos||0})}
@@ -227,6 +244,7 @@ async function switchTo(target,why){
       }else if(S.pl)await play({context_uri:S.pl.uri});
       else throw new Error('Noch keine Musik gemerkt. Kurz in Spotify Musik anmachen, dann hier umschalten.');
     }else{
+      S.mode=null;
       const ep=await podcastEpisode();
       const pos=S.pod&&S.pod.episode===ep?Math.max(0,(S.pod.pos||0)-S.rewind*1000):0;
       await play({uris:[ep],position_ms:pos});
