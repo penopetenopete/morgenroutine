@@ -289,24 +289,57 @@ public class SpotifyCore {
         }
     }
 
-    private void play(JSONObject body) throws Exception {
-        String q = dq("?");
-        try { api("PUT", "/me/player/play" + q, body); }
-        catch (ApiException e) {
-            JSONObject d;
-            synchronized (this) { d = st.optJSONObject("device"); }
-            if (e.status == 404 && d != null) {
-                addLog("Gerät nicht aktiv – versuche Übergabe an " + d.optString("name"), "w");
-                JSONObject t = new JSONObject(); t.put("device_ids", new JSONArray().put(d.optString("id"))); t.put("play", false);
-                api("PUT", "/me/player", t);
-                Thread.sleep(800);
-                api("PUT", "/me/player/play" + q, body);
-            } else throw e;
+    private interface Op { void run() throws Exception; }
+
+    /** Führt einen Spotify-Befehl aus. Meldet Spotify "kein aktives Gerät" (z. B. nach Skippen auf dem
+     *  Sperrbildschirm), wird das Handy neu gesucht, aktiviert und bis zu 3-mal neu versucht. */
+    private void withDevice(Op op) throws Exception {
+        for (int attempt = 0; ; attempt++) {
+            try { op.run(); return; }
+            catch (ApiException e) {
+                if (e.status != 404 || attempt >= 2) throw e;
+                recoverDevice(attempt);
+            }
         }
     }
 
+    private void recoverDevice(int attempt) throws Exception {
+        Thread.sleep(attempt == 0 ? 600 : 1500);
+        JSONObject j = api("GET", "/me/player/devices", null);
+        JSONArray list = j == null ? null : j.optJSONArray("devices");
+        JSONObject cur;
+        synchronized (this) { cur = st.optJSONObject("device"); }
+        JSONObject pick = null;
+        if (list != null) {
+            for (int pass = 0; pass < 3 && pick == null; pass++) {
+                for (int i = 0; i < list.length() && pick == null; i++) {
+                    JSONObject d = list.getJSONObject(i);
+                    if (pass == 0 && cur != null && cur.optString("id").equals(d.optString("id"))) pick = d;
+                    if (pass == 1 && cur != null && cur.optString("name").equals(d.optString("name"))) pick = d;
+                    if (pass == 2 && "Smartphone".equalsIgnoreCase(d.optString("type"))) pick = d;
+                }
+            }
+        }
+        if (pick == null) {
+            addLog("Gerät nicht gefunden (Versuch " + (attempt + 1) + ") – warte kurz", "w");
+            return;
+        }
+        synchronized (this) {
+            JSONObject d = new JSONObject(); d.put("id", pick.getString("id")); d.put("name", pick.optString("name"));
+            st.put("device", d); save();
+        }
+        addLog("Gerät nicht aktiv – aktiviere " + pick.optString("name") + " (Versuch " + (attempt + 1) + ")", "w");
+        JSONObject t = new JSONObject(); t.put("device_ids", new JSONArray().put(pick.getString("id"))); t.put("play", false);
+        try { api("PUT", "/me/player", t); } catch (ApiException ignored) { }
+        Thread.sleep(800);
+    }
+
+    private void play(JSONObject body) throws Exception {
+        withDevice(() -> api("PUT", "/me/player/play" + dq("?"), body));
+    }
+
     private void seekTo(long ms) throws Exception {
-        if (ms > 2000) { Thread.sleep(700); api("PUT", "/me/player/seek?position_ms=" + ms + dq("&"), null); }
+        if (ms > 2000) { Thread.sleep(700); withDevice(() -> api("PUT", "/me/player/seek?position_ms=" + ms + dq("&"), null)); }
     }
 
     /** Muss im Worker-Thread laufen. Gibt null bei Erfolg zurück, sonst die Fehlermeldung. */
@@ -323,15 +356,16 @@ public class SpotifyCore {
 
             if ("music".equals(target) && "queue".equals(modeStr) && "episode".equals(itemType) && music != null) {
                 // Folge überspringen → der eingereihte Song kommt, dann läuft Mix/Radio normal weiter
-                api("POST", "/me/player/next" + dq("?"), null);
+                withDevice(() -> api("POST", "/me/player/next" + dq("?"), null));
                 seekTo(music.optLong("pos"));
                 setMode(null);
             } else if ("podcast".equals(target) && "track".equals(itemType) && !resumable(p.optJSONObject("context"))) {
                 String ep = podcastEpisode();
                 long pos = podPos(ep);
-                api("POST", "/me/player/queue?uri=" + URLEncoder.encode(ep, "UTF-8") + dq("&"), null);
-                api("POST", "/me/player/queue?uri=" + URLEncoder.encode(item.optString("uri"), "UTF-8") + dq("&"), null);
-                api("POST", "/me/player/next" + dq("?"), null);
+                final String trackUri = item.optString("uri");
+                withDevice(() -> api("POST", "/me/player/queue?uri=" + URLEncoder.encode(ep, "UTF-8") + dq("&"), null));
+                withDevice(() -> api("POST", "/me/player/queue?uri=" + URLEncoder.encode(trackUri, "UTF-8") + dq("&"), null));
+                withDevice(() -> api("POST", "/me/player/next" + dq("?"), null));
                 seekTo(pos);
                 setMode("queue");
                 JSONObject ctx = p.optJSONObject("context");
