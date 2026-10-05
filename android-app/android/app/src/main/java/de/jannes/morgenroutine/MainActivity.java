@@ -16,8 +16,15 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        SpotifyCore.appVisible = true;
+    }
+
+    @Override
     public void onPause() {
         super.onPause();
+        SpotifyCore.appVisible = false;
         keepJsRunning();
     }
 

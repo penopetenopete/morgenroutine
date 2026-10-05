@@ -89,6 +89,28 @@ public class TrainingPlugin extends Plugin {
         });
     }
 
+    /** Aufruf aus app.js syncNative(): geplante Phasen/Töne des laufenden Workouts. */
+    @PluginMethod
+    public void scheduleEvents(PluginCall call) {
+        try {
+            org.json.JSONArray ev = call.getArray("events");
+            core().setEvents(ev == null ? new org.json.JSONArray() : ev, call.getBoolean("sound", core().soundOn()));
+            call.resolve();
+        } catch (Exception e) { call.reject(e.getMessage()); }
+    }
+
+    @PluginMethod
+    public void clearEvents(PluginCall call) { core().clearEvents(); call.resolve(); }
+
+    @PluginMethod
+    public void setSound(PluginCall call) { core().setSound(call.getBoolean("on", true)); call.resolve(); }
+
+    @PluginMethod
+    public void setSmart(PluginCall call) {
+        core().setSmart(call.getBoolean("on", false), call.getInt("short", 20));
+        call.resolve();
+    }
+
     @PluginMethod
     public void startAuto(PluginCall call) { core().startAuto(call.getInt("every", 30)); call.resolve(); }
 

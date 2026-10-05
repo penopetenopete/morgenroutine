@@ -2,6 +2,9 @@ package de.jannes.morgenroutine;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
+import android.os.SystemClock;
 import android.os.Handler;
 import android.os.HandlerThread;
 
@@ -32,6 +35,11 @@ public class SpotifyCore {
     private JSONArray log;
     private Runnable autoTask;
     private Runnable planTask;
+    private final Handler toneHandler;
+    private static final Object TONE = new Object();
+    /** Wird von MainActivity gesetzt. Töne spielt der native Teil nur, wenn die App nicht sichtbar ist
+     *  (sonst piept die Seite selbst). */
+    public static volatile boolean appVisible = true;
 
     public static synchronized SpotifyCore get(Context c) {
         if (instance == null) instance = new SpotifyCore(c.getApplicationContext());
@@ -45,6 +53,9 @@ public class SpotifyCore {
         HandlerThread t = new HandlerThread("spotify");
         t.start();
         worker = new Handler(t.getLooper());
+        HandlerThread tt = new HandlerThread("tones");
+        tt.start();
+        toneHandler = new Handler(tt.getLooper());
         if (st.has("auto")) scheduleAuto(); // Auto-Wechsel nach Neustart fortsetzen
         if (st.has("plan")) schedulePlan(); // Smart-Plan nach Neustart fortsetzen
     }
@@ -182,6 +193,103 @@ public class SpotifyCore {
             schedulePlan();
         };
         worker.postDelayed(planTask, delay);
+    }
+
+    // ---------- Workout aus der App: geplante Phasen + Töne ----------
+    /** events: aus app.js plannedEvents(): {at, typ:"phase", phase:"work"|"rest"|"done", pauseSek, …} und {at, typ:"ton"}. */
+    public synchronized void setEvents(JSONArray events, boolean sound) {
+        try { st.put("events", events); } catch (JSONException ignored) { }
+        save();
+        rebuildSmart();
+        scheduleTones(sound ? events : new JSONArray());
+    }
+
+    public synchronized void clearEvents() {
+        st.remove("events");
+        save();
+        toneHandler.removeCallbacksAndMessages(TONE);
+        if (planTask != null) worker.removeCallbacks(planTask);
+        planTask = null;
+        st.remove("plan");
+        save();
+    }
+
+    public synchronized void setSound(boolean on) {
+        try { st.put("sound", on); } catch (JSONException ignored) { }
+        save();
+        JSONArray ev = st.optJSONArray("events");
+        scheduleTones(on && ev != null ? ev : new JSONArray());
+    }
+
+    public synchronized boolean soundOn() { return st.optBoolean("sound", true); }
+
+    public synchronized void setSmart(boolean on, int shortSec) {
+        try { st.put("smart", on); st.put("short", shortSec); } catch (JSONException ignored) { }
+        save();
+        addLog(on ? "Smart an" : "Smart aus", "");
+        rebuildSmart();
+    }
+
+    /** Smart-Regel: Satz → Musik, Pause → Podcast (kurze Pausen bleiben Musik, offene Pausen = Podcast). */
+    static String smartTarget(String phase, int pauseSek, int shortSec) {
+        if ("work".equals(phase)) return "music";
+        if ("rest".equals(phase)) return (pauseSek == 0 || pauseSek >= shortSec) ? "podcast" : "music";
+        return null;
+    }
+
+    private synchronized void rebuildSmart() {
+        JSONArray ev = st.optJSONArray("events");
+        if (!st.optBoolean("smart") || ev == null) {
+            if (planTask != null) worker.removeCallbacks(planTask);
+            planTask = null; st.remove("plan"); save();
+            return;
+        }
+        int shortSec = st.optInt("short", 20);
+        JSONArray plan = new JSONArray();
+        String last = null;
+        for (int i = 0; i < ev.length(); i++) {
+            JSONObject e = ev.optJSONObject(i);
+            if (e == null || !"phase".equals(e.optString("typ"))) continue;
+            String target = smartTarget(e.optString("phase"), e.optInt("pauseSek", 0), shortSec);
+            if (target == null || target.equals(last)) continue;
+            last = target;
+            try {
+                JSONObject p = new JSONObject();
+                p.put("at", e.optLong("at")); p.put("target", target);
+                p.put("label", "Smart · " + ("work".equals(e.optString("phase")) ? "Satz" : "Pause"));
+                plan.put(p);
+            } catch (JSONException ignored) { }
+        }
+        try { st.put("plan", plan); } catch (JSONException ignored) { }
+        save();
+        schedulePlan();
+    }
+
+    private void scheduleTones(JSONArray ev) {
+        toneHandler.removeCallbacksAndMessages(TONE);
+        long now = System.currentTimeMillis();
+        for (int i = 0; i < ev.length(); i++) {
+            JSONObject e = ev.optJSONObject(i);
+            if (e == null) continue;
+            long delay = e.optLong("at") - now;
+            if (delay < -300) continue;
+            int tone;
+            if ("ton".equals(e.optString("typ"))) tone = ToneGenerator.TONE_PROP_BEEP;
+            else if ("work".equals(e.optString("phase"))) tone = ToneGenerator.TONE_PROP_BEEP2;
+            else if ("done".equals(e.optString("phase"))) tone = ToneGenerator.TONE_PROP_ACK;
+            else continue;
+            final int t = tone;
+            toneHandler.postAtTime(() -> beep(t), TONE, SystemClock.uptimeMillis() + Math.max(0, delay));
+        }
+    }
+
+    private void beep(int tone) {
+        if (appVisible) return;
+        try {
+            ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_MUSIC, 90);
+            tg.startTone(tone, 200);
+            toneHandler.postDelayed(tg::release, 600);
+        } catch (Exception ignored) { }
     }
 
     // ---------- Steuerknöpfe ----------

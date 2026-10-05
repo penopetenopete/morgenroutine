@@ -3,7 +3,7 @@
   "appName": "Training",
   "webDir": "www",
   "server": {
-    "url": "https://penopetenopete.github.io/morgenroutine/spotify-labor.html",
+    "url": "https://penopetenopete.github.io/morgenroutine/index.html",
     "errorPath": "offline.html"
   },
   "android": {
