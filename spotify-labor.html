@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B0F14">
+<title>Spotify-Labor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#0B0F14;--card:#121922;--line:#223040;--text:#E6EDF3;--dim:#8A99A8;--acc:#00E5FF;--warn:#FFB547;--ok:#5BE38C;--bad:#FF6B6B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 Barlow,system-ui,sans-serif;padding:16px 16px 40px;max-width:560px;margin-inline:auto}
+h1{font:700 24px 'Chakra Petch',sans-serif;margin:4px 0 2px;color:var(--acc);letter-spacing:.5px}
+h2{font:600 15px 'Chakra Petch',sans-serif;margin:0 0 10px;text-transform:uppercase;letter-spacing:1px;color:var(--dim)}
+.sub{color:var(--dim);margin:0 0 16px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+button{font:600 15px 'Chakra Petch',sans-serif;background:#1A2430;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 14px;cursor:pointer}
+button:active{transform:scale(.98)}
+button.pri{background:var(--acc);color:#001318;border-color:var(--acc)}
+button.small{padding:7px 10px;font-size:13px}
+input{width:100%;background:#0E141B;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:15px Barlow,sans-serif;margin:4px 0 10px}
+label{font-size:13px;color:var(--dim)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:20px 8px;font-size:19px;background:#0E141B}
+.seg button.on{background:var(--acc);color:#001318}
+.seg button.busy{opacity:.55}
+.st{font-size:14px;color:var(--dim);margin-top:10px}
+.st b{color:var(--text);font-weight:600}
+.dev{display:block;width:100%;text-align:left;margin-top:6px}
+.dev.on{border-color:var(--acc);color:var(--acc)}
+.msg{font-size:14px;padding:10px;border-radius:10px;margin-top:10px;display:none}
+.msg.err{display:block;background:#2A1416;border:1px solid #5A2428;color:#FFB4B4}
+.msg.ok{display:block;background:#11251A;border:1px solid #23503A;color:#B8F5CF}
+#log{font:13px/1.5 ui-monospace,Menlo,monospace;max-height:340px;overflow:auto;white-space:pre-wrap}
+#log .e{color:var(--bad)}#log .o{color:var(--ok)}#log .w{color:var(--warn)}
+.big{font:700 28px 'Chakra Petch',sans-serif;color:var(--warn)}
+ol{margin:6px 0 0;padding-left:20px;font-size:14px;color:var(--dim)}
+</style>
+</head>
+<body>
+<h1>Spotify-Labor</h1>
+<p class="sub">Testseite: Musik ↔ Podcast umschalten und Stelle merken.</p>
+
+<div class="card">
+  <h2>1 · Verbindung</h2>
+  <div id="authState" class="st">Nicht verbunden.</div>
+  <div class="row" style="margin-top:10px"><button id="btnLogin" class="pri">Mit Spotify verbinden</button><button id="btnLogout" class="small">Abmelden</button></div>
+  <div id="authMsg" class="msg"></div>
+</div>
+
+<div class="card">
+  <h2>2 · Quellen</h2>
+  <label>Playlist-Link (Spotify → Teilen → Link kopieren)</label>
+  <input id="inPl" placeholder="https://open.spotify.com/playlist/…">
+  <label>Podcast-Link (Folge oder ganze Sendung)</label>
+  <input id="inPod" placeholder="https://open.spotify.com/episode/… oder /show/…">
+  <label>Podcast beim Zurückkommen zurückspulen (Sekunden)</label>
+  <input id="inRew" type="number" min="0" max="30" value="4">
+  <button id="btnSave">Speichern</button>
+  <div id="srcMsg" class="msg"></div>
+</div>
+
+<div class="card">
+  <h2>3 · Gerät</h2>
+  <div class="st">Spotify am Handy einmal öffnen und kurz etwas abspielen, dann hier suchen.</div>
+  <button id="btnDev" style="margin-top:10px">Geräte suchen</button>
+  <div id="devList"></div>
+</div>
+
+<div class="card">
+  <h2>4 · Umschalten</h2>
+  <div class="seg"><button id="bMusic">Musik</button><button id="bPod">Podcast</button></div>
+  <div id="saved" class="st"></div>
+  <div id="now" class="st"></div>
+  <div class="row" style="margin-top:10px"><button id="btnNow" class="small">Was läuft gerade?</button><button id="btnShuf" class="small">Shuffle aus</button></div>
+  <div id="swMsg" class="msg"></div>
+</div>
+
+<div class="card">
+  <h2>5 · Test: Bildschirm aus</h2>
+  <label>Automatisch umschalten alle … Sekunden</label>
+  <input id="inEvery" type="number" min="10" max="300" value="30">
+  <div class="row"><button id="btnAuto" class="pri">Auto-Wechsel starten</button><span id="autoInfo" class="big"></span></div>
+  <ol>
+    <li>Starten, Handy sperren, 2–3 Minuten zuhören.</li>
+    <li>Wechselt es weiter? Dann reicht die Web-App.</li>
+    <li>Entsperren: Im Protokoll steht, ob die Seite „eingefroren“ war.</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h2>Protokoll</h2>
+  <div class="row" style="margin-bottom:8px"><button id="btnClr" class="small">Leeren</button><button id="btnCopy" class="small">Kopieren</button></div>
+  <div id="log"></div>
+</div>
+
+<script>
+const CLIENT_ID='e4b95d44f2f6410e8e80483e9f3f82c0';
+const REDIRECT='https://penopetenopete.github.io/morgenroutine/spotify-labor.html';
+const SCOPES='user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-playback-position';
+const KEY='spotify_labor_v1';
+const $=id=>document.getElementById(id);
+
+// ---------- Speicher ----------
+let S=load();
+function load(){try{return Object.assign({log:[],rewind:4,every:30},JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){return {log:[],rewind:4,every:30}}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+// ---------- Protokoll ----------
+function hhmmss(t){const d=new Date(t);return d.toLocaleTimeString('de-DE',{hour12:false})}
+function log(text,kind){S.log.unshift({t:Date.now(),text,kind:kind||''});S.log=S.log.slice(0,200);save();renderLog()}
+function renderLog(){$('log').innerHTML=S.log.map(e=>`<div class="${e.kind}">${hhmmss(e.t)}  ${esc(e.text)}</div>`).join('')||'<span style="color:var(--dim)">Noch leer.</span>'}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function msg(id,text,kind){const m=$(id);m.className='msg '+(text?kind:'');m.textContent=text||''}
+function fmt(ms){if(ms==null)return'–';const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+
+// ---------- Login (PKCE, ohne Server) ----------
+function randStr(n){const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';const a=crypto.getRandomValues(new Uint8Array(n));return Array.from(a,x=>c[x%c.length]).join('')}
+async function challenge(v){const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return btoa(String.fromCharCode(...new Uint8Array(d))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+async function login(){
+  const v=randStr(64),st=randStr(16);
+  localStorage.setItem(KEY+'_pkce',JSON.stringify({v,st}));
+  const p=new URLSearchParams({response_type:'code',client_id:CLIENT_ID,scope:SCOPES,code_challenge_method:'S256',code_challenge:await challenge(v),redirect_uri:REDIRECT,state:st});
+  location.href='https://accounts.spotify.com/authorize?'+p;
+}
+async function tokenReq(params){
+  const r=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(params)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error('Token-Fehler: '+(j.error_description||j.error||r.status));
+  S.tok={access:j.access_token,refresh:j.refresh_token||(S.tok&&S.tok.refresh),exp:Date.now()+(j.expires_in-60)*1000};save();
+}
+async function handleRedirect(){
+  const q=new URLSearchParams(location.search);
+  if(!q.has('code')&&!q.has('error'))return;
+  history.replaceState(null,'',location.pathname);
+  if(q.has('error')){msg('authMsg','Spotify hat abgelehnt: '+q.get('error'),'err');log('Login abgelehnt: '+q.get('error'),'e');return}
+  const k=JSON.parse(localStorage.getItem(KEY+'_pkce')||'{}');
+  if(k.st!==q.get('state')){msg('authMsg','Login passt nicht zusammen. Bitte nochmal verbinden.','err');return}
+  try{await tokenReq({client_id:CLIENT_ID,grant_type:'authorization_code',code:q.get('code'),redirect_uri:REDIRECT,code_verifier:k.v});log('Mit Spotify verbunden','o')}
+  catch(e){msg('authMsg',e.message,'err');log(e.message,'e')}
+}
+async function token(){
+  if(!S.tok)throw Object.assign(new Error('Nicht verbunden – erst Schritt 1.'),{status:0});
+  if(Date.now()>S.tok.exp)await tokenReq({client_id:CLIENT_ID,grant_type:'refresh_token',refresh_token:S.tok.refresh});
+  return S.tok.access;
+}
+
+// ---------- Web API ----------
+async function api(method,path,body,retry){
+  const r=await fetch('https://api.spotify.com/v1'+path,{method,headers:{Authorization:'Bearer '+await token(),'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+  if(r.status===401&&!retry){S.tok.exp=0;return api(method,path,body,true)}
+  if(r.status===429&&!retry){const w=+(r.headers.get('Retry-After')||1);await new Promise(x=>setTimeout(x,w*1000));return api(method,path,body,true)}
+  if(r.status===204)return null;
+  const txt=await r.text();let j=null;try{j=txt?JSON.parse(txt):null}catch(e){}
+  if(!r.ok){const m=(j&&j.error&&(j.error.message||j.error))||txt||r.statusText;const e=new Error(r.status+': '+m);e.status=r.status;e.reason=j&&j.error&&j.error.reason;throw e}
+  return j;
+}
+function explain(e){
+  if(e.status===404)return 'Kein aktives Spotify-Gerät. Spotify am Handy öffnen, kurz Play drücken, dann nochmal.';
+  if(e.status===403)return (e.reason==='PREMIUM_REQUIRED'?'Spotify meldet: Premium nötig. ':'Zugriff verweigert (403). ')+'Evtl. in der Spotify-Entwickler-App unter „User Management“ dein Konto eintragen.';
+  return e.message;
+}
+
+// ---------- Links ----------
+function parse(s){const m=String(s||'').match(/(playlist|album|show|episode|track|artist)[\/:]([A-Za-z0-9]{22})/);return m?{type:m[1],id:m[2],uri:'spotify:'+m[1]+':'+m[2]}:null}
+
+// ---------- Kernlogik: Stand merken & umschalten ----------
+async function snapshot(){
+  const p=await api('GET','/me/player?additional_types=episode');
+  if(!p||!p.item)return null;
+  if(p.device&&p.device.id&&!S.device)S.device={id:p.device.id,name:p.device.name};
+  if(p.item.type==='track'&&S.pl&&p.context&&p.context.uri===S.pl.uri){
+    S.music={track:p.item.uri,name:p.item.name,pos:p.progress_ms,at:Date.now()};
+  }else if(p.item.type==='episode'){
+    S.pod={episode:p.item.uri,name:p.item.name,pos:p.progress_ms,at:Date.now()};
+  }
+  S.shuffle=p.shuffle_state;save();return p;
+}
+async function podcastEpisode(){
+  if(S.pod&&S.pod.episode)return S.pod.episode;
+  if(S.podSrc.type==='episode')return S.podSrc.uri;
+  if(S.podSrc.type==='show'){
+    const j=await api('GET','/shows/'+S.podSrc.id+'/episodes?limit=1');
+    if(j&&j.items&&j.items[0])return j.items[0].uri;
+  }
+  throw new Error('Keine Folge gefunden – bitte den Link einer einzelnen Folge eintragen.');
+}
+async function play(body){
+  const q=S.device?'?device_id='+encodeURIComponent(S.device.id):'';
+  try{await api('PUT','/me/player/play'+q,body)}
+  catch(e){
+    if(e.status===404&&S.device){ // Gerät "aufwecken" und nochmal
+      log('Gerät nicht aktiv – versuche Übergabe an '+S.device.name,'w');
+      await api('PUT','/me/player',{device_ids:[S.device.id],play:false});
+      await new Promise(x=>setTimeout(x,800));
+      await api('PUT','/me/player/play'+q,body);
+    }else throw e;
+  }
+}
+let busy=false;
+async function switchTo(target,why){
+  if(busy)return;busy=true;renderSwitch(target);
+  const t0=performance.now();
+  try{
+    if(!S.pl||!S.podSrc)throw new Error('Erst Playlist und Podcast in Schritt 2 speichern.');
+    try{await snapshot()}catch(e){if(e.status!==404)log('Stand lesen fehlgeschlagen: '+e.message,'w')}
+    if(target==='music'){
+      if(S.music&&S.music.track){
+        try{await play({context_uri:S.pl.uri,offset:{uri:S.music.track},position_ms:S.music.pos||0})}
+        catch(e){if(e.status===404||e.status===403)throw e;log('Springen zum Song ging nicht, starte Playlist neu','w');await play({context_uri:S.pl.uri})}
+      }else await play({context_uri:S.pl.uri});
+    }else{
+      const ep=await podcastEpisode();
+      const pos=S.pod&&S.pod.episode===ep?Math.max(0,(S.pod.pos||0)-S.rewind*1000):0;
+      await play({uris:[ep],position_ms:pos});
+    }
+    S.active=target;save();
+    const ms=Math.round(performance.now()-t0);
+    log(`→ ${target==='music'?'Musik':'Podcast'} (${ms} ms)${why?' · '+why:''}`,'o');msg('swMsg','');
+  }catch(e){log('Umschalten fehlgeschlagen: '+explain(e),'e');msg('swMsg',explain(e),'err')}
+  busy=false;renderSwitch();renderSaved();
+}
+
+// ---------- Anzeige ----------
+function renderAuth(){$('authState').innerHTML=S.tok?'<b style="color:var(--ok)">Verbunden.</b>':'Nicht verbunden.'}
+function renderSwitch(pending){
+  $('bMusic').className=(S.active==='music'?'on':'')+(pending==='music'?' busy':'');
+  $('bPod').className=(S.active==='podcast'?'on':'')+(pending==='podcast'?' busy':'');
+}
+function renderSaved(){
+  const m=S.music?`<b>${esc(S.music.name)}</b> bei ${fmt(S.music.pos)}`:'noch nichts';
+  const p=S.pod?`<b>${esc(S.pod.name)}</b> bei ${fmt(S.pod.pos)}`:'noch nichts';
+  $('saved').innerHTML=`Gemerkt – Musik: ${m}<br>Gemerkt – Podcast: ${p}`;
+  $('btnShuf').textContent=S.shuffle?'Shuffle ist AN → ausschalten':'Shuffle aus';
+}
+async function showNow(){
+  try{const p=await snapshot();
+    $('now').innerHTML=p&&p.item?`Läuft: <b>${esc(p.item.name)}</b> (${fmt(p.progress_ms)}) auf ${esc(p.device?p.device.name:'?')} · ${p.is_playing?'spielt':'pausiert'} · Shuffle ${p.shuffle_state?'an':'aus'}`:'Gerade läuft nichts.';
+    renderSaved();
+  }catch(e){$('now').textContent=explain(e)}
+}
+async function findDevices(){
+  try{const j=await api('GET','/me/player/devices');const d=(j&&j.devices)||[];
+    $('devList').innerHTML=d.length?'':'<div class="st">Kein Gerät gefunden. Spotify am Handy öffnen und kurz abspielen.</div>';
+    d.forEach(x=>{const b=document.createElement('button');b.className='dev'+(S.device&&S.device.id===x.id?' on':'');b.textContent=`${x.name} (${x.type})${x.is_active?' · aktiv':''}`;b.onclick=()=>{S.device={id:x.id,name:x.name};save();log('Gerät gewählt: '+x.name);findDevices()};$('devList').appendChild(b)});
+  }catch(e){$('devList').innerHTML=`<div class="msg err" style="display:block">${esc(explain(e))}</div>`}
+}
+
+// ---------- Auto-Test (Bildschirm aus) ----------
+let lastTick=Date.now();
+setInterval(()=>{
+  const now=Date.now(),gap=now-lastTick;lastTick=now;
+  if(gap>5000)log(`Seite war ${Math.round(gap/1000)} s eingefroren`,'w');
+  if(S.auto){
+    const left=Math.ceil((S.auto.next-now)/1000);
+    $('autoInfo').textContent=left>0?left+' s':'…';
+    if(now>=S.auto.next&&!busy){S.auto.next=now+S.every*1000;save();switchTo(S.active==='music'?'podcast':'music','Auto')}
+  }else $('autoInfo').textContent='';
+},1000);
+document.addEventListener('visibilitychange',()=>log(document.hidden?'Seite im Hintergrund / Bildschirm aus':'Seite wieder sichtbar'));
+function renderAuto(){$('btnAuto').textContent=S.auto?'Auto-Wechsel stoppen':'Auto-Wechsel starten'}
+
+// ---------- Knöpfe ----------
+$('btnLogin').onclick=login;
+$('btnLogout').onclick=()=>{delete S.tok;save();renderAuth();log('Abgemeldet')};
+$('btnSave').onclick=()=>{
+  const pl=parse($('inPl').value),pod=parse($('inPod').value);
+  if(!pl||pl.type!=='playlist'){msg('srcMsg','Playlist-Link nicht erkannt. Er sollte „open.spotify.com/playlist/…“ enthalten.','err');return}
+  if(!pod||!['episode','show'].includes(pod.type)){msg('srcMsg','Podcast-Link nicht erkannt. Er sollte „/episode/…“ oder „/show/…“ enthalten.','err');return}
+  if(!S.pl||S.pl.uri!==pl.uri)S.music=null;
+  if(!S.podSrc||S.podSrc.uri!==pod.uri)S.pod=null;
+  S.pl=pl;S.podSrc=pod;S.rewind=Math.max(0,+$('inRew').value||0);save();
+  msg('srcMsg','Gespeichert.','ok');renderSaved();
+};
+$('bMusic').onclick=()=>switchTo('music');
+$('bPod').onclick=()=>switchTo('podcast');
+$('btnNow').onclick=showNow;
+$('btnShuf').onclick=async()=>{try{await api('PUT','/me/player/shuffle?state=false'+(S.device?'&device_id='+encodeURIComponent(S.device.id):''));S.shuffle=false;save();log('Shuffle ausgeschaltet');showNow()}catch(e){msg('swMsg',explain(e),'err')}};
+$('btnDev').onclick=findDevices;
+$('btnAuto').onclick=()=>{
+  if(S.auto){S.auto=null;log('Auto-Wechsel gestoppt')}
+  else{S.every=Math.max(10,+$('inEvery').value||30);S.auto={next:Date.now()+S.every*1000};log(`Auto-Wechsel gestartet (alle ${S.every} s)`)}
+  save();renderAuto();
+};
+$('btnClr').onclick=()=>{S.log=[];save();renderLog()};
+$('btnCopy').onclick=()=>{const t=S.log.map(e=>hhmmss(e.t)+'  '+e.text).join('\n');navigator.clipboard.writeText(t).then(()=>log('Protokoll kopiert'),()=>alert(t))};
+
+// ---------- Start ----------
+(async()=>{
+  if(S.pl)$('inPl').value='https://open.spotify.com/playlist/'+S.pl.id;
+  if(S.podSrc)$('inPod').value='https://open.spotify.com/'+S.podSrc.type+'/'+S.podSrc.id;
+  $('inRew').value=S.rewind;$('inEvery').value=S.every;
+  await handleRedirect();
+  renderAuth();renderSwitch();renderSaved();renderLog();renderAuto();
+})();
+</script>
+</body>
+</html>
