@@ -52,9 +52,9 @@ ol{margin:6px 0 0;padding-left:20px;font-size:14px;color:var(--dim)}
 
 <div class="card">
   <h2>2 · Quellen</h2>
-  <label>Start-Playlist (läuft, solange noch keine Musik gemerkt ist)</label>
+  <label>Start-Playlist – optional (nur falls noch keine Musik gemerkt ist)</label>
   <input id="inPl" placeholder="https://open.spotify.com/playlist/…">
-  <label>Podcast-Link (Folge oder ganze Sendung)</label>
+  <label>Podcast – optional (Folge oder Sendung; sonst die zuletzt gehörte Folge)</label>
   <input id="inPod" placeholder="https://open.spotify.com/episode/… oder /show/…">
   <label>Podcast beim Zurückkommen zurückspulen (Sekunden)</label>
   <input id="inRew" type="number" min="0" max="30" value="4">
@@ -191,6 +191,7 @@ async function snapshot(){
 }
 async function podcastEpisode(){
   if(S.pod&&S.pod.episode)return S.pod.episode;
+  if(!S.podSrc)throw new Error('Noch keine Podcast-Folge gemerkt. Kurz in Spotify eine Folge anmachen oder oben einen Link eintragen.');
   if(S.podSrc.type==='episode')return S.podSrc.uri;
   if(S.podSrc.type==='show'){
     const j=await api('GET','/shows/'+S.podSrc.id+'/episodes?limit=1');
@@ -215,7 +216,6 @@ async function switchTo(target,why){
   if(busy)return;busy=true;renderSwitch(target);
   const t0=performance.now();
   try{
-    if(!S.pl||!S.podSrc)throw new Error('Erst Playlist und Podcast in Schritt 2 speichern.');
     try{await snapshot()}catch(e){if(e.status!==404)log('Stand lesen fehlgeschlagen: '+e.message,'w')}
     if(target==='music'){
       const m=S.music;
@@ -224,7 +224,8 @@ async function switchTo(target,why){
         catch(e){if(e.status===404||e.status===403)throw e;log('Quelle ('+(m.ctxType||'?')+') nicht fortsetzbar – spiele nur den Song','w');await play({uris:[m.track],position_ms:m.pos||0})}
       }else if(m&&m.track){ // einzelner Song ohne Quelle → danach übernimmt Spotify-Autoplay
         await play({uris:[m.track],position_ms:m.pos||0});
-      }else await play({context_uri:S.pl.uri});
+      }else if(S.pl)await play({context_uri:S.pl.uri});
+      else throw new Error('Noch keine Musik gemerkt. Kurz in Spotify Musik anmachen, dann hier umschalten.');
     }else{
       const ep=await podcastEpisode();
       const pos=S.pod&&S.pod.episode===ep?Math.max(0,(S.pod.pos||0)-S.rewind*1000):0;
@@ -281,11 +282,12 @@ function renderAuto(){$('btnAuto').textContent=S.auto?'Auto-Wechsel stoppen':'Au
 $('btnLogin').onclick=login;
 $('btnLogout').onclick=()=>{delete S.tok;save();renderAuth();log('Abgemeldet')};
 $('btnSave').onclick=()=>{
-  const pl=parse($('inPl').value),pod=parse($('inPod').value);
-  if(!pl||pl.type!=='playlist'){msg('srcMsg','Playlist-Link nicht erkannt. Er sollte „open.spotify.com/playlist/…“ enthalten.','err');return}
-  if(!pod||!['episode','show'].includes(pod.type)){msg('srcMsg','Podcast-Link nicht erkannt. Er sollte „/episode/…“ oder „/show/…“ enthalten.','err');return}
-  if(!S.pl||S.pl.uri!==pl.uri)S.music=null;
-  if(!S.podSrc||S.podSrc.uri!==pod.uri)S.pod=null;
+  const tPl=$('inPl').value.trim(),tPod=$('inPod').value.trim();
+  const pl=tPl?parse(tPl):null,pod=tPod?parse(tPod):null;
+  if(tPl&&(!pl||pl.type!=='playlist')){msg('srcMsg','Playlist-Link nicht erkannt. Er sollte „open.spotify.com/playlist/…“ enthalten – oder Feld leer lassen.','err');return}
+  if(tPod&&(!pod||!['episode','show'].includes(pod.type))){msg('srcMsg','Podcast-Link nicht erkannt. Er sollte „/episode/…“ oder „/show/…“ enthalten – oder Feld leer lassen.','err');return}
+  if(pl&&(!S.pl||S.pl.uri!==pl.uri))S.music=null;
+  if(pod&&(!S.podSrc||S.podSrc.uri!==pod.uri))S.pod=null;
   S.pl=pl;S.podSrc=pod;S.rewind=Math.max(0,+$('inRew').value||0);save();
   msg('srcMsg','Gespeichert.','ok');renderSaved();
 };
