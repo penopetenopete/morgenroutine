@@ -313,3 +313,10 @@ body{font-size:17px}
 .tlb.done,.tle.done{opacity:.32;filter:grayscale(1);cursor:default}
 .tlb.now{box-shadow:0 0 0 2px var(--fg)}
 #plTl .tl{margin-top:2px}
+
+/* Suche im Katalog, übersprungene Übungen unter der Timeline */
+.pksearch{position:sticky;top:0;z-index:3;width:100%;min-height:50px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--fg);padding:0 14px;font-size:1.05rem;font-family:inherit;margin-bottom:10px}
+.pksearch:focus{outline:2px solid var(--accent);outline-offset:1px}
+.skipline{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;color:var(--muted);font-size:.95rem}
+.skc{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:6px 12px;font-family:var(--f-display);font-size:.85rem;cursor:pointer}
+.topbar .ic#rMore{margin-left:auto}

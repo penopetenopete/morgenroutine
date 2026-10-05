@@ -85,8 +85,11 @@ function getRoutine(id){
       const x=ov.items[d.uid]||{},base=baseMorgen(d);
       const it={uid:d.uid,ex:d.ex,base,o:Object.assign({},base,x.o||{}),so:x.so?clone(x.so):{},off:!!x.off};
       if(d.pair){const b2=base2Morgen(d);it.pair={ex2:d.pair.ex2,umbau:d.pair.umbau,name:d.pair.name,base2:b2,o2:Object.assign({},b2,x.o2||{})}}
+      else it.link=!!x.link;
       return it;
     });
+    (ov.extra||[]).forEach(x=>{if(EXB[x.ex])items.push({uid:x.uid,ex:x.ex,extra:true,link:!!x.link,so:x.so?clone(x.so):{},base:Object.assign({},exDef(x.ex)),o:Object.assign({},exDef(x.ex),x.o)})});
+    if(ov.order){const pos=u=>{const i=ov.order.indexOf(u);return i<0?1e3:i};items.sort((a,b)=>pos(a.uid)-pos(b.uid))}
     return {id,name:MORGEN.name,preset:true,days:[{items}],pauses:ov.pauses||{},settings:Object.assign({},DEF_SET,MORGEN.settings,ov.settings,{confirm:false})};
   }
   const r=S.routines.find(r=>r.id===id);if(!r)return null;
@@ -99,6 +102,8 @@ function diff(o,base){const d={};for(const k in o)if(o[k]!==base[k])d[k]=o[k];re
 function persistItem(rid,it){
   if(!rid)return;
   if(rid==="morgen"){
+    const xe=(S.morgen.extra||[]).find(x=>x.uid===it.uid);
+    if(xe){xe.o=Object.assign({},it.o);if(it.so&&Object.keys(it.so).length)xe.so=clone(it.so);else delete xe.so;save();return}
     const d=MORGEN.items.find(x=>x.uid===it.uid);if(!d)return;
     const x=S.morgen.items[it.uid]||(S.morgen.items[it.uid]={});
     x.o=diff(it.o,baseMorgen(d));if(!Object.keys(x.o).length)delete x.o;
@@ -110,6 +115,36 @@ function persistItem(rid,it){
   const r=rawRoutine(rid);if(!r)return;
   for(const d of r.days)for(const x of d.items)if(x.uid===it.uid){x.o=Object.assign({},it.o);if(it.so&&Object.keys(it.so).length)x.so=clone(it.so);else delete x.so}
   save();
+}
+/* ---- Routine dauerhaft ändern: hinzufügen, löschen, Reihenfolge, Verknüpfung ---- */
+function rawItems(rid,day){
+  if(rid==="morgen"){const ov=S.morgen;ov.extra=ov.extra||[];return null}
+  const r=rawRoutine(rid);return r&&r.days[day]?r.days[day].items:null;
+}
+function addItems(rid,day,exs){
+  return exs.map(ex=>{const uid=uidGen(),o=catOpt(ex);
+    if(rid==="morgen"){S.morgen.extra=S.morgen.extra||[];S.morgen.extra.push({uid,ex,o:Object.assign({},o)});if(S.morgen.order)S.morgen.order.push(uid)}
+    else{const a=rawItems(rid,day);if(a)a.push({uid,ex,o:Object.assign({},o)})}
+    return {uid,ex,o,so:{},base:Object.assign({},o),link:false};
+  });
+}
+function deleteItem(rid,day,uid){
+  if(rid==="morgen"){
+    const ov=S.morgen,ei=(ov.extra||[]).findIndex(x=>x.uid===uid);
+    if(ei>=0){ov.extra.splice(ei,1);if(ov.order)ov.order=ov.order.filter(u=>u!==uid);save()}else setMorgenOff(uid,true);
+    return;
+  }
+  const a=rawItems(rid,day);if(!a)return;const i=a.findIndex(x=>x.uid===uid);if(i>=0)a.splice(i,1);save();
+}
+/* uids = neue Reihenfolge der sichtbaren Übungen */
+function orderItems(rid,day,uids){
+  if(rid==="morgen"){const all=getRoutine("morgen").days[0].items.map(x=>x.uid);S.morgen.order=uids.concat(all.filter(u=>!uids.includes(u)));save();return}
+  const a=rawItems(rid,day);if(!a)return;const pos=u=>{const i=uids.indexOf(u);return i<0?1e3:i};
+  const sorted=a.slice().sort((x,y)=>pos(x.uid)-pos(y.uid));a.length=0;a.push(...sorted);save();
+}
+function linkItem(rid,day,uid,v){
+  if(rid==="morgen"){const ex=(S.morgen.extra||[]).find(x=>x.uid===uid);if(ex)ex.link=v;else{const x=S.morgen.items[uid]||(S.morgen.items[uid]={});if(v)x.link=true;else delete x.link;if(!Object.keys(x).length)delete S.morgen.items[uid]}save();return}
+  const a=rawItems(rid,day),x=a&&a.find(z=>z.uid===uid);if(x){x.link=v;save()}
 }
 /* eigene Pause für eine bestimmte Stelle (v=null: wieder Standard) – dauerhaft in der Routine */
 function setPause(rid,pk,v){
@@ -157,6 +192,7 @@ const ICON={
   grip:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   go:'<svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>',
+  skip:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5.5v13l9-6.5zM15.5 5.5h2.6v13h-2.6z"/></svg>',
   plus:'<svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
 };
 const thumbOf=it=>{try{return F.thumb(EXB[it.ex],it.o)}catch(_){return ""}};
@@ -249,12 +285,12 @@ function rowHTML(it,i,{lock,tags="",cls="",extra="",action="",link=null}){
 function bindTaps(list,fn){list.querySelectorAll("[data-tap]").forEach(m=>{m.onclick=()=>fn(+m.dataset.tap);m.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fn(+m.dataset.tap)}}})}
 
 /* =================== NAVIGATION =================== */
-const SCREENS=["home","routine","builder","stats"];
+const SCREENS=["home","routine","stats"];
 let screen="home";
 function show(s,push=true){
   screen=s;SCREENS.forEach(x=>$(x).hidden=x!==s);window.scrollTo(0,0);
   if(push)history.pushState({s},"");
-  if(s==="home")renderHome();if(s==="routine")renderRoutine();if(s==="builder")renderBuilder();if(s==="stats")renderStats();
+  if(s==="home")renderHome();if(s==="routine")renderRoutine();if(s==="stats")renderStats();
 }
 document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>history.back());
 window.addEventListener("popstate",e=>{
@@ -300,7 +336,7 @@ $("resume").onclick=()=>{const a=loadActive();if(a)startPlayer(a)};
 function newRoutine(){
   if(S.routines.length>=MAX_SLOTS)return;
   const r={id:"r"+now().toString(36),name:"Routine "+(S.routines.length+1),settings:{},days:[{items:[]}]};
-  S.routines.push(r);save();bRid=r.id;bDay=0;show("builder");setTimeout(()=>{$("bName").focus();$("bName").select()},50);
+  S.routines.push(r);save();openRoutine(r.id);openRoutineSheet(true);
 }
 
 /* =================== STATISTIK =================== */
@@ -343,80 +379,102 @@ function renderStats(){
   }
 }
 
-/* =================== ROUTINE: ÜBERSICHT VOR DEM START =================== */
-let R=null,rDay=0,draft=null;
-function openRoutine(id){R=getRoutine(id);if(!R)return;rDay=nextDay(R);draft=null;show("routine")}
-function makeDraft(){draft={rid:R.id,day:rDay,pauses:clone(R.pauses||{}),items:R.days[rDay].items.map(it=>Object.assign(clone(it),{status:it.off?"removed":"plan"}))}}
-function draftChanged(){return _draftChanged()}
-function _draftChanged(){
-  if(!draft)return false;const orig=R.days[rDay].items;
-  return draft.items.some((it,i)=>it.status==="added"||(it.status==="removed")!==!!(orig.find(o=>o.uid===it.uid)||{}).off||(orig[i]&&orig[i].uid!==it.uid));
-}
+/* =================== ROUTINE: eine Ansicht =================== */
+/* Alles hier wird dauerhaft in der Routine gespeichert (Werte, Pausen, Reihenfolge, Hinzufügen, Löschen).
+   Nur „Überspringen“ gilt für heute – z. B. wenn ein Gerät besetzt ist. */
+let R=null,rDay=0;
+const skipT={};
+const skipKey=()=>R.id+"|"+rDay;
+const isSkipped=uid=>(skipT[skipKey()]||[]).includes(uid);
+function setSkip(uid,on){const k=skipKey(),a=skipT[k]||(skipT[k]=[]),i=a.indexOf(uid);if(on&&i<0)a.push(uid);if(!on&&i>=0)a.splice(i,1)}
+function openRoutine(id){R=getRoutine(id);if(!R)return;rDay=nextDay(R);show("routine")}
+function dayItems(){return R.days[rDay].items.filter(it=>!it.off).map(it=>Object.assign(it,{status:isSkipped(it.uid)?"removed":"plan"}))}
 function estimate(items,st,pauses){
   const W0={items:items.map(it=>Object.assign({},it,{status:it.status||"plan"})),settings:st,pauses:pauses||{}};
   return buildSteps(W0).reduce((a,s)=>a+(s.dur!=null?s.dur:s.type==="work"?repsEst(s):0),0);
 }
 function repsEst(s){const e=EXB[s.ex];const one=F.seqDur(e.build(s.o));const n=e.oneRun?1:s.o.reps;return one*n*(s.both?2:1)}
+/* übersprungene Übungen unter der Timeline (dort gibt es keine Kästchen für sie) */
+function skipLineHTML(items){const sk=items.filter(it=>it.status==="removed"&&!it.deleted);return sk.length?`<div class="skipline"><span>Heute übersprungen:</span>${sk.map(it=>`<button class="skc" data-unskip="${it.uid}">${esc(itemName(it))} ↺</button>`).join("")}</div>`:""}
 function renderRoutine(){
   R=getRoutine(R.id);if(!R){show("home");return}
   if(rDay>=R.days.length)rDay=0;
-  if(!draft||draft.rid!==R.id||draft.day!==rDay)makeDraft();
-  else{ // Werte frisch aus der Routine übernehmen (dauerhafte Änderungen)
-    for(const it of draft.items){const o=R.days[rDay].items.find(x=>x.uid===it.uid);if(o&&it.status!=="added"){it.o=o.o;it.base=o.base;it.link=o.link;if(o.pair)it.pair=o.pair}}
-  }
+  const items=dayItems(),act=items.filter(i=>i.status!=="removed");
   $("rEyebrow").textContent=R.preset?"Vorkonfiguriert":"Eigene Routine";
   $("rName").textContent=R.name;
   const nd=nextDay(R);
   $("rDays").hidden=R.days.length<2;
   $("rDays").innerHTML=R.days.map((d,i)=>`<button class="dtab" role="tab" aria-selected="${i===rDay}" data-d="${i}">${i===nd?'<span class="nx">nächster</span>':""}Tag ${i+1}</button>`).join("");
-  $("rDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{rDay=+b.dataset.d;draft=null;renderRoutine()});
-  const act=draft.items.filter(i=>i.status!=="removed");
-  $("rSum").textContent=`${R.days.length>1?"Tag "+(rDay+1)+" von "+R.days.length+" · ":""}${act.length} Übungen · ca. ${Math.round(estimate(act,R.settings,draft.pauses)/60)} min`;
+  $("rDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{rDay=+b.dataset.d;renderRoutine()});
+  $("rSum").textContent=`${R.days.length>1?"Tag "+(rDay+1)+" von "+R.days.length+" · ":""}${act.length} ${act.length===1?"Übung":"Übungen"} · ca. ${Math.round(estimate(act,R.settings,R.pauses)/60)} min`;
   $("rStart").disabled=!act.length;
   $("rView").querySelectorAll("[data-v]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===rView));
   $("rList").hidden=rView!=="list";$("rTl").hidden=rView!=="tl";
-  if(rView==="tl")renderTimeline($("rTl"),{items:draft.items,settings:R.settings,pauses:draft.pauses},{
-    rid:R.id,
-    onPause:(pk,v)=>{if(v==null)delete draft.pauses[pk];else draft.pauses[pk]=v;setPause(R.id,pk,v);renderRoutine()},
-    onEdit:(it,set)=>openEditor(it,{rid:it.status==="added"?null:R.id,morgen:R.preset,st:R.settings,set,onChange:renderRoutine}),
-  });
+  if(rView==="tl"){
+    renderTimeline($("rTl"),{items,settings:R.settings,pauses:R.pauses},{
+      onPause:(pk,v)=>{setPause(R.id,pk,v);renderRoutine()},
+      onEdit:(it,set)=>editR(it,set)});
+    $("rTl").insertAdjacentHTML("beforeend",skipLineHTML(items));
+  }
   const list=$("rList");
-  list.innerHTML=draft.items.map((it,i)=>{
-    const rm=it.status==="removed";
-    const tags=(it.status==="added"?'<span class="tag add">heute neu</span>':"")+(rm?`<span class="tag rm">${it.off?"abgewählt":"heute raus"}</span>`:"");
-    const lt=lastText(R.id,it.uid);
-    const nx=draft.items[i+1],canLink=!R.preset&&!rm&&!it.pair&&nx&&nx.status!=="removed"&&!nx.pair;
-    return rowHTML(it,i,{lock:rm,cls:(rm?"off":"")+linkCls(draft.items,i),tags,extra:lt?`<span class="lastv">${esc(lt)}</span>`:"",link:canLink?!!it.link:null,
-      action:rm?`<button class="act restore" data-restore="${i}">Zurück</button>`:`<button class="act" data-rm="${i}" aria-label="Für heute entfernen">${ICON.x}</button>`});
-  }).join("");
-  list.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{const it=draft.items[+b.dataset.rm];if(it.status==="added")draft.items.splice(+b.dataset.rm,1);else it.status="removed";renderRoutine()});
-  list.querySelectorAll("[data-restore]").forEach(b=>b.onclick=()=>{draft.items[+b.dataset.restore].status="plan";renderRoutine()});
-  bindTaps(list,i=>openEditor(draft.items[i],{rid:draft.items[i].status==="added"?null:R.id,morgen:R.preset,st:R.settings,onChange:renderRoutine}));
-  makeSortable(list,{onDrop:(a,b)=>{moveArr(draft.items,a,b);renderRoutine()}});
-  bindLinks(list,i=>{const it=draft.items[i];it.link=!it.link;const raw=rawRoutine(R.id),x=raw&&raw.days[rDay].items.find(z=>z.uid===it.uid);if(x){x.link=it.link;save()}renderRoutine()});
-  $("rReset").hidden=!draftChanged();
-  $("rEdit").textContent=R.preset?"Als eigene Routine kopieren":"Routine bearbeiten";
+  list.innerHTML=items.length?items.map((it,i)=>{
+    const rm=it.status==="removed",lt=lastText(R.id,it.uid);
+    const nx=items[i+1],canLink=!rm&&!it.pair&&nx&&nx.status!=="removed"&&!nx.pair;
+    return rowHTML(it,i,{lock:rm,cls:(rm?"off":"")+linkCls(items,i),tags:rm?'<span class="tag skip">heute übersprungen</span>':"",extra:lt?`<span class="lastv">${esc(lt)}</span>`:"",link:canLink?!!it.link:null,
+      action:rm?`<button class="act restore" data-unskip="${it.uid}">Rückgängig</button>`:`<button class="act" data-skip="${it.uid}" aria-label="Heute überspringen">${ICON.skip}</button>`});
+  }).join(""):'<div class="note" style="padding:14px">Noch keine Übungen.</div>';
+  document.querySelectorAll("#routine [data-skip]").forEach(b=>b.onclick=e=>{e.stopPropagation();const it=items.find(x=>x.uid===b.dataset.skip);setSkip(it.uid,true);renderRoutine();toast(itemName(it)+" heute übersprungen")});
+  document.querySelectorAll("#routine [data-unskip]").forEach(b=>b.onclick=e=>{e.stopPropagation();setSkip(b.dataset.unskip,false);renderRoutine()});
+  bindTaps(list,i=>editR(items[i]));
+  makeSortable(list,{onDrop:(a,b)=>{const u=items.map(x=>x.uid);moveArr(u,a,b);orderItems(R.id,rDay,u);renderRoutine()}});
+  bindLinks(list,i=>{linkItem(R.id,rDay,items[i].uid,!items[i].link);renderRoutine()});
+}
+function editR(it,set){
+  openEditor(it,{rid:R.id,st:R.settings,set,onChange:renderRoutine,skipped:isSkipped(it.uid),
+    onSkip:on=>{setSkip(it.uid,on);renderRoutine();toast(on?itemName(it)+" heute übersprungen":itemName(it)+" ist wieder dabei")},
+    onDelete:()=>{deleteItem(R.id,rDay,it.uid);setSkip(it.uid,false);renderRoutine();toast(itemName(it)+" gelöscht")}});
 }
 $("rStart").onclick=()=>{if(loadActive()){openSheet("Workout läuft","Es läuft schon ein Workout",`<div class="note">Erst das laufende Workout beenden oder fortsetzen.</div><button class="btn primary big" id="goRun">Zum laufenden Workout</button>`);$("goRun").onclick=()=>{closeSheet();startPlayer(loadActive())};return}startWorkout()};
-$("rAdd").onclick=()=>openPicker((ids,todayOnly)=>{
-  const raw=R.preset?null:rawRoutine(R.id);
-  ids.forEach(ex=>{const o=catOpt(ex),uid=uidGen();
-    if(raw&&!todayOnly){raw.days[rDay].items.push({uid,ex,o:Object.assign({},o)});draft.items.push({uid,ex,o,base:Object.assign({},o),status:"plan"})}
-    else draft.items.push({uid,ex,o,base:Object.assign({},o),status:"added"});
-  });
-  if(raw&&!todayOnly)save();renderRoutine();
-},{today:{value:!!R.preset,fixed:!!R.preset,note:"Die Morgenroutine ist fest – neue Übungen kommen nur in das heutige Workout. Für Dauerhaftes: „Als eigene Routine kopieren“."}});
-$("rReset").onclick=()=>{draft=null;renderRoutine()};
-$("rEdit").onclick=()=>{
+$("rAdd").onclick=()=>openPicker(ids=>{addItems(R.id,rDay,ids);save();renderRoutine()});
+$("rMore").onclick=()=>openRoutineSheet();
+/* Name, Tage, Löschen (eigene Routinen) bzw. Kopieren/Zurücksetzen (Morgenroutine) */
+function openRoutineSheet(focusName){
   if(R.preset){
-    if(S.routines.length>=MAX_SLOTS){toast("Alle 5 Slots belegt – erst eine Routine löschen");return}
-    const r={id:"r"+now().toString(36),name:R.name+" (Kopie)",settings:clone(Object.assign({},R.settings)),days:[{items:R.days[0].items.filter(it=>!it.pair).map(it=>({uid:uidGen(),ex:it.ex,o:clone(it.o),so:clone(it.so||{}),base:clone(it.base)}))}]};
-    S.routines.push(r);save();bRid=r.id;bDay=0;show("builder");
-    if(R.days[0].items.some(it=>it.pair))toast("Paare (z. B. Kick-out + Dehnung) gibt es nur in der Morgenroutine");
+    const offs=MORGEN.items.filter(d=>MORGEN_OFF(d.uid));
+    const changed=Object.keys(S.morgen.items).length||(S.morgen.extra||[]).length||S.morgen.order||Object.keys(S.morgen.pauses||{}).length;
+    openSheet("Vorkonfiguriert",R.name,(offs.length?`<h3>Gelöschte Übungen</h3><div class="list">${offs.map(d=>`<div class="row"><div class="mid"><span class="nm">${esc(d.pair?d.pair.name:EXB[d.ex].name)}</span></div><button class="act restore" data-back-in="${d.uid}">Wieder rein</button></div>`).join("")}</div>`:"")+
+      `<button class="btn primary big" id="rsOk">Fertig</button><button class="btn" id="rsCopy">Als eigene Routine kopieren</button>${changed?`<button class="btn danger" id="rsReset">Auf Original zurücksetzen</button>`:""}`);
+    $("shBody").querySelectorAll("[data-back-in]").forEach(b=>b.onclick=()=>{setMorgenOff(b.dataset.backIn,false);renderRoutine();openRoutineSheet()});
+    $("rsCopy").onclick=()=>{
+      if(S.routines.length>=MAX_SLOTS){toast("Alle 5 Slots belegt – erst eine Routine löschen");return}
+      const r={id:"r"+now().toString(36),name:R.name+" (Kopie)",settings:{},pauses:clone(R.pauses||{}),days:[{items:R.days[0].items.filter(it=>!it.pair&&!it.off).map(it=>({uid:uidGen(),ex:it.ex,o:clone(it.o),so:clone(it.so||{}),link:!!it.link}))}]};
+      S.routines.push(r);save();closeSheet();
+      if(R.days[0].items.some(it=>it.pair))toast("Paare (z. B. Kick-out + Dehnung) gibt es nur in der Morgenroutine");
+      R=getRoutine(r.id);rDay=0;show("routine",false);history.replaceState({s:"routine"},"");
+    };
+    if($("rsReset"))$("rsReset").onclick=()=>{const b=$("rsReset");if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Wirklich? Alle Änderungen gehen verloren";return}
+      S.morgen={items:{},settings:{},pauses:{}};save();closeSheet();renderRoutine();toast("Morgenroutine wie im Original")};
+    $("rsOk").onclick=closeSheet;
     return;
   }
-  bRid=R.id;bDay=rDay;show("builder");
-};
+  const r=rawRoutine(R.id);if(!r)return;
+  openSheet("Routine bearbeiten",r.name,`<label class="field"><span>Name</span><input id="rsName" maxlength="40" autocomplete="off" value="${esc(r.name)}"></label>
+    <div class="sg"><span>Anzahl Tage</span><div class="stepper"><button id="rsMinus" aria-label="weniger">−</button><span class="num" id="rsDays">${r.days.length}</span><button id="rsPlus" aria-label="mehr">+</button></div></div>
+    <div id="rsDayNote"></div>
+    <button class="btn primary big" id="rsOk">Fertig</button><button class="btn danger" id="rsDel">Routine löschen</button>`,{onClose:()=>{if(screen==="routine")renderRoutine()}});
+  const nm=$("rsName");
+  nm.oninput=()=>{r.name=nm.value.trim()||"Ohne Namen";$("shTitle").textContent=r.name;save()};
+  nm.onkeydown=e=>{if(e.key==="Enter")closeSheet()};
+  if(focusName)setTimeout(()=>{nm.focus();nm.select()},60);
+  const upd=()=>{$("rsDays").textContent=r.days.length;$("rsDayNote").innerHTML=""};
+  $("rsPlus").onclick=()=>{if(r.days.length>=14)return;r.days.push({items:[]});save();upd()};
+  $("rsMinus").onclick=()=>{if(r.days.length<=1)return;const last=r.days[r.days.length-1];
+    if(last.items.length&&!$("rsDayDel")){$("rsDayNote").innerHTML=`<button class="btn danger" id="rsDayDel">Tag ${r.days.length} mit ${last.items.length} ${last.items.length===1?"Übung":"Übungen"} löschen</button>`;$("rsDayDel").onclick=()=>{r.days.pop();save();upd()};return}
+    r.days.pop();save();upd()};
+  $("rsOk").onclick=closeSheet;
+  $("rsDel").onclick=()=>{const b=$("rsDel");if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Wirklich löschen? Statistik bleibt";return}
+    S.routines=S.routines.filter(x=>x.id!==r.id);delete S.last[r.id];save();sheetClose=null;closeSheet();history.back();setTimeout(()=>{if(screen!=="home")show("home")},80);toast("Routine gelöscht")};
+}
 /* Ablauf-Einstellungen einer Routine */
 function renderSettings(box,rid,st,after){
   box.innerHTML=`<div class="note">Pausen: ${fmtSecs(gv("rest"))} nach jedem Satz, ${fmtSecs(gv("side"))} zwischen den Seiten – änderbar im Hauptmenü unter „Einstellungen“.</div>`+
@@ -484,62 +542,35 @@ function openPauseSheet(s,onSet){
   if($("pzStd"))$("pzStd").onclick=()=>{closeSheet();onSet(s.pk,null)};
 }
 
-/* =================== BAUKASTEN =================== */
-let bRid=null,bDay=0;
-function renderBuilder(){
-  const r=rawRoutine(bRid);if(!r){show("home");return}
-  if(bDay>=r.days.length)bDay=r.days.length-1;
-  $("bTitle").textContent=r.name;
-  if(document.activeElement!==$("bName"))$("bName").value=r.name;
-  $("bDaysVal").textContent=r.days.length;
-  $("bDays").hidden=r.days.length<2;
-  $("bDays").innerHTML=r.days.map((d,i)=>`<button class="dtab" role="tab" aria-selected="${i===bDay}" data-d="${i}">Tag ${i+1}<span class="nx">${d.items.length} Üb.</span></button>`).join("");
-  $("bDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{bDay=+b.dataset.d;renderBuilder()});
-  const RR=getRoutine(bRid),items=RR.days[bDay].items;
-  const list=$("bList");
-  list.innerHTML=items.map((it,i)=>rowHTML(it,i,{cls:linkCls(items,i),link:i<items.length-1?!!it.link:null,action:`<button class="act" data-rm="${i}" aria-label="Entfernen">${ICON.x}</button>`})).join("");
-  bindLinks(list,i=>{const x=r.days[bDay].items[i];x.link=!x.link;save();renderBuilder()});
-  list.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{const i=+b.dataset.rm,x=r.days[bDay].items.splice(i,1)[0];save();renderBuilder();toast(EXB[x.ex].name+" entfernt")});
-  bindTaps(list,i=>openEditor(items[i],{rid:bRid,st:RR.settings,onChange:renderBuilder}));
-  makeSortable(list,{onDrop:(a,b)=>{moveArr(r.days[bDay].items,a,b);save();renderBuilder()}});
-}
-$("bName").addEventListener("input",e=>{const r=rawRoutine(bRid);if(!r)return;r.name=e.target.value.trim()||"Ohne Namen";$("bTitle").textContent=r.name;save()});
-$("bDaysMinus").onclick=()=>{const r=rawRoutine(bRid);if(r.days.length<=1)return;
-  const last=r.days[r.days.length-1];
-  const go=()=>{r.days.pop();save();renderBuilder()};
-  if(last.items.length){openSheet("Tag entfernen",`Tag ${r.days.length} löschen?`,`<div class="note">Tag ${r.days.length} hat ${last.items.length} Übungen. Sie werden gelöscht.</div><button class="btn danger" id="dDel">Tag ${r.days.length} löschen</button>`);$("dDel").onclick=()=>{closeSheet();go()}}else go()};
-$("bDaysPlus").onclick=()=>{const r=rawRoutine(bRid);if(r.days.length>=14)return;r.days.push({items:[]});bDay=r.days.length-1;save();renderBuilder()};
-$("bAdd").onclick=()=>openPicker(ids=>{const r=rawRoutine(bRid);ids.forEach(ex=>r.days[bDay].items.push({uid:uidGen(),ex,o:catOpt(ex)}));save();renderBuilder()});
-$("bDelete").onclick=()=>{const r=rawRoutine(bRid);
-  openSheet("Routine löschen",`„${r.name}“ löschen?`,`<div class="note">Die Routine und ihre Einstellungen werden gelöscht. Erledigte Workouts bleiben in der Statistik.</div><button class="btn danger" id="rDel">Endgültig löschen</button>`);
-  $("rDel").onclick=()=>{S.routines=S.routines.filter(x=>x.id!==bRid);delete S.last[bRid];save();closeSheet();history.go(-2);setTimeout(()=>{if(screen!=="home")show("home")},80)}};
-
 /* =================== KATALOG-AUSWAHL =================== */
 const MUSCLES=[["alle","Alle"],["ruecken","Unterer Rücken"],["knie","Knie · ATG"],["huefte","Hüfte"],["bauch","Bauch"],["morgen","Morgenroutine"]];
 const muscleOf=e=>e.muscle||"ruecken";
 let pickMuscle="alle";
-/* Mehrfachauswahl: antippen = auswählen (Nummer = Reihenfolge), unten alle auf einmal hinzufügen.
-   opts.today: {value, fixed, note} zeigt den Schalter „Nur für heute“ */
-function openPicker(onAdd,opts={}){
-  const sel=[],today=opts.today;let todayOnly=today?!!today.value:false;
+/* Mehrfachauswahl: antippen = auswählen (Nummer = Reihenfolge), unten alle auf einmal hinzufügen. Suche oben. */
+const norm=t=>String(t||"").toLowerCase().replace(/ä/g,"a").replace(/ö/g,"o").replace(/ü/g,"u").replace(/ß/g,"ss").replace(/[^a-z0-9 ]/g," ");
+function openPicker(onAdd){
+  const sel=[];let q="";
   const rowOf=e=>{const o=catOpt(e.id);return `<div class="row pick" data-pick="${e.id}" role="button" tabindex="0" aria-pressed="false"><span class="pnum"></span><img alt="" src="${thumbOf({ex:e.id,o})}" width="44" height="44"><div class="mid"><span class="nm">${esc(e.name)}${e.warn?`<span class="tag rm">${esc(e.warn)}</span>`:""}</span><span class="val">${esc(valText(e,o))}</span><span class="def">${esc(e.de)}</span></div></div>`};
-  const paint=body=>{
+  const body=openSheet("Übungskatalog","Übungen hinzufügen",`<input class="pksearch" id="pkQ" type="search" placeholder="Suchen …" autocomplete="off" aria-label="Übung suchen"><div class="mtabs" id="pkTabs">${MUSCLES.map(([id,l])=>`<button class="dtab" aria-selected="${id===pickMuscle}" data-m="${id}">${l}</button>`).join("")}</div><div id="pkRes"></div><div class="pickfoot"><button class="btn primary big" id="pkAdd" disabled></button></div>`);
+  const paint=()=>{
     body.querySelectorAll("[data-pick]").forEach(r=>{const n=sel.indexOf(r.dataset.pick)+1;r.classList.toggle("sel",n>0);r.setAttribute("aria-pressed",n>0);r.querySelector(".pnum").textContent=n||""});
     const b=$("pkAdd");b.disabled=!sel.length;b.textContent=sel.length?(sel.length===1?"1 Übung hinzufügen":sel.length+" Übungen hinzufügen"):"Übungen antippen";
   };
-  const render=()=>{
-    const secs=pickMuscle==="alle"?MUSCLES.slice(1).map(([id,l])=>[l,EXL.filter(e=>muscleOf(e)===id)])
-      :(()=>{const mine=EXL.filter(e=>muscleOf(e)===pickMuscle);return [...new Set(mine.map(e=>e.group))].map(g=>[g,mine.filter(e=>e.group===g)])})();
-    const foot=`<div class="pickfoot">${today&&!today.fixed?`<label class="toggle"><span>Nur für heute<small>${todayOnly?"Kommt nur in dieses Workout":"Wird in der Routine gespeichert"}</small></span><input type="checkbox" id="pkToday"${todayOnly?" checked":""}></label>`:""}${today&&today.fixed&&today.note?`<div class="note">${today.note}</div>`:""}<button class="btn primary big" id="pkAdd" disabled></button></div>`;
-    const body=openSheet("Übungskatalog","Übungen hinzufügen",`<div class="mtabs">${MUSCLES.map(([id,l])=>`<button class="dtab" aria-selected="${id===pickMuscle}" data-m="${id}">${l}</button>`).join("")}</div>`+
-      secs.map(([g,list])=>`<h3>${esc(g)}</h3><div class="list">${list.map(rowOf).join("")}</div>`).join("")+foot);
-    body.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{pickMuscle=b.dataset.m;render()});
-    body.querySelectorAll("[data-pick]").forEach(r=>{const tog=()=>{const id=r.dataset.pick,i=sel.indexOf(id);if(i<0)sel.push(id);else sel.splice(i,1);paint(body)};r.onclick=tog;r.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();tog()}}});
-    const t=$("pkToday");if(t)t.onchange=()=>{todayOnly=t.checked;t.previousElementSibling.querySelector("small").textContent=todayOnly?"Kommt nur in dieses Workout":"Wird in der Routine gespeichert"};
-    $("pkAdd").onclick=()=>{if(!sel.length)return;const ids=sel.slice();closeSheet();onAdd(ids,todayOnly);toast(ids.length===1?EXB[ids[0]].name+" hinzugefügt":ids.length+" Übungen hinzugefügt")};
-    paint(body);
+  const renderRes=()=>{
+    let secs;
+    if(q){const words=norm(q).split(" ").filter(Boolean);const hit=EXL.filter(e=>{const t=norm([e.name,e.de,e.group,(MUSCLES.find(m=>m[0]===muscleOf(e))||[])[1]].join(" "));return words.every(w=>t.includes(w))});secs=[[hit.length?hit.length+" Treffer":"",hit]]}
+    else if(pickMuscle==="alle")secs=MUSCLES.slice(1).map(([id,l])=>[l,EXL.filter(e=>muscleOf(e)===id)]);
+    else{const mine=EXL.filter(e=>muscleOf(e)===pickMuscle);secs=[...new Set(mine.map(e=>e.group))].map(g=>[g,mine.filter(e=>e.group===g)])}
+    $("pkTabs").hidden=!!q;
+    body.querySelectorAll("[data-m]").forEach(b=>b.setAttribute("aria-selected",b.dataset.m===pickMuscle));
+    $("pkRes").innerHTML=q&&!secs[0][1].length?'<div class="note" style="padding:14px">Nichts gefunden.</div>':secs.filter(x=>x[1].length).map(([g,list])=>`${g?`<h3>${esc(g)}</h3>`:""}<div class="list">${list.map(rowOf).join("")}</div>`).join("");
+    $("pkRes").querySelectorAll("[data-pick]").forEach(r=>{const tog=()=>{const id=r.dataset.pick,i=sel.indexOf(id);if(i<0)sel.push(id);else sel.splice(i,1);paint()};r.onclick=tog;r.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();tog()}}});
+    paint();
   };
-  render();
+  body.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{pickMuscle=b.dataset.m;renderRes()});
+  $("pkQ").oninput=()=>{q=$("pkQ").value.trim();renderRes()};
+  $("pkAdd").onclick=()=>{if(!sel.length)return;const ids=sel.slice();closeSheet();onAdd(ids);toast(ids.length===1?EXB[ids[0]].name+" hinzugefügt":ids.length+" Übungen hinzugefügt")};
+  renderRes();
 }
 
 /* =================== EDITOR (Werte einer Übung) =================== */
@@ -570,11 +601,11 @@ function openEditor(it,ctx){
     }else{
       h+=wheelRow("secs",EXB[it.ex].name+" pro Seite",e,"secs")+wheelRow("secs2",EXB[it.pair.ex2].name+" pro Seite",EXB[it.pair.ex2],"secs2");
     }
-    if(ctx.morgen&&ctx.rid==="morgen"&&!S1)h+=`<label class="toggle"><span>Fester Teil der Morgenroutine<small>Aus = wird standardmäßig weggelassen</small></span><input type="checkbox" id="edOn"${MORGEN_OFF(it.uid)?"":" checked"}></label>`;
-    if(S1){
-      const own=it.so&&it.so[S1]&&Object.keys(it.so[S1]).length;
-      h+=`<button class="btn primary big" id="edOk">Fertig</button>${own?`<button class="btn" id="edAll">Für alle Sätze übernehmen</button>`:""}${(it.o.sets||1)>1?`<button class="btn danger" id="edDel">Satz ${S1} löschen</button>`:""}`;
-    }else h+=`<button class="btn primary big" id="edOk">Fertig</button>`;
+    const own=S1&&it.so&&it.so[S1]&&Object.keys(it.so[S1]).length;
+    h+=`<button class="btn primary big" id="edOk">Fertig</button>${own?`<button class="btn" id="edAll">Für alle Sätze übernehmen</button>`:""}`;
+    if(ctx.onSkip)h+=`<button class="btn" id="edSkip">${ctx.skipped?"Doch machen":ctx.skipLabel||"Heute überspringen"}</button>`;
+    if(S1&&(it.o.sets||1)>1)h+=`<button class="btn danger" id="edDel">Satz ${S1} löschen</button>`;
+    else if(ctx.onDelete&&!S1)h+=`<button class="btn danger" id="edDelEx">Übung löschen</button>`;
     const n=it.o.sets||1;
     const body=openSheet(S1?`Satz ${S1} von ${n}`:(e.group&&!it.pair?e.group:"Übung"),itemName(it),`<div class="edprev"><canvas id="edCv" width="240" height="240" aria-label="Vorschau ${esc(e.name)}"></canvas><div class="small">${esc(e.de||"")}</div></div>`+h,{onClose:ctx.onClose});
     F.previewStart(e,O(),$("edCv"));
@@ -585,7 +616,8 @@ function openEditor(it,ctx){
       initWheel(row,e,{get:()=>O()[k],set:v=>{put(k,v);persist()},
         side:k==="kg"&&e.weight==="plate"?(v=>v>0?platesVis(v):""):null});
     });
-    const on=$("edOn");if(on)on.onchange=()=>{setMorgenOff(it.uid,!on.checked);if(ctx.onChange)ctx.onChange()};
+    if($("edSkip"))$("edSkip").onclick=()=>{const f=ctx.onSkip;closeSheet();f(!ctx.skipped)};
+    if($("edDelEx"))$("edDelEx").onclick=()=>{const b=$("edDelEx");if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Wirklich aus der Routine löschen?";return}const f=ctx.onDelete;closeSheet();f()};
     $("edOk").onclick=closeSheet;
     if($("edAll"))$("edAll").onclick=()=>{it.o=Object.assign({},it.o,it.so[S1]);it.so={};persist();toast("Gilt jetzt für alle Sätze");render()};
     if($("edDel"))$("edDel").onclick=()=>{delSet(it,S1);persist();closeSheet();toast(`Satz ${S1} gelöscht`)};
@@ -656,10 +688,10 @@ let W=null,steps=[],idx=0;
 function loadActive(){try{const a=JSON.parse(localStorage.getItem(ACT)||"null");return a&&!a.ended?a:null}catch(_){return null}}
 function saveW(){if(!W)return;try{localStorage.setItem(ACT,JSON.stringify(W))}catch(_){}}
 function startWorkout(){
-  const items=draft.items.map(it=>({uid:it.uid,ex:it.ex,o:clone(it.o),base:it.base?clone(it.base):null,pair:it.pair?clone(it.pair):null,link:!!it.link,so:clone(it.so||{}),status:it.status,planned:it.status!=="added"}));
-  W={v:1,id:"w"+now().toString(36),rid:R.id,rname:R.name,day:rDay,days:R.days.length,settings:clone(R.settings),pauses:clone(draft.pauses||{}),
+  const items=dayItems().map(it=>({uid:it.uid,ex:it.ex,o:clone(it.o),base:it.base?clone(it.base):null,pair:it.pair?clone(it.pair):null,link:!!it.link,so:clone(it.so||{}),status:it.status,planned:true}));
+  W={v:1,id:"w"+now().toString(36),rid:R.id,rname:R.name,day:rDay,days:R.days.length,settings:clone(R.settings),pauses:clone(R.pauses||{}),
      startedAt:now(),items,cur:null,stepStart:now(),pauseAt:null,pausedMs:0,extra:0,res:{},pending:null,ended:false,visited:[]};
-  draft=null;
+  delete skipT[skipKey()];
   startPlayer(W,true);
 }
 
@@ -786,7 +818,7 @@ function startPlayer(w,isNew){
   if(!steps.length){W=null;toast("Keine Übungen aktiv");return}
   idx=Math.max(0,steps.findIndex(s=>s.key===W.cur));
   ensureAudio();lockScreen();
-  $("home").hidden=$("routine").hidden=$("builder").hidden=$("stats").hidden=true;$("done").hidden=true;$("player").hidden=false;
+  $("home").hidden=$("routine").hidden=$("stats").hidden=true;$("done").hidden=true;$("player").hidden=false;
   $("tips").classList.remove("open");
   size();
   if(isNew){W.stepStart=now();enter(0)}
@@ -870,7 +902,7 @@ $("tips").onclick=()=>{const o=!$("tips").classList.contains("open");$("tips").c
 $("target").onclick=()=>{
   const s=steps[idx],it=itemOf(s);if(!it)return;
   const wasPaused=!!W.pauseAt;setPaused(true);
-  openEditor(it,{rid:it.planned?W.rid:null,st:W.settings,onClose:()=>{rebuildKeep();if(!wasPaused)setPaused(false)}});
+  editW(it,0,()=>{if(W&&!wasPaused)setPaused(false)});
 };
 $("plan").onclick=()=>openPlan();
 $("mute").onclick=()=>{setG("sound",!gv("sound"));muteIcon()};
@@ -907,45 +939,70 @@ function commitPending(actual){
 }
 
 /* ---- Übersicht im Workout ---- */
+/* Überspringen = nur heute. Hat die Übung schon angefangen, ist das dasselbe wie „Übung beenden“. */
+const activeCount=()=>W.items.filter(x=>x.status!=="removed"&&effSets(x)>0).length;
+function skipW(it,on){
+  if(on){
+    if(activeCount()<=1&&effSets(it)>0){toast("Das ist die letzte Übung – oben mit ✕ beenden");return false}
+    if((W.visited||[]).includes(it.uid)){if(W.pending&&W.pending.uid===it.uid)commitPending(W.pending.target);it.cut=doneSets(it)}
+    else it.status="removed";
+  }else{it.status=it.planned?"plan":"added";delete it.cut}
+  rebuildKeep();saveW();return true;
+}
+/* Löschen = dauerhaft aus der Routine (und aus dem heutigen Workout) */
+function delW(it){
+  if(activeCount()<=1&&it.status!=="removed"&&effSets(it)>0){toast("Das ist die letzte Übung – oben mit ✕ beenden");return}
+  deleteItem(W.rid,W.day,it.uid);
+  const r=W.res[it.uid];
+  if(r&&r.sets.length){it.status="removed";it.deleted=true}else W.items.splice(W.items.indexOf(it),1);
+  rebuildKeep();saveW();toast(itemName(it)+" gelöscht");
+}
+const startedW=it=>(W.visited||[]).includes(it.uid);
+function editW(it,set,after){
+  const sk=it.status==="removed"||(it.cut!=null&&startedW(it));
+  openEditor(it,{rid:W.rid,st:W.settings,set,skipped:sk&&!startedW(it),skipLabel:startedW(it)?"Übung beenden":null,
+    onSkip:sk&&startedW(it)?null:(on=>{skipW(it,on);after&&after()}),
+    onDelete:()=>{delW(it);after&&after()},
+    onClose:()=>{rebuildKeep();saveW();after&&after()}});
+}
 let planView="list";
 function openPlan(){
+  if(!W)return;
   const render=()=>{
     const hub=atHub(),curUid=hub?null:steps[idx].uid,vis=W.visited||[];
     const firstFree=W.items.reduce((m,x,i)=>vis.includes(x.uid)?i+1:m,0),curPos=W.items.findIndex(x=>x.uid===curUid);
     const h=`<div class="seg" id="plView"><button class="sbtn" data-v="list" aria-pressed="${planView==="list"}">Liste</button><button class="sbtn" data-v="tl" aria-pressed="${planView==="tl"}">Timeline</button></div><div id="plTl"${planView==="tl"?"":" hidden"}></div><div class="list"${planView==="tl"?" hidden":""} id="plList">`+
       W.items.map((it,i)=>{
-        const r=W.res[it.uid],isCur=i===curPos,past=i<firstFree&&!isCur,rm=it.status==="removed";
+        const r=W.res[it.uid],isCur=i===curPos,past=i<firstFree&&!isCur,rm=it.status==="removed",ended=it.cut!=null&&vis.includes(it.uid);
         let tags="";
         if(isCur)tags+='<span class="tag now">jetzt</span>';
         else if(past&&!rm)tags+=r&&r.sets.length?'<span class="tag done">erledigt</span>':'<span class="tag skip">übersprungen</span>';
-        if(rm)tags+='<span class="tag rm">entfernt</span>';
+        if(it.deleted)tags+='<span class="tag rm">gelöscht</span>';
+        else if(rm)tags+='<span class="tag skip">heute übersprungen</span>';
         if(it.status==="added")tags+='<span class="tag add">neu</span>';
-        const action=past?"":rm?`<button class="act restore" data-restore="${i}">Zurück</button>`:`<button class="act" data-rm="${i}" aria-label="Entfernen">${ICON.x}</button>`;
+        const action=past||it.deleted||(isCur&&ended)?"":rm?`<button class="act restore" data-unskip="${i}">Rückgängig</button>`:`<button class="act" data-skip="${i}" aria-label="${isCur?"Übung beenden":"Heute überspringen"}">${ICON.skip}</button>`;
         const free=j=>j>=firstFree&&W.items[j]&&W.items[j].status!=="removed"&&!W.items[j].pair;
         return rowHTML(it,i,{lock:i<firstFree||rm,cls:(rm?"off ":"")+(past?"done-row":"")+linkCls(W.items,i),tags,action,link:free(i)&&free(i+1)?it.link:null});
       }).join("")+`</div><button class="btn ghost" id="plAdd">＋ Übung hinzufügen</button><button class="btn primary big" id="plOk">Zurück zum Workout</button>`;
     const body=openSheet(W.rname,"Übersicht",h,{onClose:()=>rebuildKeep()});
     body.querySelectorAll("#plView [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;render()});
-    if(planView==="tl")renderTimeline($("plTl"),W,{curKey:W.cur,
-      onPause:(pk,v)=>{W.pauses=W.pauses||{};if(v==null)delete W.pauses[pk];else W.pauses[pk]=v;setPause(W.rid,pk,v);rebuildKeep();saveW();openPlan()},
-      onEdit:(it,set)=>openEditor(it,{rid:it.planned?W.rid:null,st:W.settings,set,onClose:()=>{rebuildKeep();saveW();openPlan()}})});
+    if(planView==="tl"){
+      renderTimeline($("plTl"),W,{curKey:W.cur,
+        onPause:(pk,v)=>{W.pauses=W.pauses||{};if(v==null)delete W.pauses[pk];else W.pauses[pk]=v;setPause(W.rid,pk,v);rebuildKeep();saveW();openPlan()},
+        onEdit:(it,set)=>editW(it,set,openPlan)});
+      $("plTl").insertAdjacentHTML("beforeend",skipLineHTML(W.items));
+      $("plTl").querySelectorAll("[data-unskip]").forEach(b=>b.onclick=()=>{skipW(W.items.find(x=>x.uid===b.dataset.unskip),false);render()});
+    }
     const list=$("plList");
-    list.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{
-      const i=+b.dataset.rm,it=W.items[i];
-      if(it.uid===curUid&&W.items.filter(x=>x.status!=="removed").length<=1){toast("Das ist die letzte Übung");return}
-      it.status="removed";rebuildKeep();render();
+    list.querySelectorAll("[data-skip]").forEach(b=>b.onclick=e=>{e.stopPropagation();const it=W.items[+b.dataset.skip];if(skipW(it,true)){if(W)render();toast(startedW(it)?itemName(it)+" beendet":itemName(it)+" heute übersprungen")}});
+    list.querySelectorAll("[data-unskip]").forEach(b=>b.onclick=e=>{e.stopPropagation();skipW(W.items[+b.dataset.unskip],false);render()});
+    bindTaps(list,i=>editW(W.items[i],0,openPlan));
+    makeSortable(list,{min:firstFree,onDrop:(a,b)=>{moveArr(W.items,a,b);orderItems(W.rid,W.day,W.items.filter(x=>!x.deleted).map(x=>x.uid));rebuildKeep();saveW();render()}});
+    bindLinks(list,i=>{const it=W.items[i];it.link=!it.link;linkItem(W.rid,W.day,it.uid,it.link);rebuildKeep();saveW();render()});
+    $("plAdd").onclick=()=>openPicker(ids=>{
+      addItems(W.rid,W.day,ids).forEach(x=>W.items.push(Object.assign(x,{pair:null,status:"added",planned:false})));
+      save();rebuildKeep();saveW();openPlan();
     });
-    list.querySelectorAll("[data-restore]").forEach(b=>b.onclick=()=>{const it=W.items[+b.dataset.restore];it.status=it.planned?"plan":"added";rebuildKeep();render()});
-    bindTaps(list,i=>{const it=W.items[i];openEditor(it,{rid:it.planned?W.rid:null,st:W.settings,onClose:()=>{rebuildKeep();openPlan()}})});
-    makeSortable(list,{min:firstFree,onDrop:(a,b)=>{moveArr(W.items,a,b);rebuildKeep();render()}});
-    bindLinks(list,i=>{W.items[i].link=!W.items[i].link;rebuildKeep();saveW();render()});
-    $("plAdd").onclick=()=>openPicker((ids,todayOnly)=>{
-      const raw=W.rid==="morgen"?null:rawRoutine(W.rid);
-      ids.forEach(ex=>{const o=catOpt(ex),uid=uidGen(),keep=!!(raw&&!todayOnly&&raw.days[W.day]);
-        if(keep)raw.days[W.day].items.push({uid,ex,o:Object.assign({},o)});
-        W.items.push({uid,ex,o,base:Object.assign({},o),pair:null,link:false,status:"added",planned:keep});});
-      if(raw&&!todayOnly)save();rebuildKeep();saveW();openPlan();
-    },{today:{value:true,fixed:W.rid==="morgen",note:"In der Morgenroutine kommen neue Übungen nur in das heutige Workout."}});
     $("plOk").onclick=closeSheet;
   };
   render();
@@ -960,7 +1017,7 @@ function renderHub(s){
   $("hubList").innerHTML=W.items.map((it,i)=>{
     const r=W.res[it.uid]||{sets:[]},rm=it.status==="removed",isNext=i===nextPos,past=i<nextPos||((W.visited||[]).includes(it.uid)&&!isNext);
     let ic,cls="",det;
-    if(rm){ic="–";cls="rm";det="entfernt"}
+    if(rm){ic="–";cls="rm";det=it.deleted?"gelöscht":"heute übersprungen"}
     else if(past&&r.sets.length){ic="✓";cls="ok";det=setsText({sets:r.sets})||"erledigt"}
     else if(past){ic="›";cls="skip";det="übersprungen"}
     else if(isNext){ic="▶";cls="nx";det=esc(itemText(it))}
@@ -996,13 +1053,13 @@ function finish(at){
   const tot=(w.endedAt-w.startedAt)/1000;
   const items=w.items.map(it=>{
     const r=w.res[it.uid]||{time:0,sets:[]};
-    const status=it.status==="removed"?"entfernt":r.sets.length?"erledigt":"übersprungen";
+    const status=it.deleted&&!r.sets.length?"entfernt":r.sets.length?"erledigt":"übersprungen";
     return {uid:it.uid,ex:it.ex,name:itemName(it),status,added:it.status==="added",o:it.o,o2:it.pair?it.pair.o2:null,time:Math.round(r.time),sets:r.sets,planned:it.pair?1:(it.o.sets||1),cut:it.cut!=null?it.cut:null,link:!!it.link};
   });
   const entry={d:w.startedAt,end:w.endedAt,t:tot,rid:w.rid,rname:w.rname,day:w.day,days:w.days,items};
   S.log.push(entry);S.log=S.log.slice(-300);
   S.last[w.rid]={day:w.day,d:w.startedAt};
-  items.forEach(x=>{if(x.sets.length&&!x.added)S.lastRes[w.rid+"|"+x.uid]={d:w.startedAt,sets:x.sets,kg:x.o.kg||0}});
+  items.forEach(x=>{if(x.sets.length)S.lastRes[w.rid+"|"+x.uid]={d:w.startedAt,sets:x.sets,kg:x.o.kg||0}});
   save();
   try{localStorage.removeItem(ACT)}catch(_){}
   onPhase("done",{uebung:"",workout:w.rname,dauerSek:Math.round(tot)});

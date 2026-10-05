@@ -60,6 +60,7 @@
   <div class="topbar">
     <button class="ic" data-back aria-label="Zurück"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button>
     <div class="ttl"><div class="eyebrow" id="rEyebrow"></div><h1 id="rName"></h1></div>
+    <button class="ic" id="rMore" aria-label="Name, Tage, Löschen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button>
   </div>
   <div class="days" id="rDays" role="tablist" aria-label="Tag"></div>
   <div class="small" id="rSum"></div>
@@ -68,24 +69,6 @@
   <div class="list" id="rList"></div>
   <div id="rTl" hidden></div>
   <button class="btn ghost" id="rAdd">＋ Übung hinzufügen</button>
-  <button class="btn ghost small-btn" id="rReset" hidden>Änderungen für heute zurücksetzen</button>
-  <div class="row2">
-    <button class="btn" id="rEdit">Routine bearbeiten</button>
-  </div>
-</main>
-
-<!-- BAUKASTEN -->
-<main class="wrap screen" id="builder" hidden>
-  <div class="topbar">
-    <button class="ic" data-back aria-label="Zurück"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button>
-    <div class="ttl"><div class="eyebrow">Routine bearbeiten</div><h1 id="bTitle"></h1></div>
-  </div>
-  <label class="field"><span>Name</span><input id="bName" maxlength="40" autocomplete="off"></label>
-  <div class="sg"><span>Anzahl Tage</span><div class="stepper"><button id="bDaysMinus" aria-label="weniger">−</button><span class="num" id="bDaysVal"></span><button id="bDaysPlus" aria-label="mehr">+</button></div></div>
-  <div class="days" id="bDays" role="tablist" aria-label="Tag"></div>
-  <div class="list" id="bList"></div>
-  <button class="btn ghost" id="bAdd">＋ Übung hinzufügen</button>
-  <button class="btn danger" id="bDelete">Routine löschen</button>
 </main>
 
 <!-- PLAYER -->
