@@ -41,7 +41,7 @@ ol{margin:6px 0 0;padding-left:20px;font-size:14px;color:var(--dim)}
 </head>
 <body>
 <h1>Spotify-Labor</h1>
-<p class="sub">Testseite: Musik ↔ Podcast umschalten und Stelle merken.</p>
+<p class="sub">Testseite: Musik ↔ Podcast umschalten und Stelle merken. <span id="mode"></span></p>
 
 <div class="card">
   <h2>1 · Verbindung</h2>
@@ -98,7 +98,10 @@ ol{margin:6px 0 0;padding-left:20px;font-size:14px;color:var(--dim)}
 
 <script>
 const CLIENT_ID='e4b95d44f2f6410e8e80483e9f3f82c0';
-const REDIRECT='https://penopetenopete.github.io/morgenroutine/spotify-labor.html';
+// In der Android-App (Capacitor) läuft der Login im Browser und springt per morgenroutine://spotify zurück.
+const CAP=window.Capacitor;
+const NATIVE=!!(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform());
+const REDIRECT=NATIVE?'morgenroutine://spotify':'https://penopetenopete.github.io/morgenroutine/spotify-labor.html';
 const SCOPES='user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-playback-position';
 const KEY='spotify_labor_v1';
 const $=id=>document.getElementById(id);
@@ -123,7 +126,8 @@ async function login(){
   const v=randStr(64),st=randStr(16);
   localStorage.setItem(KEY+'_pkce',JSON.stringify({v,st}));
   const p=new URLSearchParams({response_type:'code',client_id:CLIENT_ID,scope:SCOPES,code_challenge_method:'S256',code_challenge:await challenge(v),redirect_uri:REDIRECT,state:st});
-  location.href='https://accounts.spotify.com/authorize?'+p;
+  const url='https://accounts.spotify.com/authorize?'+p;
+  if(NATIVE)await CAP.Plugins.Browser.open({url});else location.href=url;
 }
 async function tokenReq(params){
   const r=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(params)});
@@ -131,15 +135,22 @@ async function tokenReq(params){
   if(!r.ok)throw new Error('Token-Fehler: '+(j.error_description||j.error||r.status));
   S.tok={access:j.access_token,refresh:j.refresh_token||(S.tok&&S.tok.refresh),exp:Date.now()+(j.expires_in-60)*1000};save();
 }
-async function handleRedirect(){
-  const q=new URLSearchParams(location.search);
-  if(!q.has('code')&&!q.has('error'))return;
-  history.replaceState(null,'',location.pathname);
+async function handleRedirect(q){
+  if(!q){q=new URLSearchParams(location.search);if(!q.has('code')&&!q.has('error'))return;history.replaceState(null,'',location.pathname)}
+  else if(!q.has('code')&&!q.has('error'))return;
   if(q.has('error')){msg('authMsg','Spotify hat abgelehnt: '+q.get('error'),'err');log('Login abgelehnt: '+q.get('error'),'e');return}
   const k=JSON.parse(localStorage.getItem(KEY+'_pkce')||'{}');
   if(k.st!==q.get('state')){msg('authMsg','Login passt nicht zusammen. Bitte nochmal verbinden.','err');return}
   try{await tokenReq({client_id:CLIENT_ID,grant_type:'authorization_code',code:q.get('code'),redirect_uri:REDIRECT,code_verifier:k.v});log('Mit Spotify verbunden','o')}
   catch(e){msg('authMsg',e.message,'err');log(e.message,'e')}
+  renderAuth();
+}
+if(NATIVE){
+  CAP.Plugins.App.addListener('appUrlOpen',ev=>{
+    if(!ev||!ev.url||ev.url.indexOf('morgenroutine://spotify')!==0)return;
+    try{CAP.Plugins.Browser.close()}catch(e){}
+    handleRedirect(new URLSearchParams(ev.url.split('?')[1]||''));
+  });
 }
 async function token(){
   if(!S.tok)throw Object.assign(new Error('Nicht verbunden – erst Schritt 1.'),{status:0});
@@ -296,6 +307,7 @@ $('btnCopy').onclick=()=>{const t=S.log.map(e=>hhmmss(e.t)+'  '+e.text).join('\n
   if(S.pl)$('inPl').value='https://open.spotify.com/playlist/'+S.pl.id;
   if(S.podSrc)$('inPod').value='https://open.spotify.com/'+S.podSrc.type+'/'+S.podSrc.id;
   $('inRew').value=S.rewind;$('inEvery').value=S.every;
+  $('mode').textContent=NATIVE?'· Android-App':'· Web';
   await handleRedirect();
   renderAuth();renderSwitch();renderSaved();renderLog();renderAuto();
 })();

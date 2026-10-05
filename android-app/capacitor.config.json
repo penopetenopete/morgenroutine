@@ -1,0 +1,12 @@
+{
+  "appId": "de.jannes.morgenroutine",
+  "appName": "Training",
+  "webDir": "www",
+  "server": {
+    "url": "https://penopetenopete.github.io/morgenroutine/spotify-labor.html",
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "backgroundColor": "#0B0F14"
+  }
+}

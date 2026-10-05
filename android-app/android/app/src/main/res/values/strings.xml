@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Training</string>
+    <string name="title_activity_main">Training</string>
+    <string name="package_name">de.jannes.morgenroutine</string>
+    <string name="custom_url_scheme">de.jannes.morgenroutine</string>
+</resources>
