@@ -19,7 +19,7 @@
 <main class="wrap screen" id="home">
   <header>
     <div class="eyebrow" id="today"></div>
-    <h1>Training</h1>
+    <div class="brand"><img src="logo.png" alt="" width="52" height="52"><h1>Training</h1></div>
   </header>
   <button class="resume" id="resume" hidden></button>
   <section class="sect">
@@ -64,7 +64,9 @@
   <div class="days" id="rDays" role="tablist" aria-label="Tag"></div>
   <div class="small" id="rSum"></div>
   <button class="btn primary big" id="rStart">Starten</button>
+  <div class="seg" id="rView" role="group" aria-label="Ansicht"><button class="sbtn" data-v="list" aria-pressed="true">Liste</button><button class="sbtn" data-v="tl" aria-pressed="false">Timeline</button></div>
   <div class="list" id="rList"></div>
+  <div id="rTl" hidden></div>
   <button class="btn ghost" id="rAdd">＋ Übung hinzufügen</button>
   <div class="note" id="rNote">Entfernen (✕) und Reihenfolge (ziehen) gelten <b>nur für heute</b>. Neue Übungen und Werte (Übung antippen) werden in der Routine gespeichert.</div>
   <button class="btn ghost small-btn" id="rReset" hidden>Änderungen für heute zurücksetzen</button>
@@ -128,7 +130,7 @@
     <div class="readout" id="readout">
       <div class="phase" id="phase"></div>
       <div class="clock num" id="clock">0:00</div>
-      <div class="subctrl" id="restCtrl" hidden><button class="btn ghost" id="plus10">+10 s</button><button class="btn ghost" id="endEx">Übung beenden</button></div>
+      <div class="subctrl" id="restCtrl" hidden><button class="btn ghost" id="plus10">+10 s</button><button class="btn ghost" id="pzEdit">Pause ändern</button><button class="btn ghost" id="endEx">Übung beenden</button></div>
       <button class="target" id="target"></button>
     </div>
     <button class="tips" id="tips" aria-expanded="false"><ul class="cue" id="cue"></ul><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 15l6-6 6 6"/></svg></button>

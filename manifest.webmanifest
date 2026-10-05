@@ -1,6 +1,6 @@
 {
- "name": "Morgenroutine",
- "short_name": "Routine",
+ "name": "Training",
+ "short_name": "Training",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",

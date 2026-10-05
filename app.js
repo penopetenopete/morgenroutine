@@ -87,10 +87,10 @@ function getRoutine(id){
       if(d.pair){const b2=base2Morgen(d);it.pair={ex2:d.pair.ex2,umbau:d.pair.umbau,name:d.pair.name,base2:b2,o2:Object.assign({},b2,x.o2||{})}}
       return it;
     });
-    return {id,name:MORGEN.name,preset:true,days:[{items}],settings:Object.assign({},DEF_SET,MORGEN.settings,ov.settings)};
+    return {id,name:MORGEN.name,preset:true,days:[{items}],pauses:ov.pauses||{},settings:Object.assign({},DEF_SET,MORGEN.settings,ov.settings)};
   }
   const r=S.routines.find(r=>r.id===id);if(!r)return null;
-  return {id,name:r.name,preset:false,settings:Object.assign({},DEF_SET,r.settings),
+  return {id,name:r.name,preset:false,pauses:r.pauses||{},settings:Object.assign({},DEF_SET,r.settings),
     days:r.days.map(d=>({items:d.items.filter(it=>EXB[it.ex]).map(it=>({uid:it.uid,ex:it.ex,link:!!it.link,base:Object.assign({},exDef(it.ex),it.base||{}),o:Object.assign({},exDef(it.ex),it.o)}))}))};
 }
 const rawRoutine=id=>S.routines.find(r=>r.id===id);
@@ -109,6 +109,11 @@ function persistItem(rid,it){
   const r=rawRoutine(rid);if(!r)return;
   for(const d of r.days)for(const x of d.items)if(x.uid===it.uid)x.o=Object.assign({},it.o);
   save();
+}
+/* eigene Pause für eine bestimmte Stelle (v=null: wieder Standard) – dauerhaft in der Routine */
+function setPause(rid,pk,v){
+  const tgt=rid==="morgen"?S.morgen:rawRoutine(rid);if(!tgt)return;
+  tgt.pauses=tgt.pauses||{};if(v==null)delete tgt.pauses[pk];else tgt.pauses[pk]=v;save();
 }
 function setMorgenOff(uid,off){const x=S.morgen.items[uid]||(S.morgen.items[uid]={});if(off)x.off=true;else delete x.off;if(!Object.keys(x).length)delete S.morgen.items[uid];save()}
 function setRoutineSetting(rid,k,v){if(rid==="morgen")S.morgen.settings[k]=v;else{const r=rawRoutine(rid);if(!r)return;r.settings=r.settings||{};r.settings[k]=v}save()}
@@ -335,14 +340,14 @@ function renderStats(){
 /* =================== ROUTINE: ÜBERSICHT VOR DEM START =================== */
 let R=null,rDay=0,draft=null;
 function openRoutine(id){R=getRoutine(id);if(!R)return;rDay=nextDay(R);draft=null;show("routine")}
-function makeDraft(){draft={rid:R.id,day:rDay,items:R.days[rDay].items.map(it=>Object.assign(clone(it),{status:it.off?"removed":"plan"}))}}
+function makeDraft(){draft={rid:R.id,day:rDay,pauses:clone(R.pauses||{}),items:R.days[rDay].items.map(it=>Object.assign(clone(it),{status:it.off?"removed":"plan"}))}}
 function draftChanged(){return _draftChanged()}
 function _draftChanged(){
   if(!draft)return false;const orig=R.days[rDay].items;
   return draft.items.some((it,i)=>it.status==="added"||(it.status==="removed")!==!!(orig.find(o=>o.uid===it.uid)||{}).off||(orig[i]&&orig[i].uid!==it.uid));
 }
-function estimate(items,st){
-  const W0={items:items.map(it=>Object.assign({},it,{status:it.status||"plan"})),settings:st};
+function estimate(items,st,pauses){
+  const W0={items:items.map(it=>Object.assign({},it,{status:it.status||"plan"})),settings:st,pauses:pauses||{}};
   return buildSteps(W0).reduce((a,s)=>a+(s.dur!=null?s.dur:s.type==="work"?repsEst(s):0),0);
 }
 function repsEst(s){const e=EXB[s.ex];const one=F.seqDur(e.build(s.o));const n=e.oneRun?1:s.o.reps;return one*n*(s.both?2:1)}
@@ -360,8 +365,16 @@ function renderRoutine(){
   $("rDays").innerHTML=R.days.map((d,i)=>`<button class="dtab" role="tab" aria-selected="${i===rDay}" data-d="${i}">${i===nd?'<span class="nx">nächster</span>':""}Tag ${i+1}</button>`).join("");
   $("rDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{rDay=+b.dataset.d;draft=null;renderRoutine()});
   const act=draft.items.filter(i=>i.status!=="removed");
-  $("rSum").textContent=`${R.days.length>1?"Tag "+(rDay+1)+" von "+R.days.length+" · ":""}${act.length} Übungen · ca. ${Math.round(estimate(act,R.settings)/60)} min`;
+  $("rSum").textContent=`${R.days.length>1?"Tag "+(rDay+1)+" von "+R.days.length+" · ":""}${act.length} Übungen · ca. ${Math.round(estimate(act,R.settings,draft.pauses)/60)} min`;
   $("rStart").disabled=!act.length;
+  $("rView").querySelectorAll("[data-v]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===rView));
+  $("rList").hidden=rView!=="list";$("rTl").hidden=rView!=="tl";
+  if(rView==="tl")renderTimeline($("rTl"),{items:draft.items,settings:R.settings,pauses:draft.pauses},{
+    rid:R.id,
+    onPause:(pk,v)=>{if(v==null)delete draft.pauses[pk];else draft.pauses[pk]=v;setPause(R.id,pk,v);renderRoutine()},
+    onEdit:it=>openEditor(it,{rid:it.status==="added"?null:R.id,morgen:R.preset,st:R.settings,onChange:renderRoutine}),
+    onDelSet:it=>{if((it.o.sets||1)>1){it.o.sets--;if(it.status!=="added")persistItem(R.id,it);rememberValues(it)}else{if(it.status==="added")draft.items.splice(draft.items.indexOf(it),1);else it.status="removed"}renderRoutine()}
+  });
   const list=$("rList");
   list.innerHTML=draft.items.map((it,i)=>{
     const rm=it.status==="removed";
@@ -409,6 +422,66 @@ function renderSettings(box,rid,st,after){
 /* Startwerte beim Hinzufügen: zuletzt eingestellte Werte dieser Übung (egal in welcher Routine), sonst Katalog */
 function catOpt(ex){let s={};try{s=(JSON.parse(localStorage.getItem(CAT)||"{}").ex||{})[ex]||{}}catch(_){}return Object.assign({},exDef(ex),s,(S.exLast||{})[ex]||{})}
 function rememberValues(it){S.exLast=S.exLast||{};S.exLast[it.ex]=Object.assign({},it.o);if(it.pair)S.exLast[it.pair.ex2]=Object.assign({},it.pair.o2);save()}
+
+/* =================== TIMELINE: jeder Satz ein Kästchen, Pausen als Linien =================== */
+let rView="list";
+document.querySelectorAll("#rView [data-v]").forEach(b=>b.onclick=()=>{rView=b.dataset.v;renderRoutine()});
+const TL_COL=["#00E5FF","#FFB547","#5BE38C","#B18CFF","#FF7AB6","#F2E863","#6FA8FF","#FF8F6B"];
+function pauseText(v){return v===0?"0 s":fmtSecs(v)}
+function renderTimeline(box,Wk,h){
+  const steps=buildSteps(Wk),colOf={};let ci=0;
+  Wk.items.forEach(it=>{if(it.status!=="removed")colOf[it.uid]=TL_COL[ci++%TL_COL.length]});
+  const seq=[];let lastBox=null;
+  steps.forEach((s,i)=>{
+    if(s.type==="work"){
+      const k=[s.uid,s.set,s.side,s.part].join("|");
+      if(lastBox&&lastBox.k===k&&seq[seq.length-1]===lastBox)return; // Drop-Set-Stufen = ein Kästchen
+      if(seq.length&&seq[seq.length-1].box)seq.push({edge:true,none:true});
+      lastBox={box:true,k,s};seq.push(lastBox);
+    }else if(seq.length)seq.push({edge:true,s});
+  });
+  const boxes=seq.filter(x=>x.box),PER=3;
+  if(!boxes.length){box.innerHTML='<div class="note" style="padding:14px">Noch keine Sätze.</div>';return}
+  const boxHTML=b=>{const s=b.s,it=Wk.items.find(x=>x.uid===s.uid),e=EXB[s.ex],uni=isUni(EXB[it.ex],it.o);
+    const side=s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
+    return `<button class="tlb" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}"><b>${esc(e.name)}</b><small>S${s.set}${side?" · "+side:""}</small></button>`};
+  const edgeHTML=(x,turn)=>{
+    if(x.none)return `<span class="tle${turn?" turn":""} none"><i></i></span>`;
+    const s=x.s,open=s.dur==null;
+    const lab=open?"▶":pauseText(s.dur);
+    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}" ${open?"disabled":""} data-e="${seq.indexOf(x)}" aria-label="Pause ${lab}"><i></i><span>${lab}</span></button>`};
+  let html="",row=[],ri=0;
+  const flush=()=>{html+=`<div class="tlrow${ri%2?" rev":""}">${row.join("")}</div>`;row=[];ri++};
+  let bi=0;
+  for(let i=0;i<seq.length;i++){
+    const x=seq[i];
+    if(x.box){row.push(boxHTML(x));bi++;continue}
+    if(bi%PER===0&&bi<boxes.length){flush();html+=`<div class="tlturnrow ${(ri-1)%2?"l":"r"}">${edgeHTML(x,true)}</div>`}
+    else row.push(edgeHTML(x,false));
+  }
+  if(row.length)flush();
+  box.innerHTML=`<div class="tl">${html}</div><div class="note">Kästchen = ein Satz (Farbe = Übung). Linie antippen = diese Pause einstellen (gilt dauerhaft für diese Routine). ▶ = nächste Übung per Knopf. <span class="tlc">Farbig umrandet</span> = eigene Pause.</div>`;
+  box.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{const s=seq[+b.dataset.e].s;openPauseSheet(s,h.onPause)});
+  box.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{
+    const s=boxes[+b.dataset.b].s,it=Wk.items.find(x=>x.uid===s.uid),n=it.pair?1:(it.o.sets||1);
+    openSheet(`Satz ${s.set}`,itemName(it),`<div class="note">${it.pair?"Paar aus der Morgenroutine.":n>1?`Hat ${n} Sätze. „Satz löschen“ macht daraus ${n-1} – auch in der Liste.`:"Das ist der einzige Satz."}</div>
+      <button class="btn" id="tlEdit">Übung bearbeiten</button>${it.pair?"":`<button class="btn danger" id="tlDel">${n>1?"Satz löschen":"Übung für heute entfernen"}</button>`}`);
+    $("tlEdit").onclick=()=>{closeSheet();h.onEdit(it)};
+    if($("tlDel"))$("tlDel").onclick=()=>{closeSheet();h.onDelSet(it)};
+  });
+}
+/* Pause einstellen (Timeline und laufendes Training) */
+function openPauseSheet(s,onSet){
+  const def=s.kind==="side"||s.kind==="umbau"?gv("side"):gv("rest");
+  let v=s.dur;
+  const what={side:"Zwischen den Seiten",umbau:"Umbau",set:"Nach dem Satz",link:"Vor der verknüpften Übung"}[s.kind]||"Pause";
+  openSheet(what,"Pause einstellen",`<div class="wheelcenter">${wheelRow("pz","Diese Pause",EXB.balance,"rest")}</div>
+    <div class="note">Gilt dauerhaft für genau diese Stelle in der Routine. Standard: ${pauseText(def)} (Hauptmenü → Einstellungen).</div>
+    <button class="btn primary big" id="pzOk">Übernehmen</button>${s.custom?`<button class="btn ghost" id="pzStd">Zurück auf Standard (${pauseText(def)})</button>`:""}`);
+  const wh=initWheel($("shBody").querySelector(".wheelrow"),EXB.balance,{get:()=>v,set:x=>{v=x}});
+  $("pzOk").onclick=()=>{const x=wh.value();closeSheet();onSet(s.pk,x)};
+  if($("pzStd"))$("pzStd").onclick=()=>{closeSheet();onSet(s.pk,null)};
+}
 
 /* =================== BAUKASTEN =================== */
 let bRid=null,bDay=0;
@@ -525,17 +598,18 @@ function blocksOf(items){
 function blockRange(items,i){let a=i,b=i;while(a>0&&items[a-1].link&&items[a-1].status!=="removed")a--;while(b<items.length-1&&items[b].link)b++;return [a,b]}
 /* Schritte aus den aktiven Übungen. Schlüssel bleiben stabil, damit Änderungen mitten im Workout die Position halten. */
 function buildSteps(Wk){
-  const st=Wk.settings,out=[];
-  const T=(uid,label,dur,kind,x)=>out.push(Object.assign({type:"trans",uid,label,dur,kind},x||{}));
+  const st=Wk.settings,out=[],PZ=Wk.pauses||{};
+  /* jede Pause hat einen festen Schlüssel (pk); eigene Werte aus der Timeline/dem Training gehen vor */
+  const T=(uid,label,dur,kind,x)=>{x=x||{};if(x.pk&&PZ[x.pk]!=null){dur=PZ[x.pk];x.custom=true}out.push(Object.assign({type:"trans",uid,label,dur,kind},x))};
   blocksOf(Wk.items).forEach((bl,bi)=>{
     const first=bl[0];
     T(first.uid,bi===0?"Mach dich bereit":"Nächste Übung",null,"next",{big:true,hub:bi>0}); // ohne Zeit: weiter per Knopf
     if(first.pair){
       const it=first,o=it.o,Wo=x=>out.push(Object.assign({type:"work",uid:it.uid,ex:it.ex,o,part:0,stage:null},x));
       [0,1].forEach(sd=>{
-        if(sd)T(it.uid,"Seitenwechsel",swOf(it,st),"side");
+        if(sd)T(it.uid,"Seitenwechsel",swOf(it,st),"side",{pk:it.uid+"|side|p"});
         Wo({side:sd,set:1,mode:"hold",dur:o.secs});
-        T(it.uid,"Umbau · "+it.pair.umbau,swOf(it,st),"umbau");
+        T(it.uid,"Umbau · "+it.pair.umbau,swOf(it,st),"umbau",{pk:it.uid+"|umbau|"+sd});
         Wo({ex:it.pair.ex2,o:it.pair.o2,part:1,side:sd,set:1,mode:"hold",dur:it.pair.o2.secs});
       });
       return;
@@ -543,14 +617,14 @@ function buildSteps(Wk){
     const max=Math.max(...bl.map(effSets));
     for(let r=1;r<=max;r++){
       const mem=bl.filter(it=>effSets(it)>=r);
-      if(r>1){const prev=bl.filter(it=>effSets(it)>=r-1);T(mem[0].uid,"Satzpause",restOf(prev[prev.length-1],st),"set")}
+      if(r>1){const prev=bl.filter(it=>effSets(it)>=r-1);T(mem[0].uid,"Satzpause",restOf(prev[prev.length-1],st),"set",{pk:mem[0].uid+"|set|"+r})}
       mem.forEach((it,j)=>{
         const e=EXB[it.ex],o=it.o,uni=isUni(e,o);
         const Wo=x=>out.push(Object.assign({type:"work",uid:it.uid,ex:it.ex,o,part:0,stage:null},x));
-        if(j>0)T(it.uid,"Pause · gleich "+e.name,restOf(mem[j-1],st),"link");
+        if(j>0)T(it.uid,"Pause · gleich "+e.name,restOf(mem[j-1],st),"link",{pk:it.uid+"|link|"+r});
         if(o.mode==="reps"&&uni&&!st.confirm){Wo({side:0,set:r,mode:"reps",both:true});return}
         (uni?[0,1]:[0]).forEach(sd=>{
-          if(sd)T(it.uid,"Seitenwechsel",swOf(it,st),"side");
+          if(sd)T(it.uid,"Seitenwechsel",swOf(it,st),"side",{pk:it.uid+"|side|"+r});
           if(o.mode==="reps")Wo({side:sd,set:r,mode:"reps"});
           else if(e.drop)[0,1,2].forEach(k=>Wo({side:sd,set:r,stage:k,mode:"hold",dur:o.secs}));
           else Wo({side:sd,set:r,mode:"hold",dur:o.secs});
@@ -570,7 +644,7 @@ function loadActive(){try{const a=JSON.parse(localStorage.getItem(ACT)||"null");
 function saveW(){if(!W)return;try{localStorage.setItem(ACT,JSON.stringify(W))}catch(_){}}
 function startWorkout(){
   const items=draft.items.map(it=>({uid:it.uid,ex:it.ex,o:clone(it.o),base:it.base?clone(it.base):null,pair:it.pair?clone(it.pair):null,link:!!it.link,status:it.status,planned:it.status!=="added"}));
-  W={v:1,id:"w"+now().toString(36),rid:R.id,rname:R.name,day:rDay,days:R.days.length,settings:clone(R.settings),
+  W={v:1,id:"w"+now().toString(36),rid:R.id,rname:R.name,day:rDay,days:R.days.length,settings:clone(R.settings),pauses:clone(draft.pauses||{}),
      startedAt:now(),items,cur:null,stepStart:now(),pauseAt:null,pausedMs:0,extra:0,res:{},pending:null,ended:false,visited:[]};
   draft=null;
   startPlayer(W,true);
@@ -741,6 +815,7 @@ function stepUI(){
   if(cueEx!==ws.ex+"|"+JSON.stringify(ws.o)){cueEx=ws.ex+"|"+JSON.stringify(ws.o);$("cue").innerHTML=e.tips(ws.o).filter(x=>!x.startsWith("In der App")).map(x=>`<li>${esc(x)}</li>`).join("")}
   $("restCtrl").hidden=s.type==="trans"&&s.kind==="next";
   $("plus10").hidden=!(s.type==="trans"&&s.dur!=null);
+  $("pzEdit").hidden=!(s.type==="trans"&&s.dur!=null&&s.pk);
   const hub=!!(s.type==="trans"&&s.hub);
   $("hub").hidden=!hub;$("stagebox").hidden=hub;$("readout").hidden=hub;$("tips").hidden=hub;
   if(hub)renderHub(s);
@@ -773,6 +848,10 @@ function repsDone(s){
 $("pause").onclick=()=>setPaused(!W.pauseAt);
 $("next").onclick=()=>{if(W)advance()};
 $("prev").onclick=()=>{if(W)back()};
+$("pzEdit").onclick=()=>{
+  if(!W)return;const s=steps[idx];if(!(s.type==="trans"&&s.dur!=null&&s.pk))return;
+  openPauseSheet(s,(pk,v)=>{W.pauses=W.pauses||{};if(v==null)delete W.pauses[pk];else W.pauses[pk]=v;setPause(W.rid,pk,v);rebuildKeep();saveW();toast(v==null?"Standard-Pause":"Pause: "+pauseText(v)+" – gespeichert")});
+};
 $("plus10").onclick=()=>{if(!W)return;W.extra=(W.extra||0)+10;saveW();syncNative();toast("+10 s")};
 $("tips").onclick=()=>{const o=!$("tips").classList.contains("open");$("tips").classList.toggle("open",o);$("tips").setAttribute("aria-expanded",o)};
 $("target").onclick=()=>{

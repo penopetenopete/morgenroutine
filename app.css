@@ -259,3 +259,32 @@ h3{font-family:var(--f-display);font-size:.78rem;letter-spacing:.14em;text-trans
 .edprev{display:flex;align-items:center;gap:12px}
 .edprev canvas{width:120px;height:120px;flex:none;border-radius:14px;border:1px solid var(--line);background:radial-gradient(circle at 50% 45%,#122030,var(--bg) 72%)}
 .edprev .small{flex:1;min-width:0}
+
+/* Logo */
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{width:52px;height:52px;border-radius:14px;border:1px solid var(--line);background:#01050B}
+/* Timeline */
+.tl{display:flex;flex-direction:column;gap:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 10px}
+.tlrow{display:flex;align-items:center}
+.tlrow.rev{flex-direction:row-reverse}
+.tlb{flex:0 0 calc((100% - 92px)/3);min-width:0;min-height:56px;border-radius:10px;border:1.5px solid var(--c);background:color-mix(in srgb,var(--c) 14%,var(--bg));color:var(--fg);padding:6px 6px;text-align:center;cursor:pointer;display:flex;flex-direction:column;justify-content:center;line-height:1.2}
+.tlb b{font-family:var(--f-display);font-weight:600;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tlb small{font-family:var(--f-display);font-size:.72rem;color:var(--c)}
+.tle{flex:0 0 46px;height:44px;position:relative;border:0;background:none;padding:0;cursor:pointer;color:var(--muted)}
+.tle i{position:absolute;left:2px;right:2px;top:50%;height:2px;background:var(--line);transform:translateY(-50%)}
+.tle.side i{height:5px;background:#3A4C60}
+.tle span{position:absolute;left:50%;top:0;transform:translateX(-50%);font-family:var(--f-display);font-size:.68rem;white-space:nowrap;background:var(--card);padding:0 3px;border-radius:4px}
+.tle.custom span{color:var(--accent);outline:1px solid var(--accent)}
+.tle.open{cursor:default}.tle.open i{background:repeating-linear-gradient(90deg,var(--line) 0 4px,transparent 4px 8px)}
+.tle.open span{font-size:.6rem}
+.tle.none{flex-basis:12px;cursor:default}
+.tlturnrow{display:flex;height:46px}
+.tlturnrow.r{justify-content:flex-end;padding-right:calc((100% - 92px)/6 - 23px)}
+.tlturnrow.l{justify-content:flex-start;padding-left:calc((100% - 92px)/6 - 23px)}
+.tle.turn{flex:0 0 46px;height:46px}
+.tle.turn i{left:50%;right:auto;top:0;bottom:0;width:2px;height:auto;transform:translateX(-50%)}
+.tle.turn.side i{width:5px}
+.tle.turn span{top:50%;transform:translate(-50%,-50%)}
+.tle.turn.open i{background:repeating-linear-gradient(180deg,var(--line) 0 4px,transparent 4px 8px)}
+.tlc{color:var(--accent)}
+.tle:focus-visible,.tlb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
