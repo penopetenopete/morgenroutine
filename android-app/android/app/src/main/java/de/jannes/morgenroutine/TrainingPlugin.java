@@ -56,6 +56,19 @@ public class TrainingPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void playMusic(PluginCall call) {
+        JSONObject m;
+        try { m = new JSONObject(call.getString("music", "{}")); } catch (Exception e) { call.reject(e.getMessage()); return; }
+        core().post(() -> {
+            String err = core().switchTo("music", "Auswahl", m);
+            JSObject r = new JSObject();
+            r.put("ok", err == null);
+            if (err != null) r.put("error", err);
+            call.resolve(r);
+        });
+    }
+
+    @PluginMethod
     public void startAuto(PluginCall call) { core().startAuto(call.getInt("every", 30)); call.resolve(); }
 
     @PluginMethod

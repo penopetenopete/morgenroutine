@@ -343,11 +343,15 @@ public class SpotifyCore {
     }
 
     /** Muss im Worker-Thread laufen. Gibt null bei Erfolg zurück, sonst die Fehlermeldung. */
-    public String switchTo(String target, String why) {
+    public String switchTo(String target, String why) { return switchTo(target, why, null); }
+
+    /** forceMusic: in der App gewählte Musik (Playlist oder Song), die sofort laufen soll. */
+    public String switchTo(String target, String why, JSONObject forceMusic) {
         long t0 = System.currentTimeMillis();
         try {
             JSONObject p = null;
             try { p = snapshot(); } catch (ApiException e) { if (e.status != 404) addLog("Stand lesen fehlgeschlagen: " + e.getMessage(), "w"); }
+            if (forceMusic != null) synchronized (this) { st.put("music", forceMusic); st.remove("mode"); save(); }
             JSONObject item = p == null ? null : p.optJSONObject("item");
             String itemType = item == null ? "" : item.optString("type");
             JSONObject music;
@@ -374,7 +378,9 @@ public class SpotifyCore {
                 setMode(null);
                 JSONObject pl;
                 synchronized (this) { pl = st.optJSONObject("pl"); }
-                if (music != null && music.has("track") && music.has("ctx")) {
+                if (music != null && music.has("ctx") && !music.has("track")) {
+                    play(new JSONObject().put("context_uri", music.getString("ctx")));
+                } else if (music != null && music.has("track") && music.has("ctx")) {
                     JSONObject b = new JSONObject();
                     b.put("context_uri", music.getString("ctx"));
                     b.put("offset", new JSONObject().put("uri", music.getString("track")));

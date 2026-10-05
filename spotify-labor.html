@@ -56,6 +56,10 @@ ol{margin:6px 0 0;padding-left:20px;font-size:14px;color:var(--dim)}
   <h2>2 · Quellen</h2>
   <label>Start-Playlist – optional (nur falls noch keine Musik gemerkt ist)</label>
   <input id="inPl" placeholder="https://open.spotify.com/playlist/…">
+  <label>Musik wählen</label>
+  <div class="row" style="flex-wrap:nowrap"><input id="inMSearch" placeholder="Song oder Playlist suchen" style="margin:4px 0" enterkeyhint="search"><button id="btnMSearch">Suchen</button></div>
+  <button id="btnMyPl" class="small" style="margin:6px 0 4px">Meine Playlists</button>
+  <div id="mRes" style="margin-bottom:12px"></div>
   <label>Podcast suchen</label>
   <div class="row" style="flex-wrap:nowrap"><input id="inSearch" placeholder="z. B. Hotel Matze" style="margin:4px 0" enterkeyhint="search"><button id="btnSearch">Suchen</button></div>
   <div id="searchRes" style="margin-bottom:10px"></div>
@@ -109,7 +113,7 @@ const NATIVE=!!(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform());
 // In der App übernimmt der native Teil (Plugin "Training") das Umschalten – läuft auch bei gesperrtem Bildschirm.
 const T=NATIVE&&CAP.Plugins&&CAP.Plugins.Training?CAP.Plugins.Training:null;
 const REDIRECT=NATIVE?'morgenroutine://spotify':'https://penopetenopete.github.io/morgenroutine/spotify-labor.html';
-const SCOPES='user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-playback-position';
+const SCOPES='user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-playback-position playlist-read-private playlist-read-collaborative';
 const KEY='spotify_labor_v1';
 const $=id=>document.getElementById(id);
 
@@ -241,7 +245,7 @@ const wait=ms=>new Promise(x=>setTimeout(x,ms));
 function resumable(ctx){return !!ctx&&(ctx.type==='album'||(ctx.type==='playlist'&&!/^spotify:playlist:37i9/.test(ctx.uri)))}
 async function seekTo(ms){if(ms>2000){await wait(700);await api('PUT','/me/player/seek?position_ms='+Math.round(ms)+dq('&'))}}
 let busy=false;
-async function switchTo(target,why){
+async function switchTo(target,why,force){
   if(busy)return;busy=true;renderSwitch(target);
   if(T){
     try{const r=await T.switchTo({target});msg('swMsg',r.ok?'':r.error,'err')}catch(e){msg('swMsg',String(e.message||e),'err')}
@@ -250,6 +254,7 @@ async function switchTo(target,why){
   const t0=performance.now();
   try{
     let p=null;try{p=await snapshot()}catch(e){if(e.status!==404)log('Stand lesen fehlgeschlagen: '+e.message,'w')}
+    if(force){S.music=force;S.mode=null}
     if(target==='music'&&S.mode==='queue'&&p&&p.item&&p.item.type==='episode'&&S.music){
       // Zurück zur Musik: Folge überspringen → der eingereihte Song kommt, dann läuft Mix/Radio normal weiter
       await api('POST','/me/player/next'+dq());await seekTo(S.music.pos||0);S.mode=null;
@@ -263,7 +268,8 @@ async function switchTo(target,why){
     }else if(target==='music'){
       S.mode=null;
       const m=S.music;
-      if(m&&m.track&&m.ctx){ // Song in seiner Quelle (Playlist/Album …) fortsetzen → Quelle läuft danach weiter
+      if(m&&m.ctx&&!m.track){await play({context_uri:m.ctx})}
+      else if(m&&m.track&&m.ctx){ // Song in seiner Quelle (Playlist/Album …) fortsetzen → Quelle läuft danach weiter
         try{await play({context_uri:m.ctx,offset:{uri:m.track},position_ms:m.pos||0})}
         catch(e){if(e.status===404||e.status===403)throw e;log('Quelle ('+(m.ctxType||'?')+') nicht fortsetzbar – spiele nur den Song','w');await play({uris:[m.track],position_ms:m.pos||0})}
       }else if(m&&m.track){ // einzelner Song ohne Quelle → danach übernimmt Spotify-Autoplay
@@ -307,6 +313,36 @@ async function findDevices(){
     $('devList').innerHTML=d.length?'':'<div class="st">Kein Gerät gefunden. Spotify am Handy öffnen und kurz abspielen.</div>';
     d.forEach(x=>{const b=document.createElement('button');b.className='dev'+(S.device&&S.device.id===x.id?' on':'');b.textContent=`${x.name} (${x.type})${x.is_active?' · aktiv':''}`;b.onclick=()=>{S.device={id:x.id,name:x.name};save();pushConfig();log('Gerät gewählt: '+x.name);findDevices()};$('devList').appendChild(b)});
   }catch(e){$('devList').innerHTML=`<div class="msg err" style="display:block">${esc(explain(e))}</div>`}
+}
+
+// ---------- Musik-Auswahl ----------
+let myPl=[];
+function needScope(e){return e.status===401||e.status===403?'Für deine Playlists bitte einmal oben „Abmelden“ und neu „Mit Spotify verbinden“ (neue Berechtigung).':explain(e)}
+async function myPlaylists(){
+  const box=$('mRes');box.innerHTML='<div class="st">Lade deine Playlists …</div>';
+  try{myPl=[];let url='/me/playlists?limit=50';
+    for(let i=0;i<4&&url;i++){const j=await api('GET',url);(j&&j.items||[]).filter(Boolean).forEach(x=>myPl.push(x));url=j&&j.next?j.next.replace('https://api.spotify.com/v1',''):null}
+    box.innerHTML='<input id="plFilter" placeholder="Playlists filtern …" style="margin:4px 0">';
+    const list=document.createElement('div');box.appendChild(list);
+    const draw=()=>{const f=($('plFilter').value||'').toLowerCase();list.innerHTML='';
+      myPl.filter(x=>!f||(x.name||'').toLowerCase().includes(f)).slice(0,60).forEach(x=>list.appendChild(resBtn(x.name,(x.owner&&x.owner.display_name||'')+(x.tracks&&x.tracks.total!=null?' · '+x.tracks.total+' Songs':x.items&&x.items.total!=null?' · '+x.items.total+' Songs':''),()=>pickMusic({ctx:x.uri,ctxType:'playlist',name:x.name}))))};
+    $('plFilter').oninput=draw;draw();
+    if(!myPl.length)list.innerHTML='<div class="st">Keine Playlists gefunden.</div>';
+  }catch(e){box.innerHTML=`<div class="msg err" style="display:block">${esc(needScope(e))}</div>`}
+}
+async function searchMusic(){
+  const q=$('inMSearch').value.trim();if(!q)return;const box=$('mRes');box.innerHTML='<div class="st">Suche …</div>';
+  try{const j=await api('GET','/search?type=track,playlist&market=DE&limit=6&q='+encodeURIComponent(q));box.innerHTML='';
+    const tr=((j&&j.tracks&&j.tracks.items)||[]).filter(Boolean),pl=((j&&j.playlists&&j.playlists.items)||[]).filter(Boolean);
+    if(tr.length){box.insertAdjacentHTML('beforeend','<div class="st">Songs</div>');tr.forEach(t=>box.appendChild(resBtn(t.name,(t.artists||[]).map(a=>a.name).join(', '),()=>pickMusic({track:t.uri,name:t.name}))))}
+    if(pl.length){box.insertAdjacentHTML('beforeend','<div class="st">Playlists</div>');pl.forEach(x=>box.appendChild(resBtn(x.name,x.owner&&x.owner.display_name||'',()=>pickMusic({ctx:x.uri,ctxType:'playlist',name:x.name}))))}
+    if(!tr.length&&!pl.length)box.innerHTML='<div class="st">Nichts gefunden.</div>';
+  }catch(e){box.innerHTML=`<div class="msg err" style="display:block">${esc(explain(e))}</div>`}
+}
+async function pickMusic(m){
+  $('mRes').innerHTML='';
+  if(T){const r=await T.playMusic({music:JSON.stringify(m)}).catch(e=>({ok:false,error:String(e.message||e)}));msg('srcMsg',r.ok?'Musik läuft: '+m.name:r.error,r.ok?'ok':'err');await syncNative()}
+  else{await switchTo('music','Auswahl',m);msg('srcMsg','Musik: '+m.name,'ok')}
 }
 
 // ---------- Podcast-Suche ----------
@@ -372,6 +408,9 @@ $('btnNow').onclick=showNow;
 $('btnShuf').onclick=async()=>{try{await api('PUT','/me/player/shuffle?state=false'+(S.device?'&device_id='+encodeURIComponent(S.device.id):''));S.shuffle=false;save();log('Shuffle ausgeschaltet');showNow()}catch(e){msg('swMsg',explain(e),'err')}};
 $('btnDev').onclick=findDevices;
 $('btnSearch').onclick=searchShows;
+$('btnMSearch').onclick=searchMusic;
+$('inMSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchMusic()});
+$('btnMyPl').onclick=myPlaylists;
 $('inSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchShows()});
 $('btnAuto').onclick=async()=>{
   if(T){if(S.auto)await T.stopAuto();else{S.every=Math.max(10,+$('inEvery').value||30);save();await T.startAuto({every:S.every})}return syncNative()}
