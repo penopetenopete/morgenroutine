@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1";
 const MAX_SLOTS=5;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const G_DEF={shade:2,sound:true,vib:true};
+const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
 const MORGEN={id:"morgen",name:"Morgenroutine",settings:{umbau:10,satz:30,wechsel:15,confirm:false},items:[
@@ -274,6 +274,8 @@ function renderHome(){
   document.querySelectorAll("[data-new]").forEach(b=>b.onclick=newRoutine);
   document.querySelectorAll("[data-shade]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.shade===gv("shade")));
   $("snd").checked=gv("sound");$("vib").checked=gv("vib");
+  $("gPauses").innerHTML=wheelRow("gRest","Pause nach jedem Satz",EXB.balance,"rest")+wheelRow("gSide","Pause zwischen den Seiten",EXB.balance,"sw");
+  $("gPauses").querySelectorAll(".wheelrow").forEach(row=>{const k=row.dataset.k==="rest"?"rest":"side";initWheel(row,EXB.balance,{get:()=>gv(k),set:v=>setG(k,v)})});
   const a=loadActive();
   $("resume").hidden=!a;
   if(a)$("resume").innerHTML=`<span class="dot"></span><span><b>Workout läuft · ${esc(a.rname)}</b><span class="small">seit ${fmt((now()-a.startedAt)/1000)} · antippen zum Weitermachen</span></span>`;
@@ -400,10 +402,8 @@ $("rEdit").onclick=()=>{
 };
 /* Ablauf-Einstellungen einer Routine */
 function renderSettings(box,rid,st,after){
-  box.innerHTML=wheelRow("rsw","Pause zwischen den Seiten / Umbau",EXB.balance,"sw")+wheelRow("rrest","Pause nach einem Satz",EXB.balance,"rest")+
-    `<div class="note">Gilt für alle Übungen dieser Routine, bei denen du keine eigene Pause eingestellt hast (Übung antippen → „Pause danach“).</div>`+
+  box.innerHTML=`<div class="note">Pausen: ${fmtSecs(gv("rest"))} nach jedem Satz, ${fmtSecs(gv("side"))} zwischen den Seiten – änderbar im Hauptmenü unter „Einstellungen“.</div>`+
     `<label class="toggle"><span>Wiederholungen bestätigen<small>Nach jedem Satz „Geschafft“ oder „Andere Zahl“. Aus = beide Seiten in einem Durchgang.</small></span><input type="checkbox" data-confirm${st.confirm?" checked":""}></label>`;
-  box.querySelectorAll(".wheelrow").forEach(row=>{const key=row.dataset.k==="sw"?"umbau":"satz";initWheel(row,EXB.balance,{get:()=>st[key],set:v=>{st[key]=v;setRoutineSetting(rid,key,v)}})});
   box.querySelector("[data-confirm]").onchange=e=>{setRoutineSetting(rid,"confirm",e.target.checked);after()};
 }
 /* Startwerte beim Hinzufügen: zuletzt eingestellte Werte dieser Übung (egal in welcher Routine), sonst Katalog */
@@ -482,8 +482,6 @@ function openEditor(it,ctx){
       h+=wheelRow("sets","Sätze",e,"sets");
       if(o.mode==="hold")h+=wheelRow("secs",e.drop?"Sekunden pro Stufe":e.timeWord||(uni?"Zeit pro Seite":"Zeit"),e,"secs");
       else h+=wheelRow("reps",e.repsLabel||(uni?"Wiederholungen pro Seite":"Wiederholungen"),e,"reps");
-      h+=wheelRow("rest","Pause danach",e,"rest")+`<div class="note">Pause nach jedem Satz. Im Supersatz: Pause, bevor die nächste verknüpfte Übung kommt.</div>`;
-      if(isUni(e,o))h+=wheelRow("sw","Pause zwischen den Seiten",e,"sw");
       if(e.weight!=="none"){
         const lab={plate:"Gewicht (Scheibe)",kb:"Kettlebell",kb2:"Kettlebell pro Hand",cable:"Gewicht am Kabelzug",db:"Kurzhantel pro Hand",bar:"Langhantel gesamt"}[e.weight];
         h+=wheelRow("kg",e.id==="bridge"?"Gewicht (Scheibe auf dem Becken)":lab,e,"kg");
@@ -515,8 +513,9 @@ const MORGEN_OFF=uid=>!!(S.morgen.items[uid]&&S.morgen.items[uid].off);
 /* Sätze einer Übung heute (nach „Übung beenden“ weniger) */
 const effSets=it=>it.pair?(it.cut===0?0:1):Math.min(it.o.sets||1,it.cut!=null?it.cut:99);
 /* Pausen pro Übung (o.rest = Satzpause, o.sw = Seitenwechsel), sonst Routine-Einstellung */
-const restOf=(it,st)=>it.o.rest!=null?it.o.rest:st.satz;
-const swOf=(it,st)=>it.o.sw!=null?it.o.sw:st.umbau;
+/* Pausen zentral (Hauptmenü → Einstellungen): nach jedem Satz und zwischen den Seiten – für alle Übungen gleich */
+const restOf=()=>gv("rest");
+const swOf=()=>gv("side");
 /* Blöcke: verknüpfte Übungen (it.link = mit der nächsten verknüpft) laufen als Supersatz */
 function blocksOf(items){
   const act=items.filter(it=>it.status!=="removed"&&effSets(it)>0),out=[];
