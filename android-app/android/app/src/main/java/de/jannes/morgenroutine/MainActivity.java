@@ -8,6 +8,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(TrainingPlugin.class);
         super.onCreate(savedInstanceState);
         // Test-Version: Dienst "Training läuft" startet mit der App und hält sie im Hintergrund wach.
         Intent i = new Intent(this, WorkoutService.class);

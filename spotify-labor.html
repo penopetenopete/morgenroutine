@@ -106,6 +106,8 @@ const CLIENT_ID='e4b95d44f2f6410e8e80483e9f3f82c0';
 // In der Android-App (Capacitor) läuft der Login im Browser und springt per morgenroutine://spotify zurück.
 const CAP=window.Capacitor;
 const NATIVE=!!(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform());
+// In der App übernimmt der native Teil (Plugin "Training") das Umschalten – läuft auch bei gesperrtem Bildschirm.
+const T=NATIVE&&CAP.Plugins&&CAP.Plugins.Training?CAP.Plugins.Training:null;
 const REDIRECT=NATIVE?'morgenroutine://spotify':'https://penopetenopete.github.io/morgenroutine/spotify-labor.html';
 const SCOPES='user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-playback-position';
 const KEY='spotify_labor_v1';
@@ -118,8 +120,9 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 // ---------- Protokoll ----------
 function hhmmss(t){const d=new Date(t);return d.toLocaleTimeString('de-DE',{hour12:false})}
-function log(text,kind){S.log.unshift({t:Date.now(),text,kind:kind||''});S.log=S.log.slice(0,200);save();renderLog()}
-function renderLog(){$('log').innerHTML=S.log.map(e=>`<div class="${e.kind}">${hhmmss(e.t)}  ${esc(e.text)}</div>`).join('')||'<span style="color:var(--dim)">Noch leer.</span>'}
+function log(text,kind){if(T){T.addLog({text,kind:kind||''}).then(syncNative);return}S.log.unshift({t:Date.now(),text,kind:kind||''});S.log=S.log.slice(0,200);save();renderLog()}
+function logList(){return T?(S.nlog||[]):S.log}
+function renderLog(){$('log').innerHTML=logList().map(e=>`<div class="${e.kind}">${hhmmss(e.t)}  ${esc(e.text)}</div>`).join('')||'<span style="color:var(--dim)">Noch leer.</span>'}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function msg(id,text,kind){const m=$(id);m.className='msg '+(text?kind:'');m.textContent=text||''}
 function fmt(ms){if(ms==null)return'–';const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
@@ -139,6 +142,7 @@ async function tokenReq(params){
   const j=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error('Token-Fehler: '+(j.error_description||j.error||r.status));
   S.tok={access:j.access_token,refresh:j.refresh_token||(S.tok&&S.tok.refresh),exp:Date.now()+(j.expires_in-60)*1000};save();
+  if(T)await T.setAuth({access:S.tok.access,refresh:S.tok.refresh,exp:Math.round(S.tok.exp)});
 }
 async function handleRedirect(q){
   if(!q){q=new URLSearchParams(location.search);if(!q.has('code')&&!q.has('error'))return;history.replaceState(null,'',location.pathname)}
@@ -158,6 +162,7 @@ if(NATIVE){
   });
 }
 async function token(){
+  if(T){const r=await T.getToken();return r.access}
   if(!S.tok)throw Object.assign(new Error('Nicht verbunden – erst Schritt 1.'),{status:0});
   if(Date.now()>S.tok.exp)await tokenReq({client_id:CLIENT_ID,grant_type:'refresh_token',refresh_token:S.tok.refresh});
   return S.tok.access;
@@ -216,6 +221,19 @@ async function play(body){
     }else throw e;
   }
 }
+async function syncNative(){
+  if(!T)return;
+  try{const n=await T.getState();
+    ['music','pod','active','mode','shuffle','device','auto'].forEach(k=>{if(n[k]===undefined||n[k]===null)delete S[k];else S[k]=n[k]});
+    S.nlog=n.log||[];S.hasAuth=!!n.hasAuth;
+  }catch(e){}
+  renderAuth();renderSwitch();renderSaved();renderLog();renderAuto();
+}
+function pushConfig(extra){
+  if(!T)return Promise.resolve();
+  const c=Object.assign({pl:S.pl||null,podSrc:S.podSrc||null,device:S.device||null,rewind:S.rewind},extra||{});
+  return T.setConfig({config:JSON.stringify(c)});
+}
 function dq(sep){return S.device?(sep||'?')+'device_id='+encodeURIComponent(S.device.id):''}
 const wait=ms=>new Promise(x=>setTimeout(x,ms));
 // Eigene Playlists und Alben kann die App neu starten. Spotify-Mixe, Radio, Lieblingssongs usw. nicht –
@@ -225,6 +243,10 @@ async function seekTo(ms){if(ms>2000){await wait(700);await api('PUT','/me/playe
 let busy=false;
 async function switchTo(target,why){
   if(busy)return;busy=true;renderSwitch(target);
+  if(T){
+    try{const r=await T.switchTo({target});msg('swMsg',r.ok?'':r.error,'err')}catch(e){msg('swMsg',String(e.message||e),'err')}
+    busy=false;await syncNative();return;
+  }
   const t0=performance.now();
   try{
     let p=null;try{p=await snapshot()}catch(e){if(e.status!==404)log('Stand lesen fehlgeschlagen: '+e.message,'w')}
@@ -262,7 +284,7 @@ async function switchTo(target,why){
 }
 
 // ---------- Anzeige ----------
-function renderAuth(){$('authState').innerHTML=S.tok?'<b style="color:var(--ok)">Verbunden.</b>':'Nicht verbunden.'}
+function renderAuth(){$('authState').innerHTML=(T?S.hasAuth:S.tok)?'<b style="color:var(--ok)">Verbunden.</b>':'Nicht verbunden.'}
 function renderSwitch(pending){
   $('bMusic').className=(S.active==='music'?'on':'')+(pending==='music'?' busy':'');
   $('bPod').className=(S.active==='podcast'?'on':'')+(pending==='podcast'?' busy':'');
@@ -283,7 +305,7 @@ async function showNow(){
 async function findDevices(){
   try{const j=await api('GET','/me/player/devices');const d=(j&&j.devices)||[];
     $('devList').innerHTML=d.length?'':'<div class="st">Kein Gerät gefunden. Spotify am Handy öffnen und kurz abspielen.</div>';
-    d.forEach(x=>{const b=document.createElement('button');b.className='dev'+(S.device&&S.device.id===x.id?' on':'');b.textContent=`${x.name} (${x.type})${x.is_active?' · aktiv':''}`;b.onclick=()=>{S.device={id:x.id,name:x.name};save();log('Gerät gewählt: '+x.name);findDevices()};$('devList').appendChild(b)});
+    d.forEach(x=>{const b=document.createElement('button');b.className='dev'+(S.device&&S.device.id===x.id?' on':'');b.textContent=`${x.name} (${x.type})${x.is_active?' · aktiv':''}`;b.onclick=()=>{S.device={id:x.id,name:x.name};save();pushConfig();log('Gerät gewählt: '+x.name);findDevices()};$('devList').appendChild(b)});
   }catch(e){$('devList').innerHTML=`<div class="msg err" style="display:block">${esc(explain(e))}</div>`}
 }
 
@@ -309,7 +331,7 @@ async function showEpisodes(sh){
 function pickEpisode(ep){
   const rp=ep.resume_point||{};
   S.podSrc={type:'episode',id:ep.id,uri:ep.uri};
-  S.pod={episode:ep.uri,name:ep.name,pos:rp.fully_played?0:(rp.resume_position_ms||0),at:Date.now()};save();
+  S.pod={episode:ep.uri,name:ep.name,pos:rp.fully_played?0:(rp.resume_position_ms||0),at:Date.now()};save();pushConfig({pod:S.pod});
   $('inPod').value='https://open.spotify.com/episode/'+ep.id;
   $('searchRes').innerHTML='';msg('srcMsg','Podcast gewählt: '+ep.name,'ok');log('Podcast gewählt: '+ep.name);renderSaved();
 }
@@ -322,15 +344,17 @@ setInterval(()=>{
   if(S.auto){
     const left=Math.ceil((S.auto.next-now)/1000);
     $('autoInfo').textContent=left>0?left+' s':'…';
-    if(now>=S.auto.next&&!busy){S.auto.next=now+S.every*1000;save();switchTo(S.active==='music'?'podcast':'music','Auto')}
+    if(!T&&now>=S.auto.next&&!busy){S.auto.next=now+S.every*1000;save();switchTo(S.active==='music'?'podcast':'music','Auto')}
   }else $('autoInfo').textContent='';
 },1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncNative()});
+setInterval(()=>{if(T&&!document.hidden)syncNative()},3000);
 document.addEventListener('visibilitychange',()=>log(document.hidden?'Seite im Hintergrund / Bildschirm aus':'Seite wieder sichtbar'));
 function renderAuto(){$('btnAuto').textContent=S.auto?'Auto-Wechsel stoppen':'Auto-Wechsel starten'}
 
 // ---------- Knöpfe ----------
 $('btnLogin').onclick=login;
-$('btnLogout').onclick=()=>{delete S.tok;save();renderAuth();log('Abgemeldet')};
+$('btnLogout').onclick=()=>{delete S.tok;save();if(T)T.logout().then(syncNative);renderAuth();log('Abgemeldet')};
 $('btnSave').onclick=()=>{
   const tPl=$('inPl').value.trim(),tPod=$('inPod').value.trim();
   const pl=tPl?parse(tPl):null,pod=tPod?parse(tPod):null;
@@ -338,7 +362,8 @@ $('btnSave').onclick=()=>{
   if(tPod&&(!pod||!['episode','show'].includes(pod.type))){msg('srcMsg','Podcast-Link nicht erkannt. Er sollte „/episode/…“ oder „/show/…“ enthalten – oder Feld leer lassen.','err');return}
   if(pl&&(!S.pl||S.pl.uri!==pl.uri))S.music=null;
   if(pod&&(!S.podSrc||S.podSrc.uri!==pod.uri))S.pod=null;
-  S.pl=pl;S.podSrc=pod;S.rewind=Math.max(0,+$('inRew').value||0);save();
+  const extra={};if(pl&&S.music===null)extra.music=null;if(pod&&S.pod===null)extra.pod=null;
+  S.pl=pl;S.podSrc=pod;S.rewind=Math.max(0,+$('inRew').value||0);save();pushConfig(extra);
   msg('srcMsg','Gespeichert.','ok');renderSaved();
 };
 $('bMusic').onclick=()=>switchTo('music');
@@ -348,13 +373,14 @@ $('btnShuf').onclick=async()=>{try{await api('PUT','/me/player/shuffle?state=fal
 $('btnDev').onclick=findDevices;
 $('btnSearch').onclick=searchShows;
 $('inSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchShows()});
-$('btnAuto').onclick=()=>{
+$('btnAuto').onclick=async()=>{
+  if(T){if(S.auto)await T.stopAuto();else{S.every=Math.max(10,+$('inEvery').value||30);save();await T.startAuto({every:S.every})}return syncNative()}
   if(S.auto){S.auto=null;log('Auto-Wechsel gestoppt')}
   else{S.every=Math.max(10,+$('inEvery').value||30);S.auto={next:Date.now()+S.every*1000};log(`Auto-Wechsel gestartet (alle ${S.every} s)`)}
   save();renderAuto();
 };
-$('btnClr').onclick=()=>{S.log=[];save();renderLog()};
-$('btnCopy').onclick=()=>{const t=S.log.map(e=>hhmmss(e.t)+'  '+e.text).join('\n');navigator.clipboard.writeText(t).then(()=>log('Protokoll kopiert'),()=>alert(t))};
+$('btnClr').onclick=()=>{if(T){T.clearLog().then(syncNative);return}S.log=[];save();renderLog()};
+$('btnCopy').onclick=()=>{const t=logList().map(e=>hhmmss(e.t)+'  '+e.text).join('\n');navigator.clipboard.writeText(t).then(()=>log('Protokoll kopiert'),()=>alert(t))};
 
 // ---------- Start ----------
 (async()=>{
@@ -364,6 +390,14 @@ $('btnCopy').onclick=()=>{const t=S.log.map(e=>hhmmss(e.t)+'  '+e.text).join('\n
   $('mode').textContent=NATIVE?'· Android-App':'· Web';
   await handleRedirect();
   renderAuth();renderSwitch();renderSaved();renderLog();renderAuto();
+  if(T){
+    const n=await T.getState().catch(()=>({}));
+    if(!n.hasAuth&&S.tok&&S.tok.refresh)await T.setAuth({access:S.tok.access,refresh:S.tok.refresh,exp:Math.round(S.tok.exp||0)}); // Login aus älterer Version übernehmen
+    if(!n.hasAuth)await pushConfig({music:S.music||null,pod:S.pod||null});
+    else await pushConfig();
+    await syncNative();
+    $('mode').textContent='· Android-App (native Steuerung)';
+  }
 })();
 </script>
 </body>

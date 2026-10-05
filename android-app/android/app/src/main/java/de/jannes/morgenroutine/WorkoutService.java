@@ -44,6 +44,7 @@ public class WorkoutService extends Service {
             wakeLock.setReferenceCounted(false);
             wakeLock.acquire(3 * 60 * 60 * 1000L); // höchstens 3 Stunden
         }
+        SpotifyCore.get(this); // native Spotify-Steuerung starten (setzt Auto-Wechsel ggf. fort)
         return START_STICKY;
     }
 
