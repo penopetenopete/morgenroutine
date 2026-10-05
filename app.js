@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1";
 const MAX_SLOTS=5;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10};
+const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
 const MORGEN={id:"morgen",name:"Morgenroutine",settings:{umbau:10,satz:30,wechsel:15,confirm:false},items:[
@@ -87,10 +87,10 @@ function getRoutine(id){
       if(d.pair){const b2=base2Morgen(d);it.pair={ex2:d.pair.ex2,umbau:d.pair.umbau,name:d.pair.name,base2:b2,o2:Object.assign({},b2,x.o2||{})}}
       return it;
     });
-    return {id,name:MORGEN.name,preset:true,days:[{items}],pauses:ov.pauses||{},settings:Object.assign({},DEF_SET,MORGEN.settings,ov.settings)};
+    return {id,name:MORGEN.name,preset:true,days:[{items}],pauses:ov.pauses||{},settings:Object.assign({},DEF_SET,MORGEN.settings,ov.settings,{confirm:false})};
   }
   const r=S.routines.find(r=>r.id===id);if(!r)return null;
-  return {id,name:r.name,preset:false,pauses:r.pauses||{},settings:Object.assign({},DEF_SET,r.settings),
+  return {id,name:r.name,preset:false,pauses:r.pauses||{},settings:Object.assign({},DEF_SET,r.settings,{confirm:gv("confirm")}),
     days:r.days.map(d=>({items:d.items.filter(it=>EXB[it.ex]).map(it=>({uid:it.uid,ex:it.ex,link:!!it.link,base:Object.assign({},exDef(it.ex),it.base||{}),o:Object.assign({},exDef(it.ex),it.o)}))}))};
 }
 const rawRoutine=id=>S.routines.find(r=>r.id===id);
@@ -278,7 +278,7 @@ function renderHome(){
   document.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>openRoutine(b.dataset.r));
   document.querySelectorAll("[data-new]").forEach(b=>b.onclick=newRoutine);
   document.querySelectorAll("[data-shade]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.shade===gv("shade")));
-  $("snd").checked=gv("sound");$("vib").checked=gv("vib");
+  $("snd").checked=gv("sound");$("vib").checked=gv("vib");$("gConfirm").checked=gv("confirm");
   $("gPauses").innerHTML=wheelRow("gRest","Pause nach jedem Satz",EXB.balance,"rest")+wheelRow("gSide","Pause zwischen den Seiten",EXB.balance,"sw");
   $("gPauses").querySelectorAll(".wheelrow").forEach(row=>{const k=row.dataset.k==="rest"?"rest":"side";initWheel(row,EXB.balance,{get:()=>gv(k),set:v=>setG(k,v)})});
   const a=loadActive();
@@ -290,6 +290,7 @@ function renderHome(){
 document.querySelectorAll("[data-shade]").forEach(b=>b.onclick=()=>{setG("shade",+b.dataset.shade);F.setShade(gv("shade"));renderHome()});
 $("snd").onchange=e=>{setG("sound",e.target.checked);muteIcon()};
 $("vib").onchange=e=>setG("vib",e.target.checked);
+$("gConfirm").onchange=e=>setG("confirm",e.target.checked);
 $("resume").onclick=()=>{const a=loadActive();if(a)startPlayer(a)};
 function newRoutine(){
   if(S.routines.length>=MAX_SLOTS)return;
@@ -391,7 +392,6 @@ function renderRoutine(){
   bindLinks(list,i=>{const it=draft.items[i];it.link=!it.link;const raw=rawRoutine(R.id),x=raw&&raw.days[rDay].items.find(z=>z.uid===it.uid);if(x){x.link=it.link;save()}renderRoutine()});
   $("rReset").hidden=!draftChanged();
   $("rEdit").textContent=R.preset?"Als eigene Routine kopieren":"Routine bearbeiten";
-  renderSettings($("rSettings"),R.id,R.settings,renderRoutine);
 }
 $("rStart").onclick=()=>{if(loadActive()){openSheet("Workout läuft","Es läuft schon ein Workout",`<div class="note">Erst das laufende Workout beenden oder fortsetzen.</div><button class="btn primary big" id="goRun">Zum laufenden Workout</button>`);$("goRun").onclick=()=>{closeSheet();startPlayer(loadActive())};return}startWorkout()};
 $("rAdd").onclick=()=>openPicker((ids,todayOnly)=>{
@@ -460,7 +460,7 @@ function renderTimeline(box,Wk,h){
     else row.push(edgeHTML(x,false));
   }
   if(row.length)flush();
-  box.innerHTML=`<div class="tl">${html}</div><div class="note">Kästchen = ein Satz (Farbe = Übung). Linie antippen = diese Pause einstellen (gilt dauerhaft für diese Routine). ▶ = nächste Übung per Knopf. <span class="tlc">Farbig umrandet</span> = eigene Pause.</div>`;
+  box.innerHTML=`<div class="tl">${html}</div>`;
   box.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{const s=seq[+b.dataset.e].s;openPauseSheet(s,h.onPause)});
   box.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{
     const s=boxes[+b.dataset.b].s,it=Wk.items.find(x=>x.uid===s.uid),n=it.pair?1:(it.o.sets||1);
@@ -476,7 +476,6 @@ function openPauseSheet(s,onSet){
   let v=s.dur;
   const what={side:"Zwischen den Seiten",umbau:"Umbau",set:"Nach dem Satz",link:"Vor der verknüpften Übung"}[s.kind]||"Pause";
   openSheet(what,"Pause einstellen",`<div class="wheelcenter">${wheelRow("pz","Diese Pause",EXB.balance,"rest")}</div>
-    <div class="note">Gilt dauerhaft für genau diese Stelle in der Routine. Standard: ${pauseText(def)} (Hauptmenü → Einstellungen).</div>
     <button class="btn primary big" id="pzOk">Übernehmen</button>${s.custom?`<button class="btn ghost" id="pzStd">Zurück auf Standard (${pauseText(def)})</button>`:""}`);
   const wh=initWheel($("shBody").querySelector(".wheelrow"),EXB.balance,{get:()=>v,set:x=>{v=x}});
   $("pzOk").onclick=()=>{const x=wh.value();closeSheet();onSet(s.pk,x)};
@@ -501,7 +500,6 @@ function renderBuilder(){
   list.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{const i=+b.dataset.rm,x=r.days[bDay].items.splice(i,1)[0];save();renderBuilder();toast(EXB[x.ex].name+" entfernt")});
   bindTaps(list,i=>openEditor(items[i],{rid:bRid,st:RR.settings,onChange:renderBuilder}));
   makeSortable(list,{onDrop:(a,b)=>{moveArr(r.days[bDay].items,a,b);save();renderBuilder()}});
-  renderSettings($("bSettings"),bRid,RR.settings,renderBuilder);
 }
 $("bName").addEventListener("input",e=>{const r=rawRoutine(bRid);if(!r)return;r.name=e.target.value.trim()||"Ohne Namen";$("bTitle").textContent=r.name;save()});
 $("bDaysMinus").onclick=()=>{const r=rawRoutine(bRid);if(r.days.length<=1)return;
@@ -563,7 +561,7 @@ function openEditor(it,ctx){
       h+=wheelRow("secs",EXB[it.ex].name+" pro Seite",e,"secs")+wheelRow("secs2",EXB[it.pair.ex2].name+" pro Seite",EXB[it.pair.ex2],"secs2");
     }
     if(ctx.morgen&&ctx.rid==="morgen")h+=`<label class="toggle"><span>Fester Teil der Morgenroutine<small>Aus = wird standardmäßig weggelassen</small></span><input type="checkbox" id="edOn"${MORGEN_OFF(it.uid)?"":" checked"}></label>`;
-    h+=`<div class="note">${ctx.rid?"Werte werden in der Routine gespeichert.":"Diese Übung ist nur heute dabei."} Neu hinzugefügte Übungen starten mit den zuletzt eingestellten Werten.</div><button class="btn primary big" id="edOk">Fertig</button>`;
+    h+=`<button class="btn primary big" id="edOk">Fertig</button>`;
     const body=openSheet(e.group&&!it.pair?e.group:"Übung",itemName(it),`<div class="edprev"><canvas id="edCv" width="240" height="240" aria-label="Vorschau ${esc(e.name)}"></canvas><div class="small">${esc(e.de||"")}</div></div>`+h,{onClose:ctx.onClose});
     F.previewStart(e,it.o,$("edCv"));
     body.querySelectorAll(".sbtn").forEach(b=>b.onclick=()=>{it.o[b.dataset.k]=b.dataset.v;persist();render()});
@@ -898,7 +896,7 @@ function openPlan(){
   const render=()=>{
     const hub=atHub(),curUid=hub?null:steps[idx].uid,vis=W.visited||[];
     const firstFree=W.items.reduce((m,x,i)=>vis.includes(x.uid)?i+1:m,0),curPos=W.items.findIndex(x=>x.uid===curUid);
-    const h=`<div class="note">Entfernen und Reihenfolge gelten <b>nur für dieses Workout</b>. Werte (antippen) werden gespeichert.</div><div class="list" id="plList">`+
+    const h=`<div class="list" id="plList">`+
       W.items.map((it,i)=>{
         const r=W.res[it.uid],isCur=i===curPos,past=i<firstFree&&!isCur,rm=it.status==="removed";
         let tags="";

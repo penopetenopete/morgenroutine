@@ -33,7 +33,7 @@
   <section class="card">
     <div class="eyebrow">Einstellungen</div>
     <div id="gPauses" style="display:flex;flex-direction:column;gap:10px"></div>
-    <div class="note">Gilt für alle Übungen. Ist dir die Pause zu lang, tippst du einfach „Weiter“.</div>
+    <label class="toggle"><span>Wiederholungen bestätigen<small>„Geschafft“ oder „Andere Zahl“ nach jedem Satz</small></span><input type="checkbox" id="gConfirm"></label>
     <div class="seg" role="group" aria-label="Schattierung">
       <button class="sbtn" data-shade="2">Gegenlicht</button>
       <button class="sbtn" data-shade="1">Comic</button>
@@ -68,12 +68,7 @@
   <div class="list" id="rList"></div>
   <div id="rTl" hidden></div>
   <button class="btn ghost" id="rAdd">＋ Übung hinzufügen</button>
-  <div class="note" id="rNote">Entfernen (✕) und Reihenfolge (ziehen) gelten <b>nur für heute</b>. Neue Übungen und Werte (Übung antippen) werden in der Routine gespeichert.</div>
   <button class="btn ghost small-btn" id="rReset" hidden>Änderungen für heute zurücksetzen</button>
-  <section class="card">
-    <div class="eyebrow">Ablauf dieser Routine</div>
-    <div id="rSettings"></div>
-  </section>
   <div class="row2">
     <button class="btn" id="rEdit">Routine bearbeiten</button>
   </div>
@@ -90,11 +85,6 @@
   <div class="days" id="bDays" role="tablist" aria-label="Tag"></div>
   <div class="list" id="bList"></div>
   <button class="btn ghost" id="bAdd">＋ Übung hinzufügen</button>
-  <div class="note">Ziehen am Griff ändert die Reihenfolge. Alles wird sofort gespeichert.</div>
-  <section class="card">
-    <div class="eyebrow">Ablauf</div>
-    <div id="bSettings"></div>
-  </section>
   <button class="btn danger" id="bDelete">Routine löschen</button>
 </main>
 
