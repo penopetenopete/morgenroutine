@@ -40,7 +40,17 @@
     <label class="toggle"><span>Töne</span><input type="checkbox" id="snd"></label>
     <label class="toggle"><span>Vibration</span><input type="checkbox" id="vib"></label>
   </section>
-  <div class="small" id="lastAll"></div>
+  <button class="rcard" id="openStats"><span class="nm">Statistik</span><span class="meta" id="lastAll"></span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></button>
+</main>
+
+<!-- STATISTIK -->
+<main class="wrap screen" id="stats" hidden>
+  <div class="topbar">
+    <button class="ic" data-back aria-label="Zurück"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div class="ttl"><div class="eyebrow" id="stSum"></div><h1>Statistik</h1></div>
+  </div>
+  <div class="days" role="tablist" aria-label="Ansicht"><button class="dtab" role="tab" data-st="w" aria-selected="true">Workouts</button><button class="dtab" role="tab" data-st="e" aria-selected="false">Übungen</button></div>
+  <div class="list" id="stList"></div>
 </main>
 
 <!-- ROUTINE: Übersicht vor dem Start -->
@@ -116,7 +126,7 @@
     <div class="readout" id="readout">
       <div class="phase" id="phase"></div>
       <div class="clock num" id="clock">0:00</div>
-      <div class="subctrl" id="restCtrl" hidden><button class="btn ghost" id="plus10">+10 s</button></div>
+      <div class="subctrl" id="restCtrl" hidden><button class="btn ghost" id="plus10">+10 s</button><button class="btn ghost" id="endEx">Übung beenden</button></div>
       <button class="target" id="target"></button>
     </div>
     <button class="tips" id="tips" aria-expanded="false"><ul class="cue" id="cue"></ul><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 15l6-6 6 6"/></svg></button>
