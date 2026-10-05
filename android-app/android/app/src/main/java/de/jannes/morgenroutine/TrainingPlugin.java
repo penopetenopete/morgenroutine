@@ -69,6 +69,27 @@ public class TrainingPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void schedule(PluginCall call) {
+        try { core().setPlan(new org.json.JSONArray(call.getString("events", "[]"))); call.resolve(); }
+        catch (Exception e) { call.reject(e.getMessage()); }
+    }
+
+    @PluginMethod
+    public void clearPlan(PluginCall call) { core().clearPlan(); call.resolve(); }
+
+    @PluginMethod
+    public void control(PluginCall call) {
+        String action = call.getString("action", "toggle");
+        core().post(() -> {
+            String err = core().control(action);
+            JSObject r = new JSObject();
+            r.put("ok", err == null);
+            if (err != null) r.put("error", err);
+            call.resolve(r);
+        });
+    }
+
+    @PluginMethod
     public void startAuto(PluginCall call) { core().startAuto(call.getInt("every", 30)); call.resolve(); }
 
     @PluginMethod

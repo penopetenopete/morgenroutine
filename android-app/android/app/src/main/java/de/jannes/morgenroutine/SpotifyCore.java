@@ -31,6 +31,7 @@ public class SpotifyCore {
     private JSONObject st;   // Zustand: tok, music, pod, podSrc, pl, device, rewind, mode, active, auto
     private JSONArray log;
     private Runnable autoTask;
+    private Runnable planTask;
 
     public static synchronized SpotifyCore get(Context c) {
         if (instance == null) instance = new SpotifyCore(c.getApplicationContext());
@@ -45,6 +46,7 @@ public class SpotifyCore {
         t.start();
         worker = new Handler(t.getLooper());
         if (st.has("auto")) scheduleAuto(); // Auto-Wechsel nach Neustart fortsetzen
+        if (st.has("plan")) schedulePlan(); // Smart-Plan nach Neustart fortsetzen
     }
 
     public void post(Runnable r) { worker.post(r); }
@@ -137,6 +139,75 @@ public class SpotifyCore {
             scheduleAuto();
         };
         worker.postDelayed(autoTask, delay);
+    }
+
+    // ---------- Smart-Plan: geplante Wechsel (z. B. Satz → Musik, Pause → Podcast) ----------
+    /** events: [{at: Zeitpunkt in ms, target: "music"|"podcast", label: "…"}], ersetzt den bisherigen Plan. */
+    public synchronized void setPlan(JSONArray events) {
+        try { st.put("plan", events); } catch (JSONException ignored) { }
+        save();
+        addLog("Smart an: " + events.length() + " Wechsel geplant", "");
+        schedulePlan();
+    }
+
+    public synchronized void clearPlan() {
+        if (planTask != null) worker.removeCallbacks(planTask);
+        planTask = null;
+        boolean had = st.has("plan");
+        st.remove("plan");
+        save();
+        if (had) addLog("Smart aus", "");
+    }
+
+    private synchronized void schedulePlan() {
+        if (planTask != null) worker.removeCallbacks(planTask);
+        planTask = null;
+        JSONArray plan = st.optJSONArray("plan");
+        if (plan == null || plan.length() == 0) { st.remove("plan"); save(); return; }
+        long delay = Math.max(0, plan.optJSONObject(0).optLong("at") - System.currentTimeMillis());
+        planTask = () -> {
+            JSONObject ev;
+            synchronized (SpotifyCore.this) {
+                JSONArray pl = st.optJSONArray("plan");
+                if (pl == null || pl.length() == 0) return;
+                ev = pl.optJSONObject(0); pl.remove(0);
+                long now = System.currentTimeMillis();
+                // verpasste Wechsel überspringen, nur der jüngste zählt
+                while (pl.length() > 0 && pl.optJSONObject(0).optLong("at") <= now) { ev = pl.optJSONObject(0); pl.remove(0); }
+                if (pl.length() == 0) st.remove("plan");
+                save();
+            }
+            String target = ev.optString("target");
+            if (!target.equals(st.optString("active"))) switchTo(target, ev.optString("label", "Smart"));
+            schedulePlan();
+        };
+        worker.postDelayed(planTask, delay);
+    }
+
+    // ---------- Steuerknöpfe ----------
+    /** action: prev | next | toggle | back15 | fwd30. Muss im Worker-Thread laufen. */
+    public String control(String action) {
+        try {
+            switch (action) {
+                case "prev": withDevice(() -> api("POST", "/me/player/previous" + dq("?"), null)); break;
+                case "next": withDevice(() -> api("POST", "/me/player/next" + dq("?"), null)); break;
+                case "toggle": {
+                    JSONObject p = api("GET", "/me/player", null);
+                    if (p != null && p.optBoolean("is_playing")) withDevice(() -> api("PUT", "/me/player/pause" + dq("?"), null));
+                    else withDevice(() -> api("PUT", "/me/player/play" + dq("?"), null));
+                    break;
+                }
+                case "back15": case "fwd30": {
+                    JSONObject p = api("GET", "/me/player?additional_types=episode", null);
+                    long pos = p == null ? 0 : p.optLong("progress_ms");
+                    final long to = Math.max(0, pos + ("back15".equals(action) ? -15000 : 30000));
+                    withDevice(() -> api("PUT", "/me/player/seek?position_ms=" + to + dq("&"), null));
+                    break;
+                }
+                default: return "Unbekannte Aktion";
+            }
+            return null;
+        } catch (Exception e) { return explain(e); }
     }
 
     // ---------- Web API ----------
