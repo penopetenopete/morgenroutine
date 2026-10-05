@@ -309,3 +309,7 @@ body{font-size:17px}
 .subctrl .btn{font-size:.92rem}
 .hpick{font-size:.82rem}
 .spb{font-size:.82rem}
+
+.tlb.done,.tle.done{opacity:.32;filter:grayscale(1);cursor:default}
+.tlb.now{box-shadow:0 0 0 2px var(--fg)}
+#plTl .tl{margin-top:2px}

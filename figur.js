@@ -674,8 +674,7 @@ const MR_IN=["Stufe 1 · vorderen Fuß heben","Stufe 2 · Fuß + Knie heben","St
 const EX=[
  {id:"backext",group:G1,name:"Back Extension 45°",de:"Rückenstrecker an der Hyperextension-Bank",gear:["45°-Bank"],src:"LBA Stufe 1–5",weight:"plate",uni:o=>o.legs==="single",
   def:{mode:"hold",legs:"both",range:"voll",secs:120,reps:10,kg:0},
-  opts:o=>[["mode","Ausführung",[["hold","Halten"],["reps","Wiederholungen"]]],["legs","Beine",[["both","Beidbeinig"],["single","Einbeinig"]]],
-    ...(o.mode==="reps"?[["range","Bewegung",[["halb","Halbe Wdh."],["voll","Volle Wdh."]]]]:[])],
+  opts:o=>[["mode","Ausführung",[["hold","Halten"],["reps","Wiederholungen"]]],["legs","Beine",[["both","Beidbeinig"],["single","Einbeinig"]]]],
   cam:{y:.75,d:3.9,yaw:.85,p:.15},build:backExt,props:o=>({bench:benchUpdate}),
   tips:o=>[o.mode==="hold"?"Körper in einer Linie halten – Kopf, Rücken, Beine":"Langsam runter, oben nicht ins Hohlkreuz schwingen",
     o.mode==="reps"&&o.range==="voll"?"Volle Wdh.: unten die Wirbelsäule rund werden lassen, hoch Wirbel für Wirbel strecken":"Unter Last nicht runden, solange der flache Rücken nicht stark ist",

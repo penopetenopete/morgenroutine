@@ -83,7 +83,7 @@ function getRoutine(id){
     const ov=S.morgen;
     const items=MORGEN.items.map(d=>{
       const x=ov.items[d.uid]||{},base=baseMorgen(d);
-      const it={uid:d.uid,ex:d.ex,base,o:Object.assign({},base,x.o||{}),off:!!x.off};
+      const it={uid:d.uid,ex:d.ex,base,o:Object.assign({},base,x.o||{}),so:x.so?clone(x.so):{},off:!!x.off};
       if(d.pair){const b2=base2Morgen(d);it.pair={ex2:d.pair.ex2,umbau:d.pair.umbau,name:d.pair.name,base2:b2,o2:Object.assign({},b2,x.o2||{})}}
       return it;
     });
@@ -91,7 +91,7 @@ function getRoutine(id){
   }
   const r=S.routines.find(r=>r.id===id);if(!r)return null;
   return {id,name:r.name,preset:false,pauses:r.pauses||{},settings:Object.assign({},DEF_SET,r.settings,{confirm:gv("confirm")}),
-    days:r.days.map(d=>({items:d.items.filter(it=>EXB[it.ex]).map(it=>({uid:it.uid,ex:it.ex,link:!!it.link,base:Object.assign({},exDef(it.ex),it.base||{}),o:Object.assign({},exDef(it.ex),it.o)}))}))};
+    days:r.days.map(d=>({items:d.items.filter(it=>EXB[it.ex]).map(it=>({uid:it.uid,ex:it.ex,link:!!it.link,so:it.so?clone(it.so):{},base:Object.assign({},exDef(it.ex),it.base||{}),o:Object.assign({},exDef(it.ex),it.o)}))}))};
 }
 const rawRoutine=id=>S.routines.find(r=>r.id===id);
 function diff(o,base){const d={};for(const k in o)if(o[k]!==base[k])d[k]=o[k];return d}
@@ -103,11 +103,12 @@ function persistItem(rid,it){
     const x=S.morgen.items[it.uid]||(S.morgen.items[it.uid]={});
     x.o=diff(it.o,baseMorgen(d));if(!Object.keys(x.o).length)delete x.o;
     if(d.pair){x.o2=diff(it.pair.o2,base2Morgen(d));if(!Object.keys(x.o2).length)delete x.o2}
+    if(it.so&&Object.keys(it.so).length)x.so=clone(it.so);else delete x.so;
     if(!Object.keys(x).length)delete S.morgen.items[it.uid];
     save();return;
   }
   const r=rawRoutine(rid);if(!r)return;
-  for(const d of r.days)for(const x of d.items)if(x.uid===it.uid)x.o=Object.assign({},it.o);
+  for(const d of r.days)for(const x of d.items)if(x.uid===it.uid){x.o=Object.assign({},it.o);if(it.so&&Object.keys(it.so).length)x.so=clone(it.so);else delete x.so}
   save();
 }
 /* eigene Pause für eine bestimmte Stelle (v=null: wieder Standard) – dauerhaft in der Routine */
@@ -131,7 +132,11 @@ function valText(e,o){
   return s;
 }
 const itemName=it=>it.pair?it.pair.name:EXB[it.ex].name;
-const itemText=it=>it.pair?fmtSecs(it.o.secs)+" + "+fmtSecs(it.pair.o2.secs)+" pro Seite":valText(EXB[it.ex],it.o);
+/* Einzelne Sätze können abweichen (it.so[satz] = Abweichungen von it.o) */
+const setOpt=(it,s)=>Object.assign({},it.o,((it.so||{})[s])||{});
+const isMixed=it=>!!(it.so&&Object.keys(it.so).some(k=>+k<=(it.o.sets||1)&&Object.keys(it.so[k]).length));
+function delSet(it,s){const n=it.o.sets||1;if(n<=1)return false;const so={};for(const k in (it.so||{})){const i=+k;if(i<s)so[i]=it.so[k];else if(i>s)so[i-1]=it.so[k]}it.so=so;it.o.sets=n-1;return true}
+const itemText=it=>!it.pair&&isMixed(it)?`${it.o.sets} Sätze · gemischt`:it.pair?fmtSecs(it.o.secs)+" + "+fmtSecs(it.pair.o2.secs)+" pro Seite":valText(EXB[it.ex],it.o);
 function itemChanged(it){return false;if(!it.base)return false;if(Object.keys(diff(it.o,it.base)).some(k=>k in it.base))return true;return !!(it.pair&&Object.keys(diff(it.pair.o2,it.pair.base2)).length)}
 const itemStdText=it=>it.pair?fmtSecs(it.base.secs)+" + "+fmtSecs(it.pair.base2.secs):valText(EXB[it.ex],it.base);
 function lastText(rid,uid){
@@ -373,8 +378,7 @@ function renderRoutine(){
   if(rView==="tl")renderTimeline($("rTl"),{items:draft.items,settings:R.settings,pauses:draft.pauses},{
     rid:R.id,
     onPause:(pk,v)=>{if(v==null)delete draft.pauses[pk];else draft.pauses[pk]=v;setPause(R.id,pk,v);renderRoutine()},
-    onEdit:it=>openEditor(it,{rid:it.status==="added"?null:R.id,morgen:R.preset,st:R.settings,onChange:renderRoutine}),
-    onDelSet:it=>{if((it.o.sets||1)>1){it.o.sets--;if(it.status!=="added")persistItem(R.id,it);rememberValues(it)}else{if(it.status==="added")draft.items.splice(draft.items.indexOf(it),1);else it.status="removed"}renderRoutine()}
+    onEdit:(it,set)=>openEditor(it,{rid:it.status==="added"?null:R.id,morgen:R.preset,st:R.settings,set,onChange:renderRoutine}),
   });
   const list=$("rList");
   list.innerHTML=draft.items.map((it,i)=>{
@@ -406,7 +410,7 @@ $("rReset").onclick=()=>{draft=null;renderRoutine()};
 $("rEdit").onclick=()=>{
   if(R.preset){
     if(S.routines.length>=MAX_SLOTS){toast("Alle 5 Slots belegt – erst eine Routine löschen");return}
-    const r={id:"r"+now().toString(36),name:R.name+" (Kopie)",settings:clone(Object.assign({},R.settings)),days:[{items:R.days[0].items.filter(it=>!it.pair).map(it=>({uid:uidGen(),ex:it.ex,o:clone(it.o),base:clone(it.base)}))}]};
+    const r={id:"r"+now().toString(36),name:R.name+" (Kopie)",settings:clone(Object.assign({},R.settings)),days:[{items:R.days[0].items.filter(it=>!it.pair).map(it=>({uid:uidGen(),ex:it.ex,o:clone(it.o),so:clone(it.so||{}),base:clone(it.base)}))}]};
     S.routines.push(r);save();bRid=r.id;bDay=0;show("builder");
     if(R.days[0].items.some(it=>it.pair))toast("Paare (z. B. Kick-out + Dehnung) gibt es nur in der Morgenroutine");
     return;
@@ -430,26 +434,27 @@ const TL_COL=["#00E5FF","#FFB547","#5BE38C","#B18CFF","#FF7AB6","#F2E863","#6FA8
 function pauseText(v){return v===0?"0 s":fmtSecs(v)}
 function renderTimeline(box,Wk,h){
   const steps=buildSteps(Wk),colOf={};let ci=0;
+  const curI=h.curKey?steps.findIndex(x=>x.key===h.curKey):-1;
   Wk.items.forEach(it=>{if(it.status!=="removed")colOf[it.uid]=TL_COL[ci++%TL_COL.length]});
   const seq=[];let lastBox=null;
   steps.forEach((s,i)=>{
     if(s.type==="work"){
       const k=[s.uid,s.set,s.side,s.part].join("|");
-      if(lastBox&&lastBox.k===k&&seq[seq.length-1]===lastBox)return; // Drop-Set-Stufen = ein Kästchen
+      if(lastBox&&lastBox.k===k&&seq[seq.length-1]===lastBox){lastBox.i2=i;return} // Drop-Set-Stufen = ein Kästchen
       if(seq.length&&seq[seq.length-1].box)seq.push({edge:true,none:true});
-      lastBox={box:true,k,s};seq.push(lastBox);
-    }else if(seq.length)seq.push({edge:true,s});
+      lastBox={box:true,k,s,i};seq.push(lastBox);
+    }else if(seq.length)seq.push({edge:true,s,i});
   });
   const boxes=seq.filter(x=>x.box),PER=3;
   if(!boxes.length){box.innerHTML='<div class="note" style="padding:14px">Noch keine Sätze.</div>';return}
-  const boxHTML=b=>{const s=b.s,it=Wk.items.find(x=>x.uid===s.uid),e=EXB[s.ex],uni=isUni(EXB[it.ex],it.o);
+  const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,st=curI<0?"":last<curI?" done":b.i<=curI?" now":"",it=Wk.items.find(x=>x.uid===s.uid),e=EXB[s.ex],uni=isUni(EXB[s.ex],s.o);
     const side=s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
-    return `<button class="tlb" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}"><b>${esc(e.name)}</b><small>S${s.set}${side?" · "+side:""}</small></button>`};
+    return `<button class="tlb${st}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}"${st===" done"?" disabled":""}><b>${esc(e.name)}</b><small>S${s.set}${side?" · "+side:""}</small></button>`};
   const edgeHTML=(x,turn)=>{
     if(x.none)return `<span class="tle${turn?" turn":""} none"><i></i></span>`;
-    const s=x.s,open=s.dur==null;
+    const s=x.s,open=s.dur==null,dn=curI>=0&&x.i<curI;
     const lab=open?"▶":pauseText(s.dur);
-    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}" ${open?"disabled":""} data-e="${seq.indexOf(x)}" aria-label="Pause ${lab}"><i></i><span>${lab}</span></button>`};
+    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}" ${open||dn?"disabled":""} data-e="${seq.indexOf(x)}" aria-label="Pause ${lab}"><i></i><span>${lab}</span></button>`};
   let html="",row=[],ri=0;
   const flush=()=>{html+=`<div class="tlrow${ri%2?" rev":""}">${row.join("")}</div>`;row=[];ri++};
   let bi=0;
@@ -463,11 +468,8 @@ function renderTimeline(box,Wk,h){
   box.innerHTML=`<div class="tl">${html}</div>`;
   box.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{const s=seq[+b.dataset.e].s;openPauseSheet(s,h.onPause)});
   box.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{
-    const s=boxes[+b.dataset.b].s,it=Wk.items.find(x=>x.uid===s.uid),n=it.pair?1:(it.o.sets||1);
-    openSheet(`Satz ${s.set}`,itemName(it),`<div class="note">${it.pair?"Paar aus der Morgenroutine.":n>1?`Hat ${n} Sätze. „Satz löschen“ macht daraus ${n-1} – auch in der Liste.`:"Das ist der einzige Satz."}</div>
-      <button class="btn" id="tlEdit">Übung bearbeiten</button>${it.pair?"":`<button class="btn danger" id="tlDel">${n>1?"Satz löschen":"Übung für heute entfernen"}</button>`}`);
-    $("tlEdit").onclick=()=>{closeSheet();h.onEdit(it)};
-    if($("tlDel"))$("tlDel").onclick=()=>{closeSheet();h.onDelSet(it)};
+    const s=boxes[+b.dataset.b].s,it=Wk.items.find(x=>x.uid===s.uid);
+    h.onEdit(it,it.pair?0:s.set);
   });
 }
 /* Pause einstellen (Timeline und laufendes Training) */
@@ -542,15 +544,23 @@ function openPicker(onAdd,opts={}){
 
 /* =================== EDITOR (Werte einer Übung) =================== */
 /* ctx.rid: Routine, in der dauerhaft gespeichert wird (null = nur für heute) */
+/* ctx.set: nur diesen Satz bearbeiten (Abweichungen landen in it.so[satz]) */
 function openEditor(it,ctx){
-  const e=EXB[it.ex];
+  const e=EXB[it.ex],S1=ctx.set&&!it.pair?ctx.set:0;
   const persist=()=>{rememberValues(it);if(ctx.rid)persistItem(ctx.rid,it);if(ctx.onChange)ctx.onChange()};
+  const O=()=>S1?setOpt(it,S1):it.o;
+  const put=(k,v)=>{
+    if(!S1){it.o[k]=v;return}
+    it.so=it.so||{};const so=it.so[S1]||(it.so[S1]={});
+    if(it.o[k]===v)delete so[k];else so[k]=v;
+    if(!Object.keys(so).length)delete it.so[S1];
+  };
   const render=()=>{
-    const o=it.o;let h="";
+    const o=O();let h="";
     if(!it.pair){
       for(const [k,l,choices] of e.opts(o))h+=`<div class="opt"><span>${l}</span><div class="seg" role="group" aria-label="${l}">${choices.map(([v,t])=>`<button class="sbtn" data-k="${k}" data-v="${v}" aria-pressed="${o[k]===v}">${t}</button>`).join("")}</div></div>`;
       const uni=isUni(e,o)||e.perSide;
-      h+=wheelRow("sets","Sätze",e,"sets");
+      if(!S1)h+=wheelRow("sets","Sätze",e,"sets");
       if(o.mode==="hold")h+=wheelRow("secs",e.drop?"Sekunden pro Stufe":e.timeWord||(uni?"Zeit pro Seite":"Zeit"),e,"secs");
       else h+=wheelRow("reps",e.repsLabel||(uni?"Wiederholungen pro Seite":"Wiederholungen"),e,"reps");
       if(e.weight!=="none"){
@@ -560,20 +570,25 @@ function openEditor(it,ctx){
     }else{
       h+=wheelRow("secs",EXB[it.ex].name+" pro Seite",e,"secs")+wheelRow("secs2",EXB[it.pair.ex2].name+" pro Seite",EXB[it.pair.ex2],"secs2");
     }
-    if(ctx.morgen&&ctx.rid==="morgen")h+=`<label class="toggle"><span>Fester Teil der Morgenroutine<small>Aus = wird standardmäßig weggelassen</small></span><input type="checkbox" id="edOn"${MORGEN_OFF(it.uid)?"":" checked"}></label>`;
-    h+=`<button class="btn primary big" id="edOk">Fertig</button>`;
-    const body=openSheet(e.group&&!it.pair?e.group:"Übung",itemName(it),`<div class="edprev"><canvas id="edCv" width="240" height="240" aria-label="Vorschau ${esc(e.name)}"></canvas><div class="small">${esc(e.de||"")}</div></div>`+h,{onClose:ctx.onClose});
-    F.previewStart(e,it.o,$("edCv"));
-    body.querySelectorAll(".sbtn").forEach(b=>b.onclick=()=>{it.o[b.dataset.k]=b.dataset.v;persist();render()});
+    if(ctx.morgen&&ctx.rid==="morgen"&&!S1)h+=`<label class="toggle"><span>Fester Teil der Morgenroutine<small>Aus = wird standardmäßig weggelassen</small></span><input type="checkbox" id="edOn"${MORGEN_OFF(it.uid)?"":" checked"}></label>`;
+    if(S1){
+      const own=it.so&&it.so[S1]&&Object.keys(it.so[S1]).length;
+      h+=`<button class="btn primary big" id="edOk">Fertig</button>${own?`<button class="btn" id="edAll">Für alle Sätze übernehmen</button>`:""}${(it.o.sets||1)>1?`<button class="btn danger" id="edDel">Satz ${S1} löschen</button>`:""}`;
+    }else h+=`<button class="btn primary big" id="edOk">Fertig</button>`;
+    const n=it.o.sets||1;
+    const body=openSheet(S1?`Satz ${S1} von ${n}`:(e.group&&!it.pair?e.group:"Übung"),itemName(it),`<div class="edprev"><canvas id="edCv" width="240" height="240" aria-label="Vorschau ${esc(e.name)}"></canvas><div class="small">${esc(e.de||"")}</div></div>`+h,{onClose:ctx.onClose});
+    F.previewStart(e,O(),$("edCv"));
+    body.querySelectorAll(".sbtn").forEach(b=>b.onclick=()=>{put(b.dataset.k,b.dataset.v);persist();render()});
     body.querySelectorAll(".wheelrow").forEach(row=>{
       const k=row.dataset.k;
       if(k==="secs2"){initWheel(row,EXB[it.pair.ex2],{get:()=>it.pair.o2.secs,set:v=>{it.pair.o2.secs=v;persist()},std:it.pair.base2?it.pair.base2.secs:null});return}
-      if(k==="rest"||k==="sw"){const st=ctx.st||DEF_SET;initWheel(row,e,{get:()=>it.o[k]!=null?it.o[k]:(k==="rest"?st.satz:st.umbau),set:v=>{it.o[k]=v;persist()}});return}
-      initWheel(row,e,{get:()=>it.o[k],set:v=>{it.o[k]=v;persist()},std:it.base?it.base[k]:null,
+      initWheel(row,e,{get:()=>O()[k],set:v=>{put(k,v);persist()},
         side:k==="kg"&&e.weight==="plate"?(v=>v>0?platesVis(v):""):null});
     });
     const on=$("edOn");if(on)on.onchange=()=>{setMorgenOff(it.uid,!on.checked);if(ctx.onChange)ctx.onChange()};
     $("edOk").onclick=closeSheet;
+    if($("edAll"))$("edAll").onclick=()=>{it.o=Object.assign({},it.o,it.so[S1]);it.so={};persist();toast("Gilt jetzt für alle Sätze");render()};
+    if($("edDel"))$("edDel").onclick=()=>{delSet(it,S1);persist();closeSheet();toast(`Satz ${S1} gelöscht`)};
   };
   render();
 }
@@ -617,7 +632,7 @@ function buildSteps(Wk){
       const mem=bl.filter(it=>effSets(it)>=r);
       if(r>1){const prev=bl.filter(it=>effSets(it)>=r-1);T(mem[0].uid,"Satzpause",restOf(prev[prev.length-1],st),"set",{pk:mem[0].uid+"|set|"+r})}
       mem.forEach((it,j)=>{
-        const e=EXB[it.ex],o=it.o,uni=isUni(e,o);
+        const e=EXB[it.ex],o=setOpt(it,r),uni=isUni(e,o);
         const Wo=x=>out.push(Object.assign({type:"work",uid:it.uid,ex:it.ex,o,part:0,stage:null},x));
         if(j>0)T(it.uid,"Pause · gleich "+e.name,restOf(mem[j-1],st),"link",{pk:it.uid+"|link|"+r});
         if(o.mode==="reps"&&uni&&!st.confirm){Wo({side:0,set:r,mode:"reps",both:true});return}
@@ -641,7 +656,7 @@ let W=null,steps=[],idx=0;
 function loadActive(){try{const a=JSON.parse(localStorage.getItem(ACT)||"null");return a&&!a.ended?a:null}catch(_){return null}}
 function saveW(){if(!W)return;try{localStorage.setItem(ACT,JSON.stringify(W))}catch(_){}}
 function startWorkout(){
-  const items=draft.items.map(it=>({uid:it.uid,ex:it.ex,o:clone(it.o),base:it.base?clone(it.base):null,pair:it.pair?clone(it.pair):null,link:!!it.link,status:it.status,planned:it.status!=="added"}));
+  const items=draft.items.map(it=>({uid:it.uid,ex:it.ex,o:clone(it.o),base:it.base?clone(it.base):null,pair:it.pair?clone(it.pair):null,link:!!it.link,so:clone(it.so||{}),status:it.status,planned:it.status!=="added"}));
   W={v:1,id:"w"+now().toString(36),rid:R.id,rname:R.name,day:rDay,days:R.days.length,settings:clone(R.settings),pauses:clone(draft.pauses||{}),
      startedAt:now(),items,cur:null,stepStart:now(),pauseAt:null,pausedMs:0,extra:0,res:{},pending:null,ended:false,visited:[]};
   draft=null;
@@ -808,7 +823,7 @@ function stepUI(){
   $("pEyebrow").textContent=(sets>1?`Übung ${n}/${act.length} · Satz ${s.set}/${sets}`:`Übung ${n} von ${act.length}`);
   $("pName").textContent=s.type==="trans"&&s.big?"Gleich: "+itemName(it):e.name;
   $("bar").style.width=(100*idx/steps.length)+"%";
-  const tx=esc(itemText(it));
+  const tx=esc(!it.pair&&isMixed(it)?valText(EXB[ws.ex],Object.assign({},ws.o,{sets:1}))+` · Satz ${ws.set}`:itemText(it));
   $("target").innerHTML=(ws.mode==="reps"&&s.type==="work"?"Ziel: ":"")+`<b>${tx}</b> ✎`;
   if(cueEx!==ws.ex+"|"+JSON.stringify(ws.o)){cueEx=ws.ex+"|"+JSON.stringify(ws.o);$("cue").innerHTML=e.tips(ws.o).filter(x=>!x.startsWith("In der App")).map(x=>`<li>${esc(x)}</li>`).join("")}
   $("restCtrl").hidden=s.type==="trans"&&s.kind==="next";
@@ -892,11 +907,12 @@ function commitPending(actual){
 }
 
 /* ---- Übersicht im Workout ---- */
+let planView="list";
 function openPlan(){
   const render=()=>{
     const hub=atHub(),curUid=hub?null:steps[idx].uid,vis=W.visited||[];
     const firstFree=W.items.reduce((m,x,i)=>vis.includes(x.uid)?i+1:m,0),curPos=W.items.findIndex(x=>x.uid===curUid);
-    const h=`<div class="list" id="plList">`+
+    const h=`<div class="seg" id="plView"><button class="sbtn" data-v="list" aria-pressed="${planView==="list"}">Liste</button><button class="sbtn" data-v="tl" aria-pressed="${planView==="tl"}">Timeline</button></div><div id="plTl"${planView==="tl"?"":" hidden"}></div><div class="list"${planView==="tl"?" hidden":""} id="plList">`+
       W.items.map((it,i)=>{
         const r=W.res[it.uid],isCur=i===curPos,past=i<firstFree&&!isCur,rm=it.status==="removed";
         let tags="";
@@ -909,6 +925,10 @@ function openPlan(){
         return rowHTML(it,i,{lock:i<firstFree||rm,cls:(rm?"off ":"")+(past?"done-row":"")+linkCls(W.items,i),tags,action,link:free(i)&&free(i+1)?it.link:null});
       }).join("")+`</div><button class="btn ghost" id="plAdd">＋ Übung hinzufügen</button><button class="btn primary big" id="plOk">Zurück zum Workout</button>`;
     const body=openSheet(W.rname,"Übersicht",h,{onClose:()=>rebuildKeep()});
+    body.querySelectorAll("#plView [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;render()});
+    if(planView==="tl")renderTimeline($("plTl"),W,{curKey:W.cur,
+      onPause:(pk,v)=>{W.pauses=W.pauses||{};if(v==null)delete W.pauses[pk];else W.pauses[pk]=v;setPause(W.rid,pk,v);rebuildKeep();saveW();openPlan()},
+      onEdit:(it,set)=>openEditor(it,{rid:it.planned?W.rid:null,st:W.settings,set,onClose:()=>{rebuildKeep();saveW();openPlan()}})});
     const list=$("plList");
     list.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{
       const i=+b.dataset.rm,it=W.items[i];
