@@ -122,7 +122,6 @@ function valText(e,o){
   const per=(isUni(e,o)||e.perSide)?" pro Seite":"";
   let s=e.drop?"3 Stufen à "+fmtSecs(o.secs)+per:o.mode==="hold"?fmtSecs(o.secs)+(e.timeWord||e.timedReps?"":" halten")+per:o.reps+(e.repsLabel?" pro Teil"+(per?" ·":""):" Wdh.")+per;
   if((o.sets||1)>1)s=o.sets+" × "+s;
-  if(e.steps)s+=" · "+(o.step?o.step+" cm":"ohne Erhöhung");
   if(e.weight!=="none"&&(o.kg>0||e.weight==="bar"))s+=" · "+F.kgText(e.weight,o.kg);
   return s;
 }
@@ -154,13 +153,15 @@ const thumbOf=it=>{try{return F.thumb(EXB[it.ex],it.o)}catch(_){return ""}};
 
 /* =================== SHEET =================== */
 let sheetClose=null,sheetLocked=false;
+function stopPreview(){if(F.previewStop()&&!$("player").hidden&&W){shownKey="";stepUI();size()}}
 function openSheet(eyebrow,title,html,{onClose,locked}={}){
+  stopPreview();
   $("shEyebrow").textContent=eyebrow||"";$("shTitle").textContent=title||"";$("shBody").innerHTML=html;
   sheetClose=onClose||null;sheetLocked=!!locked;$("shClose").hidden=!!locked;
   $("scrim").hidden=false;$("shBody").scrollTop=0;
   return $("shBody");
 }
-function closeSheet(){if($("scrim").hidden)return;$("scrim").hidden=true;const f=sheetClose;sheetClose=null;if(f)f()}
+function closeSheet(){if($("scrim").hidden)return;stopPreview();$("scrim").hidden=true;const f=sheetClose;sheetClose=null;if(f)f()}
 $("shClose").onclick=closeSheet;
 $("scrim").addEventListener("click",e=>{if(e.target===$("scrim")&&!sheetLocked)closeSheet()});
 
@@ -399,10 +400,10 @@ $("rEdit").onclick=()=>{
 };
 /* Ablauf-Einstellungen einer Routine */
 function renderSettings(box,rid,st,after){
-  const row=(k,l,step,min,max)=>`<div class="sg"><span>${l}</span><div class="stepper"><button data-k="${k}" data-d="${-step}" data-min="${min}" data-max="${max}" aria-label="weniger">−</button><span class="num">${fmtSecs(st[k]).replace(/^0 s$/,"0 s")}</span><button data-k="${k}" data-d="${step}" data-min="${min}" data-max="${max}" aria-label="mehr">+</button></div></div>`;
-  box.innerHTML=row("umbau","Seitenwechsel / Umbau",5,0,60)+row("satz","Satzpause",5,0,300)+
+  box.innerHTML=wheelRow("rsw","Pause zwischen den Seiten / Umbau",EXB.balance,"sw")+wheelRow("rrest","Pause nach einem Satz",EXB.balance,"rest")+
+    `<div class="note">Gilt für alle Übungen dieser Routine, bei denen du keine eigene Pause eingestellt hast (Übung antippen → „Pause danach“).</div>`+
     `<label class="toggle"><span>Wiederholungen bestätigen<small>Nach jedem Satz „Geschafft“ oder „Andere Zahl“. Aus = beide Seiten in einem Durchgang.</small></span><input type="checkbox" data-confirm${st.confirm?" checked":""}></label>`;
-  box.querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>{const k=b.dataset.k;setRoutineSetting(rid,k,Math.max(+b.dataset.min,Math.min(+b.dataset.max,st[k]+(+b.dataset.d))));after()});
+  box.querySelectorAll(".wheelrow").forEach(row=>{const key=row.dataset.k==="sw"?"umbau":"satz";initWheel(row,EXB.balance,{get:()=>st[key],set:v=>{st[key]=v;setRoutineSetting(rid,key,v)}})});
   box.querySelector("[data-confirm]").onchange=e=>{setRoutineSetting(rid,"confirm",e.target.checked);after()};
 }
 /* Startwerte beim Hinzufügen: zuletzt eingestellte Werte dieser Übung (egal in welcher Routine), sonst Katalog */
@@ -478,12 +479,11 @@ function openEditor(it,ctx){
     if(!it.pair){
       for(const [k,l,choices] of e.opts(o))h+=`<div class="opt"><span>${l}</span><div class="seg" role="group" aria-label="${l}">${choices.map(([v,t])=>`<button class="sbtn" data-k="${k}" data-v="${v}" aria-pressed="${o[k]===v}">${t}</button>`).join("")}</div></div>`;
       const uni=isUni(e,o)||e.perSide;
-      h+=wheelRow("sets",uni?"Sätze (Seiten im Wechsel)":"Sätze",e,"sets");
+      h+=wheelRow("sets","Sätze",e,"sets");
       if(o.mode==="hold")h+=wheelRow("secs",e.drop?"Sekunden pro Stufe":e.timeWord||(uni?"Zeit pro Seite":"Zeit"),e,"secs");
       else h+=wheelRow("reps",e.repsLabel||(uni?"Wiederholungen pro Seite":"Wiederholungen"),e,"reps");
-      if(e.steps)h+=wheelRow("step","Erhöhung (Stepper)",e,"step");
-      if((o.sets||1)>1||it.link)h+=wheelRow("rest","Satzpause",e,"rest");
-      if(uni)h+=wheelRow("sw","Seitenwechsel",e,"sw");
+      h+=wheelRow("rest","Pause danach",e,"rest")+`<div class="note">Pause nach jedem Satz. Im Supersatz: Pause, bevor die nächste verknüpfte Übung kommt.</div>`;
+      if(isUni(e,o))h+=wheelRow("sw","Pause zwischen den Seiten",e,"sw");
       if(e.weight!=="none"){
         const lab={plate:"Gewicht (Scheibe)",kb:"Kettlebell",kb2:"Kettlebell pro Hand",cable:"Gewicht am Kabelzug",db:"Kurzhantel pro Hand",bar:"Langhantel gesamt"}[e.weight];
         h+=wheelRow("kg",e.id==="bridge"?"Gewicht (Scheibe auf dem Becken)":lab,e,"kg");
@@ -493,7 +493,8 @@ function openEditor(it,ctx){
     }
     if(ctx.morgen&&ctx.rid==="morgen")h+=`<label class="toggle"><span>Fester Teil der Morgenroutine<small>Aus = wird standardmäßig weggelassen</small></span><input type="checkbox" id="edOn"${MORGEN_OFF(it.uid)?"":" checked"}></label>`;
     h+=`<div class="note">${ctx.rid?"Werte werden in der Routine gespeichert.":"Diese Übung ist nur heute dabei."} Neu hinzugefügte Übungen starten mit den zuletzt eingestellten Werten.</div><button class="btn primary big" id="edOk">Fertig</button>`;
-    const body=openSheet(e.group&&!it.pair?e.group:"Übung",itemName(it),h,{onClose:ctx.onClose});
+    const body=openSheet(e.group&&!it.pair?e.group:"Übung",itemName(it),`<div class="edprev"><canvas id="edCv" width="240" height="240" aria-label="Vorschau ${esc(e.name)}"></canvas><div class="small">${esc(e.de||"")}</div></div>`+h,{onClose:ctx.onClose});
+    F.previewStart(e,it.o,$("edCv"));
     body.querySelectorAll(".sbtn").forEach(b=>b.onclick=()=>{it.o[b.dataset.k]=b.dataset.v;persist();render()});
     body.querySelectorAll(".wheelrow").forEach(row=>{
       const k=row.dataset.k;
@@ -547,7 +548,7 @@ function buildSteps(Wk){
       mem.forEach((it,j)=>{
         const e=EXB[it.ex],o=it.o,uni=isUni(e,o);
         const Wo=x=>out.push(Object.assign({type:"work",uid:it.uid,ex:it.ex,o,part:0,stage:null},x));
-        if(j>0)T(it.uid,"Wechsel · "+e.name,swOf(it,st),"link");
+        if(j>0)T(it.uid,"Pause · gleich "+e.name,restOf(mem[j-1],st),"link");
         if(o.mode==="reps"&&uni&&!st.confirm){Wo({side:0,set:r,mode:"reps",both:true});return}
         (uni?[0,1]:[0]).forEach(sd=>{
           if(sd)T(it.uid,"Seitenwechsel",swOf(it,st),"side");
@@ -997,6 +998,7 @@ function frame(t){
   requestAnimationFrame(frame);
 }
 function drawPlayer(dt){
+  if(F.previewing)return;
   const s=steps[idx];if(!s||!clip)return;
   const paused=!!W.pauseAt,el=elapsed();
   if(!paused)animT+=dt;

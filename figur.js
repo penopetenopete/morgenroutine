@@ -941,7 +941,23 @@ function thumb(e,o){
   thumbs[key]=src;return src;
 }
 
-window.Figur={EX,EXB,STEPS,PLATE,plateSet,kgText,mount,show,draw,segAt,seqDur,render,sizeTo,setMirror,resetCam,thumb,
+/* Kleine animierte Vorschau (Editor): rendert mit demselben Renderer und kopiert jedes Bild in ein 2D-Canvas */
+let pv=null;
+function previewStart(e,o,cv){
+  previewStop();if(!renderer||!cv)return;
+  const ctx=cv.getContext("2d"),sz=cv.width,seq=show(e,o);let t=0,last=performance.now();
+  pv={raf:0};
+  const loop=n=>{
+    if(!pv)return;t+=Math.min(.05,(n-last)/1000);last=n;
+    const [ph,k]=segAt(seq,t%seqDur(seq));draw(ph,k);
+    const pr=renderer.getPixelRatio();renderer.setPixelRatio(1);renderer.setSize(sz,sz,false);placeCam();renderer.render(scene,cam);
+    ctx.clearRect(0,0,sz,sz);ctx.drawImage(renderer.domElement,0,0,sz,sz);renderer.setPixelRatio(pr);
+    pv.raf=requestAnimationFrame(loop);
+  };
+  pv.raf=requestAnimationFrame(loop);
+}
+function previewStop(){if(!pv)return false;cancelAnimationFrame(pv.raf);pv=null;return true}
+window.Figur={EX,EXB,STEPS,PLATE,plateSet,kgText,mount,show,draw,segAt,seqDur,render,sizeTo,setMirror,resetCam,thumb,previewStart,previewStop,get previewing(){return !!pv},
   setShade:m=>{fillMat.uniforms.uMode.value=m},
   get current(){return cur}};
 })();
