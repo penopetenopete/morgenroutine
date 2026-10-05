@@ -53,8 +53,8 @@
   <div class="small" id="rSum"></div>
   <button class="btn primary big" id="rStart">Starten</button>
   <div class="list" id="rList"></div>
-  <button class="btn ghost" id="rAdd">＋ Übung für heute hinzufügen</button>
-  <div class="note" id="rNote">Entfernen, Reihenfolge und Hinzufügen gelten <b>nur für heute</b>. Werte (Übung antippen) werden dauerhaft gespeichert.</div>
+  <button class="btn ghost" id="rAdd">＋ Übung hinzufügen</button>
+  <div class="note" id="rNote">Entfernen (✕) und Reihenfolge (ziehen) gelten <b>nur für heute</b>. Neue Übungen und Werte (Übung antippen) werden in der Routine gespeichert.</div>
   <button class="btn ghost small-btn" id="rReset" hidden>Änderungen für heute zurücksetzen</button>
   <section class="card">
     <div class="eyebrow">Ablauf dieser Routine</div>
@@ -103,11 +103,17 @@
       </div>
     </div>
     <div class="bar"><i id="bar"></i></div>
+    <!-- Zwischenseite nach jeder Übung -->
+    <section class="hub" id="hub" hidden>
+      <div class="hubhead"><div><div class="eyebrow" id="hubDone"></div><div class="hubnext">Als Nächstes: <b id="hubNext"></b></div></div><div class="hubclock num" id="hubClock" title="Pause">0:00</div></div>
+      <div class="hublist" id="hubList"></div>
+      <button class="btn ghost small-btn" id="hubEdit">Übersicht bearbeiten</button>
+    </section>
     <div class="stagebox" id="stagebox"><div class="stage" id="stage">
       <div class="hud"><span class="chip on" id="sideChip">Seite 1</span><span class="chip" id="repChip"></span></div>
       <div class="hint" id="hint"></div>
     </div></div>
-    <div class="readout">
+    <div class="readout" id="readout">
       <div class="phase" id="phase"></div>
       <div class="clock num" id="clock">0:00</div>
       <div class="subctrl" id="restCtrl" hidden><button class="btn ghost" id="plus10">+10 s</button></div>
