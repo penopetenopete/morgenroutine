@@ -468,7 +468,9 @@ function openRoutineSheet(focusName){
   openSheet("Routine bearbeiten",r.name,`<label class="field"><span>Name</span><input id="rsName" maxlength="40" autocomplete="off" value="${esc(r.name)}"></label>
     <div class="sg"><span>Anzahl Tage</span><div class="stepper"><button id="rsMinus" aria-label="weniger">−</button><span class="num" id="rsDays">${r.days.length}</span><button id="rsPlus" aria-label="mehr">+</button></div></div>
     <div id="rsDayNote"></div>
-    <button class="btn primary big" id="rsOk">Fertig</button><button class="btn danger" id="rsDel">Routine löschen</button>`,{onClose:()=>{if(screen==="routine")renderRoutine()}});
+    <button class="btn primary big" id="rsOk">Fertig</button>${r.days.some(d=>d.items.length)?`<button class="btn" id="rsShare">Teilen · an Claude schicken</button>`:`<button class="btn" id="rsPaste">Routine von Claude einfügen</button>`}<button class="btn danger" id="rsDel">Routine löschen</button>`,{onClose:()=>{if(screen==="routine")renderRoutine()}});
+  if($("rsShare"))$("rsShare").onclick=()=>shareRoutine(r);
+  if($("rsPaste"))$("rsPaste").onclick=()=>{sheetClose=null;closeSheet();setTimeout(()=>pasteImport(r.id),80)};
   const nm=$("rsName");
   nm.oninput=()=>{r.name=nm.value.trim()||"Ohne Namen";$("shTitle").textContent=r.name;save()};
   nm.onkeydown=e=>{if(e.key==="Enter")closeSheet()};
@@ -1263,12 +1265,102 @@ function drawPlayer(dt){
   F.render();
 }
 
+/* =================== TEILEN & IMPORT (Andockstelle für Claude, 06.10.2026) ===================
+   Link: <App-URL>#r=<base64url(deflate-raw(JSON))>  – JSON: {v:1,id,name,days:[{items:[{uid,ex,o,so,link}]}],pauses,audio}
+   Ohne Push: der Link trägt die ganze Routine. Gleiche id = „Ersetzen“ möglich (Verlauf bleibt). */
+const APP_URL=location.origin+location.pathname.replace(/[^/]*$/,"");
+const b64u={enc:u8=>{let s="";u8.forEach(c=>s+=String.fromCharCode(c));return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")},
+  dec:t=>{t=t.replace(/-/g,"+").replace(/_/g,"/");while(t.length%4)t+="=";const s=atob(t),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u}};
+async function zip(str,inv){
+  const cs=inv?new DecompressionStream("deflate-raw"):new CompressionStream("deflate-raw");
+  const data=inv?str:new TextEncoder().encode(str);
+  const buf=await new Response(new Blob([data]).stream().pipeThrough(cs)).arrayBuffer();
+  return inv?new TextDecoder().decode(buf):new Uint8Array(buf);
+}
+async function routineLink(r){
+  const p={v:1,id:r.id,name:r.name,days:r.days.map(d=>({items:d.items.map(it=>{const x={uid:it.uid,ex:it.ex,o:clone(it.o)};if(it.so&&Object.keys(it.so).length)x.so=clone(it.so);if(it.link)x.link=true;return x})}))};
+  if(r.pauses&&Object.keys(r.pauses).length)p.pauses=clone(r.pauses);
+  if(r.audio&&Object.keys(r.audio).length)p.audio=clone(r.audio);
+  return APP_URL+"#r="+b64u.enc(await zip(JSON.stringify(p)));
+}
+async function readLink(t){
+  const m=String(t||"").match(/[#&?]r=([A-Za-z0-9_-]+)/)||String(t||"").trim().match(/^([A-Za-z0-9_-]{20,})$/);
+  if(!m)throw new Error("Kein Routine-Link");
+  const j=await zip(b64u.dec(m[1]),true);return JSON.parse(j);
+}
+/* prüfen und aufräumen: unbekannte Übungen fallen raus, Werte auf erlaubte Stufen */
+function cleanRoutine(p){
+  const warn=[];if(!p||!Array.isArray(p.days)||!p.days.length)throw new Error("Keine Tage in der Routine");
+  const near=(arr,v)=>arr.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a,arr[0]);
+  const fix=(e,o)=>{o=Object.assign({},o);
+    ["sets","reps","secs","kg","step"].forEach(k=>{if(o[k]!=null){const vs=k==="kg"?F.STEPS[e.weight]:wheelValues(e,k);if(vs&&vs.length){const n=near(vs,+o[k]);if(n!==+o[k])warn.push(`${e.name}: ${k} ${o[k]} → ${n}`);o[k]=n}}});
+    return o};
+  const days=p.days.slice(0,14).map(d=>({items:(d.items||[]).filter(it=>{if(EXB[it.ex])return true;warn.push("Unbekannte Übung: "+it.ex);return false}).map(it=>{
+    const e=EXB[it.ex],x={uid:String(it.uid||uidGen()),ex:it.ex,o:fix(e,Object.assign({},exDef(it.ex),it.o||{}))};
+    if(it.so){x.so={};Object.keys(it.so).forEach(k=>{x.so[k]=fix(e,it.so[k])})}
+    if(it.link)x.link=true;return x})}));
+  const rv=wheelValues(EXB.balance,"rest"),pz={};Object.entries(p.pauses||{}).forEach(([k,v])=>{pz[k]=near(rv,+v)});
+  const au={};Object.entries(p.audio||{}).forEach(([k,v])=>{if(v==="music"||v==="podcast")au[k]=v});
+  return {r:{id:p.id,name:String(p.name||"Neue Routine").slice(0,40),settings:{},pauses:pz,audio:au,days},warn};
+}
+/* neue uids (für „Als neue Routine“), Schlüssel in pauses/audio mitziehen */
+function freshIds(r){
+  const map={};r.days.forEach(d=>d.items.forEach(it=>{const n=uidGen();map[it.uid]=n;it.uid=n}));
+  const re=o=>{const out={};Object.entries(o||{}).forEach(([k,v])=>{out[k.split("|").map(t=>map[t]||t).join("|")]=v});return out};
+  r.pauses=re(r.pauses);r.audio=re(r.audio);r.id="r"+now().toString(36);return r;
+}
+async function shareRoutine(r){
+  try{
+    const link=await routineLink(r),txt=`Routine „${r.name}“ aus meiner Trainings-App:\n${link}`;
+    if(navigator.share){try{await navigator.share({title:r.name,text:txt});return}catch(e){if(e&&e.name==="AbortError")return}}
+    await navigator.clipboard.writeText(txt);toast("Link kopiert – bei Claude einfügen");
+  }catch(e){toast("Teilen ging nicht: "+e.message)}
+}
+let importing=false;
+async function checkImport(){
+  if(importing||!/[#&]r=/.test(location.hash))return;
+  const h=location.hash;history.replaceState(history.state,"",location.pathname+location.search);
+  try{offerImport(await readLink(h))}catch(e){toast("Link kaputt: "+e.message)}
+}
+function offerImport(p,emptyId){
+  let c;try{c=cleanRoutine(p)}catch(e){toast(e.message);return}
+  const r=c.r,old=r.id&&rawRoutine(r.id),n=r.days.reduce((a,d)=>a+d.items.length,0);
+  const empty=emptyId?rawRoutine(emptyId):S.routines.find(x=>x.days.every(d=>!d.items.length));
+  const full=S.routines.length>=MAX_SLOTS&&!empty;
+  importing=true;
+  openSheet("Routine von Claude",r.name,
+    `<div class="note">${r.days.length>1?r.days.length+" Tage · ":""}${n} ${n===1?"Übung":"Übungen"}${r.days.length===1?": "+esc(r.days[0].items.map(it=>EXB[it.ex].name).join(", ")):""}</div>`+
+    (c.warn.length?`<div class="note warnbox">${c.warn.map(esc).join("<br>")}</div>`:"")+
+    (old?`<button class="btn primary big" id="imRep">„${esc(old.name)}“ ersetzen</button><button class="btn" id="imNew"${full?" disabled":""}>Als neue Routine</button>`
+        :full?`<div class="note">Alle 5 Slots belegt – erst eine Routine löschen.</div>`:`<button class="btn primary big" id="imNew">Übernehmen</button>`)+
+    `<button class="btn ghost" id="imNo">Abbrechen</button>`,{onClose:()=>{importing=false}});
+  const go=x=>{closeSheet();importing=false;openRoutine(x.id);toast("„"+x.name+"“ übernommen")};
+  if($("imRep"))$("imRep").onclick=()=>{const i=S.routines.indexOf(old);r.id=old.id;S.routines[i]=r;
+    if(r.days.length<=(S.last[r.id]||{}).day)delete S.last[r.id];save();go(r)};
+  if($("imNew"))$("imNew").onclick=()=>{freshIds(r);
+    if(empty){r.id=empty.id;S.routines[S.routines.indexOf(empty)]=r}else S.routines.push(r);save();go(r)};
+  $("imNo").onclick=()=>{closeSheet();importing=false};
+}
+/* Einfügen von Hand (falls der Link nicht direkt die App öffnet) */
+async function pasteImport(emptyId){
+  let t="";try{t=await navigator.clipboard.readText()}catch(_){}
+  if(!/r=|^[A-Za-z0-9_-]{20,}$/.test(t.trim())){
+    openSheet("Von Claude","Link einfügen",`<textarea class="pksearch" id="imTxt" rows="4" placeholder="Link von Claude hier einfügen"></textarea><button class="btn primary big" id="imGo">Weiter</button>`);
+    $("imGo").onclick=async()=>{const v=$("imTxt").value;try{const p=await readLink(v);closeSheet();setTimeout(()=>offerImport(p,emptyId),80)}catch(e){toast("Kein gültiger Routine-Link")}};
+    return;
+  }
+  try{offerImport(await readLink(t),emptyId)}catch(e){toast("Kein gültiger Routine-Link")}
+}
+window.addEventListener("hashchange",checkImport);
+window.TrainingApp.routineLink=id=>routineLink(rawRoutine(id));
+
 /* =================== START =================== */
 F.mount($("stage"));F.setShade(gv("shade"));muteIcon();
 history.replaceState({s:"home"},"");
 renderHome();
 const a=loadActive();if(a)startPlayer(a);
 requestAnimationFrame(frame);
+checkImport();
 /* Test-Hilfe (Playwright) */
 window.__app={get W(){return W},get idx(){return idx},steps:()=>steps,S:()=>S,shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
 })();
