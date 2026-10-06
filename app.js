@@ -296,7 +296,7 @@ let screen="home";
 function show(s,push=true){
   screen=s;SCREENS.forEach(x=>$(x).hidden=x!==s);window.scrollTo(0,0);
   if(push)history.pushState({s},"");
-  if(s==="home")renderHome();if(s==="routine")renderRoutine();if(s==="stats")renderStats();
+  if(s==="home")renderHome();if(s==="routine")renderRoutine();if(s==="stats")renderStats();if(s==="essen"&&window.renderEssen)renderEssen();
 }
 document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>history.back());
 window.addEventListener("popstate",e=>{
@@ -316,6 +316,7 @@ function routineMeta(R){
 function nextDay(R){const l=S.last[R.id];return l?(l.day+1)%R.days.length:0}
 function renderHome(){
   try{musMeta()}catch(_){}
+  try{window.essenMeta&&essenMeta()}catch(_){}
   $("today").textContent=new Date().toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"});
   const card=(R)=>`<button class="rcard" data-r="${R.id}"><span class="nm">${esc(R.name)}</span><span class="meta">${esc(routineMeta(R))}</span>${ICON.go}</button>`;
   $("presetList").innerHTML=card(getRoutine("morgen"));
@@ -930,7 +931,7 @@ function startPlayer(w,isNew){
   if(!steps.length){W=null;toast("Keine Übungen aktiv");return}
   idx=Math.max(0,steps.findIndex(s=>s.key===W.cur));
   ensureAudio();lockScreen();
-  $("home").hidden=$("routine").hidden=$("stats").hidden=true;$("done").hidden=true;$("player").hidden=false;
+  $("home").hidden=$("routine").hidden=$("stats").hidden=true;if($("essen"))$("essen").hidden=true;$("done").hidden=true;$("player").hidden=false;
   $("tips").classList.remove("open");
   size();
   if(isNew){W.stepStart=now();enter(0)}
@@ -1434,7 +1435,7 @@ window.TrainingApp.routineLink=id=>routineLink(rawRoutine(id));
 /* ---- Alle Daten übertragen (z. B. Web-App → Android-App): Routinen, Einstellungen, Statistik ---- */
 async function dataLink(){
   let cat={};try{cat=JSON.parse(localStorage.getItem(CAT)||"{}")}catch(_){}
-  const p={v:1,all:true,S,cat};
+  const p={v:1,all:true,S,cat};try{if(window.TrainingEssen)p.essen=TrainingEssen.get()}catch(_){}
   return APP_URL+"#d="+b64u.enc(await zip(JSON.stringify(p)));
 }
 function exportAll(){
@@ -1456,9 +1457,9 @@ async function readData(t){
 }
 function offerData(p){
   const r=(p.S.routines||[]).length,w=(p.S.log||[]).length;
-  openSheet("Daten übertragen","Alles übernehmen?",`<div class="note">${r} eigene ${r===1?"Routine":"Routinen"}, ${w} ${w===1?"Workout":"Workouts"} in der Statistik, Einstellungen und Morgenroutine.</div><div class="note warnbox">Ersetzt alles, was in dieser App gespeichert ist.</div><button class="btn primary big" id="dtOk">Alles ersetzen</button><button class="btn ghost" id="dtNo">Abbrechen</button>`);
+  openSheet("Daten übertragen","Alles übernehmen?",`<div class="note">${r} eigene ${r===1?"Routine":"Routinen"}, ${w} ${w===1?"Workout":"Workouts"} in der Statistik, Einstellungen und Morgenroutine${p.essen?", Ernährung":""}.</div><div class="note warnbox">Ersetzt alles, was in dieser App gespeichert ist.</div><button class="btn primary big" id="dtOk">Alles ersetzen</button><button class="btn ghost" id="dtNo">Abbrechen</button>`);
   $("dtOk").onclick=()=>{
-    try{localStorage.setItem(KEY,JSON.stringify(p.S));if(p.cat)localStorage.setItem(CAT,JSON.stringify(p.cat));localStorage.removeItem(ACT)}catch(e){toast("Speichern ging nicht");return}
+    try{localStorage.setItem(KEY,JSON.stringify(p.S));if(p.cat)localStorage.setItem(CAT,JSON.stringify(p.cat));if(p.essen)localStorage.setItem("essen_v1",JSON.stringify(p.essen));localStorage.removeItem(ACT)}catch(e){toast("Speichern ging nicht");return}
     closeSheet();location.replace(location.pathname);
   };
   $("dtNo").onclick=closeSheet;
@@ -1505,6 +1506,8 @@ renderHome();
 const a=loadActive();if(a)startPlayer(a);
 requestAnimationFrame(frame);
 checkImport();checkData();
+/* Für essen.js (Ernährung): gemeinsame Helfer */
+window.AppKit={$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S};
 /* Test-Hilfe (Playwright) */
 window.__app={get W(){return W},get idx(){return idx},steps:()=>steps,S:()=>S,shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
 })();
