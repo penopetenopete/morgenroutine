@@ -1,0 +1,21 @@
+name: BLS holen
+on:
+  push:
+    branches: [bls-daten]
+permissions:
+  contents: write
+jobs:
+  get:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download BLS 4.0 (Max Rubner-Institut, CC BY 4.0)
+        run: |
+          [ -f BLS_4_0_2025_DE.zip ] && exit 0
+          curl -fsSL -o BLS_4_0_2025_DE.zip https://blsdb.de/assets/uploads/BLS_4_0_2025_DE.zip
+          unzip -l BLS_4_0_2025_DE.zip
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add BLS_4_0_2025_DE.zip
+          git commit -m "BLS 4.0 Rohdaten"
+          git push
