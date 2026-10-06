@@ -205,6 +205,7 @@ const thumbOf=it=>{try{return F.thumb(EXB[it.ex],it.o)}catch(_){return ""}};
 /* =================== SHEET =================== */
 let sheetClose=null,sheetLocked=false;
 function stopPreview(){if(F.previewStop()&&!$("player").hidden&&W){shownKey="";stepUI();size()}}
+window.openSheet=(...a)=>openSheet(...a);window.closeSheet=()=>closeSheet();
 function openSheet(eyebrow,title,html,{onClose,locked}={}){
   stopPreview();
   $("shEyebrow").textContent=eyebrow||"";$("shTitle").textContent=title||"";$("shBody").innerHTML=html;
@@ -314,6 +315,7 @@ function routineMeta(R){
 }
 function nextDay(R){const l=S.last[R.id];return l?(l.day+1)%R.days.length:0}
 function renderHome(){
+  try{musMeta()}catch(_){}
   $("today").textContent=new Date().toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"});
   const card=(R)=>`<button class="rcard" data-r="${R.id}"><span class="nm">${esc(R.name)}</span><span class="meta">${esc(routineMeta(R))}</span>${ICON.go}</button>`;
   $("presetList").innerHTML=card(getRoutine("morgen"));
@@ -348,6 +350,14 @@ function newRoutine(){
 /* =================== STATISTIK =================== */
 let stTab="w";
 $("openStats").onclick=()=>show("stats");
+/* Musik im Hauptmenü: öffnet das Spotify-Menü (spotify.js) schon vor dem Workout */
+function musMeta(){const el=$("musMeta");if(!el)return;try{const T=window.TrainingSpotify,st=T&&T.state();
+  if(!T){el.textContent="Spotify";return}
+  if(!(st.tok||st.hasAuth)){el.textContent="Mit Spotify verbinden";return}
+  el.textContent=[st.music&&st.music.name?"♫ "+st.music.name:"",st.pod&&st.pod.name?"🎙 "+st.pod.name:""].filter(Boolean).join(" · ")||"Verbunden – Musik und Podcast wählen";
+}catch(_){el.textContent="Spotify"}}
+$("openMusic").onclick=()=>{if(window.TrainingSpotify)window.TrainingSpotify.openMenu();else toast("Spotify lädt noch …")};
+setTimeout(musMeta,800);
 document.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{stTab=b.dataset.st;renderStats()});
 function exStats(){
   const ag={};
@@ -1377,12 +1387,17 @@ async function dataLink(){
   const p={v:1,all:true,S,cat};
   return APP_URL+"#d="+b64u.enc(await zip(JSON.stringify(p)));
 }
-async function exportAll(){
-  try{
-    const link=await dataLink(),txt="Alle Daten meiner Trainings-App:\n"+link;
-    try{await navigator.clipboard.writeText(link);toast("Kopiert – in der anderen App unter Einstellungen → „Daten einfügen“")}
-    catch(_){if(navigator.share)await navigator.share({title:"Trainings-Daten",text:txt});}
-  }catch(e){toast("Ging nicht: "+e.message)}
+function exportAll(){
+  openSheet("Daten übertragen","Alles mitnehmen",`<div class="note">Routinen, Einstellungen und Statistik. In der anderen App dann Einstellungen → Daten übertragen → Einfügen.</div><button class="btn primary big" id="dtFile">Als Datei speichern</button><button class="btn" id="dtCopy">Als Link kopieren</button>`);
+  $("dtFile").onclick=async()=>{
+    try{const link=await dataLink(),blob=new Blob([link],{type:"text/plain"}),a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);a.download="training-daten-"+new Date().toISOString().slice(0,10)+".txt";document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),5000);toast("Datei gespeichert (Downloads)")}catch(e){toast("Ging nicht: "+e.message)}};
+  $("dtCopy").onclick=async()=>{
+    const link=await dataLink();
+    try{await navigator.clipboard.writeText(link);toast("Link kopiert")}
+    catch(_){$("shBody").insertAdjacentHTML("beforeend",`<textarea class="pksearch" rows="4" readonly>${esc(link)}</textarea><div class="note">Feld lange drücken → Alles auswählen → Kopieren.</div>`)}
+  };
 }
 async function readData(t){
   const m=String(t||"").match(/[#&?]d=([A-Za-z0-9_-]+)/)||String(t||"").trim().match(/^([A-Za-z0-9_-]{40,})$/);
@@ -1401,8 +1416,12 @@ function offerData(p){
 async function pasteData(){
   let t="";try{t=await navigator.clipboard.readText()}catch(_){}
   try{offerData(await readData(t));return}catch(_){}
-  openSheet("Daten übertragen","Daten einfügen",`<textarea class="pksearch" id="dtTxt" rows="4" placeholder="Kopierten Daten-Link hier einfügen"></textarea><button class="btn primary big" id="dtGo">Weiter</button>`);
-  $("dtGo").onclick=async()=>{try{const p=await readData($("dtTxt").value);closeSheet();setTimeout(()=>offerData(p),80)}catch(e){toast("Kein gültiger Daten-Link")}};
+  openSheet("Daten übertragen","Daten einfügen",`<button class="btn primary big" id="dtPick">Datei auswählen</button><input type="file" id="dtFileIn" accept=".txt,text/plain,.json,application/json" hidden>
+    <div class="note">Oder den kopierten Link einfügen: Feld lange drücken → Einfügen.</div><textarea class="pksearch" id="dtTxt" rows="3" placeholder="Link hier einfügen"></textarea><button class="btn" id="dtGo">Weiter</button>`);
+  const go=async v=>{try{const p=await readData(v);closeSheet();setTimeout(()=>offerData(p),80)}catch(e){toast("Kein gültiger Daten-Link")}};
+  $("dtPick").onclick=()=>$("dtFileIn").click();
+  $("dtFileIn").onchange=async e=>{const f=e.target.files&&e.target.files[0];if(f)go(await f.text())};
+  $("dtGo").onclick=()=>go($("dtTxt").value);
 }
 $("dtExport").onclick=exportAll;$("dtImport").onclick=pasteData;
 async function checkData(){

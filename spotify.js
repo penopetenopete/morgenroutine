@@ -206,6 +206,8 @@
 .sp-sw input:checked+i{background:var(--accent);border-color:var(--accent)}.sp-sw input:checked+i::after{left:25px;background:#001318}
 .sp-in{display:flex;gap:8px}.sp-in input,.sp-set input{flex:1;min-width:0;min-height:44px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:0 10px;font:inherit}
 .sp-res{display:flex;flex-direction:column;gap:6px}
+.sp-reshead{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}
+.sp-res .sp-reshead button{text-align:center;min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--fg);font:inherit;font-size:.85rem;cursor:pointer}
 .sp-res button{text-align:left;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg);font:inherit;font-size:.92rem;cursor:pointer}
 .sp-res button small{display:block;color:var(--muted);font-size:.78rem}
 .sp-set{display:grid;grid-template-columns:1fr 90px;gap:8px;align-items:center;font-size:.88rem;color:var(--muted)}
@@ -322,8 +324,17 @@
     setTimeout(() => nowPlaying(true), 700);
   }
   function resBtn(title, sub, fn) { const b = document.createElement("button"); b.innerHTML = esc(title) + (sub ? `<small>${esc(sub)}</small>` : ""); b.onclick = fn; return b; }
-  function busyBox(id, t) { const b = $(id); if (b) b.innerHTML = `<div class="note">${esc(t)}</div>`; return b; }
+  function busyBox(id, t) { const b = $(id); if (b) { b.innerHTML = `<div class="note">${esc(t)}</div>`; delete b.dataset.kind; } return b; }
+  // Ergebnisliste wieder einklappen können (Playlists, Suche, Podcast-Folgen)
+  function addClose(box, label, kind) {
+    if (!box) return; box.dataset.kind = kind || "";
+    const h = document.createElement("div"); h.className = "sp-reshead";
+    h.innerHTML = `<span>${esc(label)}</span><button type="button">Einklappen ▴</button>`;
+    h.querySelector("button").onclick = () => { box.innerHTML = ""; delete box.dataset.kind; };
+    box.insertBefore(h, box.firstChild);
+  }
   async function myPlaylists() {
+    const cur = $("spMRes"); if (cur && cur.dataset.kind === "pl") { cur.innerHTML = ""; delete cur.dataset.kind; return; } // zweites Tippen = einklappen
     const box = busyBox("spMRes", "Lade deine Playlists …");
     try {
       let all = [], url = "/me/playlists?limit=50";
@@ -332,6 +343,7 @@
       const list = document.createElement("div"); list.className = "sp-res"; box.appendChild(list);
       const draw = () => { const f = ($("spPlF").value || "").toLowerCase(); list.innerHTML = ""; all.filter(x => !f || (x.name || "").toLowerCase().includes(f)).slice(0, 60).forEach(x => list.appendChild(resBtn(x.name, x.owner && x.owner.display_name, () => pickMusic({ ctx: x.uri, ctxType: "playlist", name: x.name })))); };
       $("spPlF").oninput = draw; draw();
+      addClose(box, all.length + " Playlists", "pl");
     } catch (e) { box.innerHTML = `<div class="note">${esc(e.status === 401 || e.status === 403 ? "Für deine Playlists bitte unter „Weitere Einstellungen“ abmelden und neu verbinden." : explain(e))}</div>`; }
   }
   async function searchMusic() {
@@ -341,6 +353,7 @@
       ((j && j.tracks && j.tracks.items) || []).filter(Boolean).forEach(t => box.appendChild(resBtn("♪ " + t.name, (t.artists || []).map(a => a.name).join(", "), () => pickMusic({ track: t.uri, name: t.name }))));
       ((j && j.playlists && j.playlists.items) || []).filter(Boolean).forEach(x => box.appendChild(resBtn("☰ " + x.name, x.owner && x.owner.display_name, () => pickMusic({ ctx: x.uri, ctxType: "playlist", name: x.name }))));
       if (!box.children.length) box.innerHTML = '<div class="note">Nichts gefunden.</div>';
+      addClose(box, "Suche: " + q, "msearch");
     } catch (e) { box.innerHTML = `<div class="note">${esc(explain(e))}</div>`; }
   }
   async function pickMusic(m) { $("spMRes").innerHTML = ""; await switchTo("music", "Auswahl", m); }
@@ -350,6 +363,7 @@
       const j = await api("GET", "/search?type=show&market=DE&limit=8&q=" + encodeURIComponent(q)); box.innerHTML = "";
       ((j && j.shows && j.shows.items) || []).filter(Boolean).forEach(sh => box.appendChild(resBtn(sh.name, sh.publisher, () => showEpisodes(sh))));
       if (!box.children.length) box.innerHTML = '<div class="note">Nichts gefunden.</div>';
+      addClose(box, "Suche: " + q, "psearch");
     } catch (e) { box.innerHTML = `<div class="note">${esc(explain(e))}</div>`; }
   }
   async function showEpisodes(sh) {
@@ -360,6 +374,7 @@
         const rp = ep.resume_point || {}, st = rp.fully_played ? "gehört" : rp.resume_position_ms > 0 ? "angefangen bei " + fmt(rp.resume_position_ms) : "neu";
         box.appendChild(resBtn(ep.name, (ep.release_date || "") + " · " + Math.round((ep.duration_ms || 0) / 60000) + " min · " + st, () => pickEpisode(ep)));
       });
+      addClose(box, sh.name, "eps");
     } catch (e) { box.innerHTML = `<div class="note">${esc(explain(e))}</div>`; }
   }
   async function pickEpisode(ep) {
