@@ -320,3 +320,27 @@ body{font-size:17px}
 .skipline{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;color:var(--muted);font-size:.95rem}
 .skc{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:6px 12px;font-family:var(--f-display);font-size:.85rem;cursor:pointer}
 .topbar .ic#rMore{margin-left:auto}
+
+/* Timeline: Pausen | Musik, Pause kopieren (06.10.2026) */
+.seg.tlmode{margin:0 0 10px}
+.tlhint{display:flex;align-items:center;gap:14px;margin:0 2px 10px;font-family:var(--f-display);font-size:.95rem}
+.tlhint .lnk{margin-left:auto;background:none;border:0;color:var(--muted);font:inherit;font-size:.9rem;text-decoration:underline;cursor:pointer;padding:6px 0}
+.aud-music{--a:#5BE38C}.aud-podcast{--a:#B18CFF}
+.tlhint .aud-music,.tlhint .aud-podcast{color:var(--a)}
+.tl.mus .tlb{border-color:var(--a);background:color-mix(in srgb,var(--a) 16%,var(--bg))}
+.tl.mus .tlb small{color:var(--a)}
+.tl.mus .tle i{background:var(--a);height:4px}
+.tl.mus .tle.turn i{width:4px;height:auto}
+.tl.mus .tle.open i{background:repeating-linear-gradient(90deg,var(--a) 0 4px,transparent 4px 8px)}
+.tl.mus .tle.turn.open i{background:repeating-linear-gradient(180deg,var(--a) 0 4px,transparent 4px 8px)}
+.tl.mus .tle span{color:var(--a);font-size:.9rem}
+.tl.mus .tle.open{cursor:pointer}
+.tl.mus .tlb.own{box-shadow:0 0 0 1.5px var(--a) inset}
+.tl.mus .tle.own span{outline:1px solid var(--a)}
+.tlcopy{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:10px 12px;border:1px solid var(--accent);border-radius:12px;background:color-mix(in srgb,var(--accent) 10%,var(--card));font-size:.95rem}
+.tlcopy span{flex:1}.tlcopy b{color:var(--accent);font-family:var(--f-display)}
+.tlcopy .btn{flex:0 0 auto;width:auto;margin:0;padding:8px 16px;min-height:0}
+.tl.copying .tle:not(.open):not(.done):not(.none) span{outline:1px dashed var(--accent);color:var(--fg)}
+.tl.copying .tle.src span{background:var(--accent);color:var(--bg);outline:0}
+.tle{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+.tl.copying .tle.custom span{outline-style:solid;color:var(--accent)}

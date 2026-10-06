@@ -90,10 +90,10 @@ function getRoutine(id){
     });
     (ov.extra||[]).forEach(x=>{if(EXB[x.ex])items.push({uid:x.uid,ex:x.ex,extra:true,link:!!x.link,so:x.so?clone(x.so):{},base:Object.assign({},exDef(x.ex)),o:Object.assign({},exDef(x.ex),x.o)})});
     if(ov.order){const pos=u=>{const i=ov.order.indexOf(u);return i<0?1e3:i};items.sort((a,b)=>pos(a.uid)-pos(b.uid))}
-    return {id,name:MORGEN.name,preset:true,days:[{items}],pauses:ov.pauses||{},settings:Object.assign({},DEF_SET,MORGEN.settings,ov.settings,{confirm:false})};
+    return {id,name:MORGEN.name,preset:true,days:[{items}],pauses:ov.pauses||{},audio:{},settings:Object.assign({},DEF_SET,MORGEN.settings,ov.settings,{confirm:false})};
   }
   const r=S.routines.find(r=>r.id===id);if(!r)return null;
-  return {id,name:r.name,preset:false,pauses:r.pauses||{},settings:Object.assign({},DEF_SET,r.settings,{confirm:gv("confirm")}),
+  return {id,name:r.name,preset:false,pauses:r.pauses||{},audio:r.audio||{},settings:Object.assign({},DEF_SET,r.settings,{confirm:gv("confirm")}),
     days:r.days.map(d=>({items:d.items.filter(it=>EXB[it.ex]).map(it=>({uid:it.uid,ex:it.ex,link:!!it.link,so:it.so?clone(it.so):{},base:Object.assign({},exDef(it.ex),it.base||{}),o:Object.assign({},exDef(it.ex),it.o)}))}))};
 }
 const rawRoutine=id=>S.routines.find(r=>r.id===id);
@@ -150,6 +150,11 @@ function linkItem(rid,day,uid,v){
 function setPause(rid,pk,v){
   const tgt=rid==="morgen"?S.morgen:rawRoutine(rid);if(!tgt)return;
   tgt.pauses=tgt.pauses||{};if(v==null)delete tgt.pauses[pk];else tgt.pauses[pk]=v;save();
+}
+/* Musik oder Podcast an einer Stelle (Satz oder Pause), v=null: wieder Smart – dauerhaft in der Routine */
+function setAudio(rid,ak,v){
+  const tgt=rawRoutine(rid);if(!tgt)return;
+  tgt.audio=tgt.audio||{};if(v==null)delete tgt.audio[ak];else tgt.audio[ak]=v;if(!Object.keys(tgt.audio).length)delete tgt.audio;save();
 }
 function setMorgenOff(uid,off){const x=S.morgen.items[uid]||(S.morgen.items[uid]={});if(off)x.off=true;else delete x.off;if(!Object.keys(x).length)delete S.morgen.items[uid];save()}
 function setRoutineSetting(rid,k,v){if(rid==="morgen")S.morgen.settings[k]=v;else{const r=rawRoutine(rid);if(!r)return;r.settings=r.settings||{};r.settings[k]=v}save()}
@@ -411,8 +416,10 @@ function renderRoutine(){
   $("rView").querySelectorAll("[data-v]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===rView));
   $("rList").hidden=rView!=="list";$("rTl").hidden=rView!=="tl";
   if(rView==="tl"){
-    renderTimeline($("rTl"),{items,settings:R.settings,pauses:R.pauses},{
+    renderTimeline($("rTl"),{items,settings:R.settings,pauses:R.pauses,audio:R.audio},{
       onPause:(pk,v)=>{setPause(R.id,pk,v);renderRoutine()},
+      onAudio:R.preset?null:(ak,v)=>{setAudio(R.id,ak,v);renderRoutine()},
+      redraw:renderRoutine,
       onEdit:(it,set)=>editR(it,set)});
     $("rTl").insertAdjacentHTML("beforeend",skipLineHTML(items));
   }
@@ -487,11 +494,23 @@ function rememberValues(it){S.exLast=S.exLast||{};S.exLast[it.ex]=Object.assign(
 
 /* =================== TIMELINE: jeder Satz ein Kästchen, Pausen als Linien =================== */
 let rView="list";
-document.querySelectorAll("#rView [data-v]").forEach(b=>b.onclick=()=>{rView=b.dataset.v;renderRoutine()});
+document.querySelectorAll("#rView [data-v]").forEach(b=>b.onclick=()=>{rView=b.dataset.v;tlCopy=null;renderRoutine()});
 const TL_COL=["#00E5FF","#FFB547","#5BE38C","#B18CFF","#FF7AB6","#F2E863","#6FA8FF","#FF8F6B"];
 function pauseText(v){return v===0?"0 s":fmtSecs(v)}
+/* Musik/Podcast pro Stelle: Schlüssel wie bei den Pausen; ohne eigenen Wert gilt Smart (Satz = Musik, Pause ab X s = Podcast) */
+const audKey=s=>s.type==="work"?"w|"+[s.uid,s.set||1,s.side||0,s.part||0].join("|"):(s.pk||s.uid+"|"+(s.kind||"next"));
+const smartShort=()=>{try{const v=window.TrainingSpotify&&window.TrainingSpotify.state().short;return v==null?20:+v}catch(_){return 20}};
+function audioOf(s,map){
+  const v=map&&map[audKey(s)];if(v)return v;
+  if(s.type==="work")return "music";
+  return s.dur==null||s.dur>=smartShort()?"podcast":"music";
+}
+const AUD_ICON={music:"♫",podcast:"🎙"};
+let tlMode="pause",tlCopy=null; // tlCopy = {v, n} solange „Pause kopieren“ läuft
 function renderTimeline(box,Wk,h){
   const steps=buildSteps(Wk),colOf={};let ci=0;
+  const mus=tlMode==="music"&&!!h.onAudio,AM=Wk.audio||{};
+  if(mus)tlCopy=null;
   const curI=h.curKey?steps.findIndex(x=>x.key===h.curKey):-1;
   Wk.items.forEach(it=>{if(it.status!=="removed")colOf[it.uid]=TL_COL[ci++%TL_COL.length]});
   const seq=[];let lastBox=null;
@@ -504,15 +523,18 @@ function renderTimeline(box,Wk,h){
     }else if(seq.length)seq.push({edge:true,s,i});
   });
   const boxes=seq.filter(x=>x.box),PER=3;
-  if(!boxes.length){box.innerHTML='<div class="note" style="padding:14px">Noch keine Sätze.</div>';return}
+  const bar=h.onAudio?`<div class="seg tlmode" role="group" aria-label="Timeline zeigt"><button class="sbtn" data-tm="pause" aria-pressed="${!mus}">Pausen</button><button class="sbtn" data-tm="music" aria-pressed="${mus}">Musik</button></div>`:"";
+  if(!boxes.length){box.innerHTML=bar+'<div class="note" style="padding:14px">Noch keine Sätze.</div>';bindMode();return}
+  const audCls=s=>{const v=audioOf(s,AM);return ` aud-${v}${AM[audKey(s)]?" own":""}`};
   const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,st=curI<0?"":last<curI?" done":b.i<=curI?" now":"",it=Wk.items.find(x=>x.uid===s.uid),e=EXB[s.ex],uni=isUni(EXB[s.ex],s.o);
     const side=s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
-    return `<button class="tlb${st}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}"${st===" done"?" disabled":""}><b>${esc(e.name)}</b><small>S${s.set}${side?" · "+side:""}</small></button>`};
+    return `<button class="tlb${st}${mus?audCls(s):""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}"${st===" done"?" disabled":""}><b>${esc(e.name)}</b><small>${mus?AUD_ICON[audioOf(s,AM)]+" ":""}S${s.set}${side?" · "+side:""}</small></button>`};
   const edgeHTML=(x,turn)=>{
     if(x.none)return `<span class="tle${turn?" turn":""} none"><i></i></span>`;
     const s=x.s,open=s.dur==null,dn=curI>=0&&x.i<curI;
-    const lab=open?"▶":pauseText(s.dur);
-    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}" ${open||dn?"disabled":""} data-e="${seq.indexOf(x)}" aria-label="Pause ${lab}"><i></i><span>${lab}</span></button>`};
+    const lab=mus?AUD_ICON[audioOf(s,AM)]:open?"▶":pauseText(s.dur);
+    const src=tlCopy&&tlCopy.pk===s.pk?" src":"";
+    return `<button class="tle${turn?" turn":""}${open?" open":""}${!mus&&s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${mus?audCls(s):""}${src}" ${(open&&!mus)||dn?"disabled":""} data-e="${seq.indexOf(x)}" aria-label="${mus?(audioOf(s,AM)==="music"?"Musik":"Podcast"):"Pause "+lab}"><i></i><span>${lab}</span></button>`};
   let html="",row=[],ri=0;
   const flush=()=>{html+=`<div class="tlrow${ri%2?" rev":""}">${row.join("")}</div>`;row=[];ri++};
   let bi=0;
@@ -523,12 +545,44 @@ function renderTimeline(box,Wk,h){
     else row.push(edgeHTML(x,false));
   }
   if(row.length)flush();
-  box.innerHTML=`<div class="tl">${html}</div>`;
-  box.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{const s=seq[+b.dataset.e].s;openPauseSheet(s,h.onPause)});
+  const own=Object.keys(AM).length;
+  const head=mus?`<div class="tlhint"><span class="aud-music">♫ Musik</span><span class="aud-podcast">🎙 Podcast</span>${own?`<button class="lnk" id="tlAudReset">Alles auf Smart</button>`:""}</div>`
+    :tlCopy?`<div class="tlcopy"><span>Pause <b>${pauseText(tlCopy.v)}</b> kopiert – andere Pausen antippen${tlCopy.n?` · ${tlCopy.n}× eingefügt`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
+  box.innerHTML=bar+head+`<div class="tl${mus?" mus":""}${tlCopy?" copying":""}">${html}</div>`;
+  bindMode();
+  if($("tlAudReset"))$("tlAudReset").onclick=()=>{Object.keys(AM).forEach(k=>h.onAudio(k,null));toast("Alles auf Smart")};
+  if($("tlCopyOk"))$("tlCopyOk").onclick=()=>{tlCopy=null;h.redraw()};
+  box.querySelectorAll("[data-e]").forEach(b=>{
+    const s=seq[+b.dataset.e].s;
+    if(mus){b.onclick=()=>toggleAud(s);return}
+    onLongPress(b,()=>{if(s.dur==null)return;tlCopy={v:s.dur,pk:s.pk,n:0};buzz(30);h.redraw()});
+    b.onclick=()=>{
+      if(b.dataset.lp){delete b.dataset.lp;return}
+      if(tlCopy){if(s.pk===tlCopy.pk)return;tlCopy.n++;h.onPause(s.pk,tlCopy.v);return}
+      openPauseSheet(s,h.onPause);
+    };
+  });
   box.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{
     const s=boxes[+b.dataset.b].s,it=Wk.items.find(x=>x.uid===s.uid);
+    if(mus){toggleAud(s);return}
+    if(tlCopy){tlCopy=null;h.redraw();return}
     h.onEdit(it,it.pair?0:s.set);
   });
+  /* antippen = umschalten; entspricht es danach wieder Smart, wird der eigene Wert gelöscht */
+  function toggleAud(s){
+    const k=audKey(s),v=audioOf(s,AM)==="music"?"podcast":"music",std=audioOf(s,{});
+    h.onAudio(k,v===std?null:v);
+  }
+  function bindMode(){box.querySelectorAll("[data-tm]").forEach(b=>b.onclick=()=>{tlMode=b.dataset.tm;tlCopy=null;h.redraw()})}
+}
+/* langes Drücken (0,5 s, ohne Wischen); danach wird der Klick verschluckt */
+function onLongPress(el,fn){
+  let t=null,x0=0,y0=0;
+  const stop=()=>{clearTimeout(t);t=null};
+  el.addEventListener("pointerdown",e=>{x0=e.clientX;y0=e.clientY;stop();t=setTimeout(()=>{t=null;el.dataset.lp=1;fn()},500)});
+  el.addEventListener("pointermove",e=>{if(t&&Math.hypot(e.clientX-x0,e.clientY-y0)>10)stop()});
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>el.addEventListener(ev,stop));
+  el.addEventListener("contextmenu",e=>e.preventDefault());
 }
 /* Pause einstellen (Timeline und laufendes Training) */
 function openPauseSheet(s,onSet){
@@ -689,7 +743,7 @@ function loadActive(){try{const a=JSON.parse(localStorage.getItem(ACT)||"null");
 function saveW(){if(!W)return;try{localStorage.setItem(ACT,JSON.stringify(W))}catch(_){}}
 function startWorkout(){
   const items=dayItems().map(it=>({uid:it.uid,ex:it.ex,o:clone(it.o),base:it.base?clone(it.base):null,pair:it.pair?clone(it.pair):null,link:!!it.link,so:clone(it.so||{}),status:it.status,planned:true}));
-  W={v:1,id:"w"+now().toString(36),rid:R.id,rname:R.name,day:rDay,days:R.days.length,settings:clone(R.settings),pauses:clone(R.pauses||{}),
+  W={v:1,id:"w"+now().toString(36),rid:R.id,rname:R.name,day:rDay,days:R.days.length,settings:clone(R.settings),pauses:clone(R.pauses||{}),audio:clone(R.audio||{}),
      startedAt:now(),items,cur:null,stepStart:now(),pauseAt:null,pausedMs:0,extra:0,res:{},pending:null,ended:false,visited:[]};
   delete skipT[skipKey()];
   startPlayer(W,true);
@@ -711,7 +765,8 @@ function onPhase(phase,info){
 function phaseInfo(s,extra){
   const it=W.items.find(x=>x.uid===s.uid)||{},ws=s.type==="work"?s:s.next||s;
   return Object.assign({uebung:ws&&ws.ex?EXB[ws.ex].name:itemName(it),uebungId:ws&&ws.ex||it.ex,satz:s.set||1,saetze:(it.o&&it.o.sets)||1,seite:(s.side||0)+1,
-    pauseSek:s.type==="trans"?(s.dur==null?null:curDur(s)):0,offen:s.type==="trans"&&s.dur==null,art:s.type==="trans"?s.kind:(s.mode||"hold"),endetUm:timed(s)?stepEnd(s):null,workout:W.rname},extra||{});
+    pauseSek:s.type==="trans"?(s.dur==null?null:curDur(s)):0,offen:s.type==="trans"&&s.dur==null,art:s.type==="trans"?s.kind:(s.mode||"hold"),endetUm:timed(s)?stepEnd(s):null,workout:W.rname,
+    audio:audioOf(s,W.audio),audioEigen:!!(W.audio&&W.audio[audKey(s)])},extra||{});
 }
 /* Geplante Ereignisse ab jetzt (bis zum nächsten Schritt ohne festes Ende). Für Töne/Spotify nativ im Hintergrund. */
 function plannedEvents(){
@@ -985,10 +1040,12 @@ function openPlan(){
         return rowHTML(it,i,{lock:i<firstFree||rm,cls:(rm?"off ":"")+(past?"done-row":"")+linkCls(W.items,i),tags,action,link:free(i)&&free(i+1)?it.link:null});
       }).join("")+`</div><button class="btn ghost" id="plAdd">＋ Übung hinzufügen</button><button class="btn primary big" id="plOk">Zurück zum Workout</button>`;
     const body=openSheet(W.rname,"Übersicht",h,{onClose:()=>rebuildKeep()});
-    body.querySelectorAll("#plView [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;render()});
+    body.querySelectorAll("#plView [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;tlCopy=null;render()});
     if(planView==="tl"){
       renderTimeline($("plTl"),W,{curKey:W.cur,
         onPause:(pk,v)=>{W.pauses=W.pauses||{};if(v==null)delete W.pauses[pk];else W.pauses[pk]=v;setPause(W.rid,pk,v);rebuildKeep();saveW();openPlan()},
+        onAudio:W.rid==="morgen"?null:(ak,v)=>{W.audio=W.audio||{};if(v==null)delete W.audio[ak];else W.audio[ak]=v;setAudio(W.rid,ak,v);saveW();syncNative();openPlan()},
+        redraw:openPlan,
         onEdit:(it,set)=>editW(it,set,openPlan)});
       $("plTl").insertAdjacentHTML("beforeend",skipLineHTML(W.items));
       $("plTl").querySelectorAll("[data-unskip]").forEach(b=>b.onclick=()=>{skipW(W.items.find(x=>x.uid===b.dataset.unskip),false);render()});
