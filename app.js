@@ -525,16 +525,18 @@ function renderTimeline(box,Wk,h){
   });
   const boxes=seq.filter(x=>x.box),PER=3;
   if(!boxes.length){box.innerHTML='<div class="note" style="padding:14px">Noch keine Sätze.</div>';return}
-  const aud=s=>{if(!can)return "";const v=audioOf(s,AM);return `<em class="au au-${v}${AM[audKey(s)]?" own":""}" aria-label="${v==="music"?"Musik":"Podcast"}">${AUD_SVG[v]}</em>`};
+  /* Musik ist der Normalfall: in der normalen Ansicht steht nur bei Podcast ein Mikro, hervorgehoben bei beiden */
+  const audA=s=>can?` data-au="${audioOf(s,AM)}"${AM[audKey(s)]?" data-own":""}`:"";
+  const aud=s=>{if(!can)return "";const v=audioOf(s,AM);return `<em class="au au-${v}" aria-label="${v==="music"?"Musik":"Podcast"}">${AUD_SVG[v]}</em>`};
   const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,st=curI<0?"":last<curI?" done":b.i<=curI?" now":"",it=Wk.items.find(x=>x.uid===s.uid),e=EXB[s.ex],uni=isUni(EXB[s.ex],s.o);
     const side=s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
-    return `<button class="tlb${st}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}"${st===" done"?" disabled":""}>${aud(s)}<b>${esc(e.name)}</b><small>S${s.set}${side?" · "+side:""}</small></button>`};
+    return `<button class="tlb${st}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}"${audA(s)}${st===" done"?" disabled":""}>${aud(s)}<b>${esc(e.name)}</b><small>S${s.set}${side?" · "+side:""}</small></button>`};
   const edgeHTML=(x,turn)=>{
     if(x.none)return `<span class="tle${turn?" turn":""} none"><i></i></span>`;
     const s=x.s,open=s.dur==null,dn=curI>=0&&x.i<curI;
     const lab=open?"▶":pauseText(s.dur);
     const src=tlCopy&&tlCopy.pk===s.pk?" src":"";
-    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${src}" ${dn||(open&&!can)?"disabled":""} data-e="${seq.indexOf(x)}" aria-label="Pause ${lab}"><i></i><span>${lab}</span>${aud(s)}</button>`};
+    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${src}" ${dn||(open&&!can)?"disabled":""} data-e="${seq.indexOf(x)}"${audA(s)} aria-label="Pause ${lab}"><i></i><span>${aud(s)}<b>${lab}</b></span></button>`};
   let html="",row=[],ri=0;
   const flush=()=>{html+=`<div class="tlrow${ri%2?" rev":""}">${row.join("")}</div>`;row=[];ri++};
   let bi=0;
@@ -546,10 +548,10 @@ function renderTimeline(box,Wk,h){
   }
   if(row.length)flush();
   const own=Object.keys(AM).length;
-  const sw=can?`<button class="tlsw" id="tlSw" aria-pressed="${mus()}" aria-label="Musik und Podcast hervorheben"><span class="au au-music">${AUD_SVG.music}</span><span class="au au-podcast">${AUD_SVG.podcast}</span></button>`:"";
+  const sw=can?`<button class="tlsw" id="tlSw" aria-pressed="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span><i class="tlswk"></i></button>`:"";
   const hint=can?`<div class="tlhint"><span>Antippen: Musik ↔ Podcast</span>${own?`<button class="lnk" id="tlAudReset">Alles auf Smart</button>`:""}</div>`:"";
   const copy=tlCopy&&!mus()?`<div class="tlcopy"><span>Pause <b>${pauseText(tlCopy.v)}</b> kopiert – andere Pausen antippen${tlCopy.n?` · ${tlCopy.n}× eingefügt`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
-  box.innerHTML=copy+`<div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}">${sw}${hint}${html}</div>`;
+  box.innerHTML=sw+copy+`<div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}">${hint}${html}</div>`;
   const tl=box.querySelector(".tl");
   if($("tlSw"))$("tlSw").onclick=()=>{tlMode=mus()?"pause":"music";tlCopy=null;const c=box.querySelector(".tlcopy");if(c)c.remove();tl.classList.remove("copying");tl.classList.toggle("mus",mus());$("tlSw").setAttribute("aria-pressed",mus())};
   if($("tlAudReset"))$("tlAudReset").onclick=()=>{Object.keys(AM).forEach(k=>h.onAudio(k,null));toast("Alles auf Smart")};

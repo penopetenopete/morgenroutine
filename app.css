@@ -321,36 +321,45 @@ body{font-size:17px}
 .skc{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:6px 12px;font-family:var(--f-display);font-size:.85rem;cursor:pointer}
 .topbar .ic#rMore{margin-left:auto}
 
-/* Timeline: Musik/Podcast-Symbole, Hervorheben-Schalter, Pause kopieren (06.10.2026) */
-.tl{position:relative}
-.tlb{position:relative}
-.au{--a:#5BE38C;display:inline-flex;color:var(--muted);opacity:.7;transition:color .6s,opacity .6s,transform .6s}
-.au-podcast{--a:#B18CFF}
+/* Timeline: Musik/Podcast (06.10.2026) – Musik ist Normalfall, Podcast = Mikro im Pausen-Kästchen; hervorgehoben = farbige Straßen */
+.tlb,.tle>i,.tle>span{transition:border-color .6s,background-color .6s,opacity .6s,filter .6s,height .4s,width .4s,box-shadow .6s}
+.au{display:none;flex:none;width:12px;height:12px;margin-right:3px;vertical-align:-1px;color:#B18CFF}
 .au svg{width:100%;height:100%}
-.tlb .au{position:absolute;bottom:5px;right:5px;width:12px;height:12px}
-.tle .au{position:absolute;left:50%;bottom:-2px;width:12px;height:12px;transform:translateX(-50%)}
-.tle.turn .au{left:calc(50% + 30px);top:50%;bottom:auto;transform:translate(-50%,-50%)}
-.tlb>b,.tlb>small,.tle>span,.tle>i{transition:opacity .6s,filter .6s}
-/* hervorgehoben: Rest wird blasser, Symbole stehen vor */
-.tl.mus .tlb>b,.tl.mus .tlb>small,.tl.mus .tle>span,.tl.mus .tle>i{opacity:.45;filter:saturate(.25)}
-.tl.mus .tlb{transition:border-color .6s,background-color .6s;border-color:color-mix(in srgb,var(--c) 40%,var(--line));background:color-mix(in srgb,var(--c) 6%,var(--bg))}
-.tl.mus .au{color:var(--a);opacity:1}
-.tl.mus .tlb .au{width:17px;height:17px;bottom:4px;right:4px}
-.tl.mus .tle .au{width:17px;height:17px;bottom:-6px}
-.tl.mus .tle.turn .au{bottom:auto}
-.tl.mus .au.own::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:1.5px solid var(--a)}
+.tle span{display:inline-flex;align-items:center}
+.tle span b{font-weight:inherit}
+.tle[data-au="podcast"] .au{display:inline-flex}
+.tlb .au{position:absolute;top:5px;right:5px}
+.tlb[data-au="podcast"] .au{display:inline-flex}
+/* hervorgehoben */
+.tl.mus{--mu:#5BE38C;--po:#B18CFF}
+.tl.mus [data-au="music"]{--a:var(--mu)}.tl.mus [data-au="podcast"]{--a:var(--po)}
+.tl.mus .tlb>b,.tl.mus .tlb>small{opacity:.5;filter:saturate(.3)}
+.tl.mus .tlb{border-color:color-mix(in srgb,var(--c) 35%,var(--line));background:color-mix(in srgb,var(--c) 5%,var(--bg));box-shadow:inset 0 -5px 0 var(--a)}
+.tl.mus .tle>i{background:var(--a);height:5px;opacity:.9}
+.tl.mus .tle.turn>i{width:5px;height:auto}
+.tl.mus .tle.open>i{background:repeating-linear-gradient(90deg,var(--a) 0 5px,transparent 5px 9px)}
+.tl.mus .tle.turn.open>i{background:repeating-linear-gradient(180deg,var(--a) 0 5px,transparent 5px 9px)}
+.tl.mus .tle span{color:var(--a);outline:1px solid color-mix(in srgb,var(--a) 50%,transparent)}
+.tl.mus .tle span b{opacity:.6}
+.tl.mus .tle .au{display:inline-flex;color:var(--a);width:13px;height:13px}
+.tl.mus .tle.open span b{display:none}.tl.mus .tle.open .au{margin:0}
+.tl.mus .tlb .au{display:inline-flex;color:var(--a);width:14px;height:14px}
+.tl.mus [data-own] span,.tl.mus .tlb[data-own]{outline:2px solid var(--a)}
 .tl.mus .tle.open{cursor:pointer}
-.tlb{transition:border-color .6s,background-color .6s}
-/* Schalter oben rechts in der Timeline-Karte */
-.tlsw{position:absolute;top:-14px;right:12px;z-index:2;display:flex;gap:6px;align-items:center;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);cursor:pointer;transition:border-color .4s,box-shadow .4s}
-.tlsw .au{position:static;width:15px;height:15px;opacity:.8}
-.tlsw[aria-pressed="true"]{border-color:var(--fg);box-shadow:0 0 12px rgba(91,227,140,.25)}
-.tlsw[aria-pressed="true"] .au{color:var(--a);opacity:1}
+/* Schalter-Zeile über der Timeline */
+.tlsw{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:52px;margin:0 0 10px;padding:8px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--fg);font:inherit;font-size:1rem;cursor:pointer;text-align:left}
+.tlswl{display:flex;align-items:center;gap:4px}
+.tlsw .au{display:inline-flex;width:16px;height:16px;margin:0 2px 0 0;color:var(--muted);transition:color .4s}
+.tlsw .au-podcast{margin-left:4px}
+.tlswk{flex:none;position:relative;width:46px;height:28px;border-radius:999px;background:var(--line);transition:background .3s}
+.tlswk::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--fg);transition:transform .3s}
+.tlsw[aria-pressed="true"] .tlswk{background:var(--accent)}
+.tlsw[aria-pressed="true"] .tlswk::after{transform:translateX(18px);background:var(--bg)}
+.tlsw[aria-pressed="true"] .au-music{color:#5BE38C}.tlsw[aria-pressed="true"] .au-podcast{color:#B18CFF}
 .tlhint{display:flex;align-items:center;gap:12px;max-height:0;overflow:hidden;opacity:0;margin:0 4px;font-size:.9rem;color:var(--muted);transition:max-height .6s,opacity .6s,margin .6s}
 .tl.mus .tlhint{max-height:40px;opacity:1;margin:0 4px 10px}
 .tlhint .lnk{margin-left:auto;background:none;border:0;color:var(--muted);font:inherit;text-decoration:underline;cursor:pointer;padding:4px 0}
-#rTl,#plTl{padding-top:16px}
-.tlcopy{display:flex;align-items:center;gap:10px;margin:0 0 18px;padding:10px 12px;border:1px solid var(--accent);border-radius:12px;background:color-mix(in srgb,var(--accent) 10%,var(--card));font-size:.95rem}
+.tlcopy{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:10px 12px;border:1px solid var(--accent);border-radius:12px;background:color-mix(in srgb,var(--accent) 10%,var(--card));font-size:.95rem}
 .tlcopy span{flex:1}.tlcopy b{color:var(--accent);font-family:var(--f-display)}
 .tlcopy .btn{flex:0 0 auto;width:auto;margin:0;padding:8px 16px;min-height:0}
 .tl.copying .tle span{outline:1px dashed var(--accent);color:var(--fg)}
