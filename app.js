@@ -805,25 +805,26 @@ function plannedEvents(){
   return out.filter(e=>e.at>now()-500);
 }
 function nativePlugin(){const c=window.Capacitor;return c&&c.Plugins&&c.Plugins.Training}
-/* Stand für die Benachrichtigung / Sperrbildschirm (Android-App) */
+/* Stand für die Sperrbildschirm-Steuerung (Android-App): label = was gerade ist, ex = Übung, detail = Satz/Seite */
 function notifState(){
   if(!W||W.ended)return null;
   const s=steps[idx];if(!s)return null;
   const it=itemOf(s)||{},ws=s.type==="work"?s:(s.next||s),e=EXB[ws.ex]||{},sets=it.pair?1:((it.o&&it.o.sets)||1);
-  const uni=e.uni?isUni(e,ws.o):false,side=uni&&!ws.both?(ws.side?" · rechts":" · links"):"";
-  const st={workout:W.rname,paused:!!W.pauseAt,canNext:true,from:W.stepStart+W.pausedMs};if(W.pauseAt)st.pausedAt=W.pauseAt;
-  const satz=sets>1?`Satz ${s.set||1}/${sets}`:"";
-  if(W.pending){st.titel=W.pending.name;st.text=`Satz ${W.pending.set} · Ziel ${W.pending.target} Wdh.`;st.main="Geschafft ✓";st.canNext=false;return st}
+  const uni=e.uni?isUni(e,ws.o):false,side=uni&&!ws.both?(ws.side?"rechts":"links"):"";
+  const st={workout:W.rname,paused:!!W.pauseAt,from:W.stepStart+W.pausedMs,ex:e.name||itemName(it)};
+  if(W.pauseAt)st.pausedAt=W.pauseAt;
+  st.detail=[sets>1?`Satz ${s.set||1}/${sets}`:"",side].filter(Boolean).join(" · ");
+  if(W.pending){st.label="Geschafft?";st.ex=W.pending.name;st.detail=`Satz ${W.pending.set} · Ziel ${W.pending.target} Wdh.`;st.main="Geschafft";return st}
   if(s.type==="trans"){
-    st.titel=(s.hub||s.kind==="next"?"Gleich: ":s.label+" · gleich: ")+(e.name||itemName(it));
-    st.text=(satz+side).replace(/^ · /,"");
+    st.label=s.hub||s.kind==="next"?"Als Nächstes":({set:"Satzpause",side:"Seitenwechsel",umbau:"Umbau",link:"Pause"}[s.kind]||s.label);
     if(s.dur!=null)st.end=stepEnd(s);else st.start=W.stepStart+W.pausedMs;
   }else{
-    st.titel=e.name;st.text=(satz+side+(s.mode==="reps"?" · "+(s.o.reps||"")+" Wdh.":"")).replace(/^ · /,"");
-    if(s.mode==="reps")st.start=Math.max(W.stepStart+W.pausedMs,0);else st.end=stepEnd(s);
-    if(W.stepStart+W.pausedMs>now()){st.text="Gleich geht's los"+(st.text?" · "+st.text:"");st.from=W.stepStart+W.pausedMs-LEAD_MS;st.end=W.stepStart+W.pausedMs;delete st.start}
+    st.label=s.mode==="reps"?(s.o.reps?s.o.reps+" Wdh.":"Wiederholungen"):(e.timeWord?"Läuft":"Halten");
+    if(s.mode==="reps")st.start=W.stepStart+W.pausedMs;else st.end=stepEnd(s);
+    if(W.stepStart+W.pausedMs>now()){st.label="Gleich geht's los";st.from=W.stepStart+W.pausedMs-LEAD_MS;st.end=W.stepStart+W.pausedMs;delete st.start}
   }
-  st.main=W.pauseAt?"":$("main").textContent.trim();if(st.main==="Pause")st.main="";
+  const m=$("main").textContent.replace(/[▶✓]/g,"").trim();
+  st.main=W.pauseAt||m==="Pause"?"":m;
   return st;
 }
 function syncNative(){
@@ -1466,7 +1467,11 @@ window.addEventListener("hashchange",checkData);
     if(a==="pause"){if(!W.pauseAt)setPaused(true);return}
     if(a==="resume"){if(W.pauseAt)setPaused(false);return}
     if(a==="next"){if(W.pending)return;if(W.pauseAt)setPaused(false);advance();return}
-    if(a==="main"){if(W.pending){commitPending(W.pending.target);return}catchUp();$("main").click()}
+    if(a==="main"||a==="go"){ // ✓ auf dem Sperrbildschirm: Hauptaktion, sonst weiter zum nächsten Schritt
+      if(W.pending){commitPending(W.pending.target);return}
+      catchUp();if(W.pauseAt)setPaused(false);
+      const s=steps[idx];if(s&&s.type==="work"&&s.mode!=="reps"){advance();return}
+      $("main").click()}
   });
 })();
 /* =================== START =================== */
