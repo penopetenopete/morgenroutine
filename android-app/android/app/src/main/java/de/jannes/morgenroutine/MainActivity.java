@@ -10,6 +10,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(TrainingPlugin.class);
         super.onCreate(savedInstanceState);
+        // Schrift wie in Chrome: Android-Schriftgröße nicht zusätzlich auf die Seite anwenden (sonst alles zu groß/gequetscht)
+        if (bridge != null && bridge.getWebView() != null) bridge.getWebView().getSettings().setTextZoom(100);
         // Test-Version: Dienst "Training läuft" startet mit der App und hält sie im Hintergrund wach.
         Intent i = new Intent(this, WorkoutService.class);
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
