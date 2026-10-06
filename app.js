@@ -567,7 +567,7 @@ function renderTimeline(box,Wk,h){
       if(mus()){toggleAud(s);return}
       if(s.dur==null)return;
       if(tlCopy){if(s.pk===tlCopy.pk)return;tlCopy.n++;h.onPause(s.pk,tlCopy.v);return}
-      openPauseSheet(s,h.onPause);
+      openPauseSheet(s,h.onPause,h.redraw);
     };
   });
   box.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{
@@ -592,15 +592,16 @@ function onLongPress(el,fn){
   el.addEventListener("contextmenu",e=>e.preventDefault());
 }
 /* Pause einstellen (Timeline und laufendes Training) */
-function openPauseSheet(s,onSet){
+function openPauseSheet(s,onSet,onCancel){
   const def=s.kind==="side"||s.kind==="umbau"?gv("side"):gv("rest");
   let v=s.dur;
   const what={side:"Zwischen den Seiten",umbau:"Umbau",set:"Nach dem Satz",link:"Vor der verknüpften Übung"}[s.kind]||"Pause";
   openSheet(what,"Pause einstellen",`<div class="wheelcenter">${wheelRow("pz","Diese Pause",EXB.balance,"rest")}</div>
-    <button class="btn primary big" id="pzOk">Übernehmen</button>${s.custom?`<button class="btn ghost" id="pzStd">Zurück auf Standard (${pauseText(def)})</button>`:""}`);
+    <button class="btn primary big" id="pzOk">Übernehmen</button>${s.custom?`<button class="btn ghost" id="pzStd">Zurück auf Standard (${pauseText(def)})</button>`:""}`,{onClose:onCancel});
   const wh=initWheel($("shBody").querySelector(".wheelrow"),EXB.balance,{get:()=>v,set:x=>{v=x}});
-  $("pzOk").onclick=()=>{const x=wh.value();closeSheet();onSet(s.pk,x)};
-  if($("pzStd"))$("pzStd").onclick=()=>{closeSheet();onSet(s.pk,null)};
+  const done=()=>{sheetClose=null;closeSheet()};
+  $("pzOk").onclick=()=>{const x=wh.value();done();onSet(s.pk,x)};
+  if($("pzStd"))$("pzStd").onclick=()=>{done();onSet(s.pk,null)};
 }
 
 /* =================== KATALOG-AUSWAHL =================== */
@@ -1089,7 +1090,7 @@ function openPlan(){
   if(!W)return;
   if(atHub()){closeSheet();return} // auf der Zwischenseite ist die Übersicht schon da
   const body=openSheet(W.rname,"Übersicht",`<div id="plBox" class="plbox"></div><button class="btn primary big" id="plOk">Zurück zum Workout</button>`,{onClose:()=>rebuildKeep()});
-  const rr=()=>{if($("plBox"))renderPlan($("plBox"),{hub:false,rerender:rr})};
+  const rr=()=>{if(!W||atHub())return;if($("plBox"))renderPlan($("plBox"),{hub:false,rerender:rr});else openPlan()}; // nach Pause/Editor zurück in die Übersicht
   rr();$("plOk").onclick=closeSheet;
 }
 
