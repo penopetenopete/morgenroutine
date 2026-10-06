@@ -794,6 +794,11 @@ function phaseInfo(s,extra){
 function plannedEvents(){
   if(!W||W.pauseAt)return [];
   const out=[];let t=stepEnd(steps[idx]);
+  const s0=steps[idx],st0=W.stepStart+W.pausedMs;
+  if(s0&&s0.type==="work"&&st0>now()){ // Vorlauf 3-2-1, dann Start-Ton
+    [3,2,1].forEach(k=>out.push({at:st0-k*1000,typ:"ton",ton:"countdown"}));
+    out.push(Object.assign({at:st0,typ:"phase",phase:"work"},phaseInfo(s0,{endetUm:null,pauseSek:0})));
+  }
   for(let i=idx;i<steps.length;i++){
     const s=steps[i];
     if(i>idx){out.push(Object.assign({at:t,typ:"phase",phase:s.type==="work"?"work":"rest"},phaseInfo(s,{endetUm:null,pauseSek:s.type==="trans"?s.dur:0})));t+=(s.dur||0)*1000}
@@ -1220,7 +1225,7 @@ let deVoice=null;
 function pickVoice(){try{const v=speechSynthesis.getVoices();deVoice=v.find(x=>/^de/i.test(x.lang))||null}catch(_){}}
 if(window.speechSynthesis){pickVoice();try{speechSynthesis.addEventListener("voiceschanged",pickVoice)}catch(_){}}
 function say10(){
-  if(!gv("sound")||document.hidden)return;
+  if(!gv("sound")||document.hidden||nativeSnd())return;
   if(window.speechSynthesis&&deVoice){try{const u=new SpeechSynthesisUtterance("zehn");u.voice=deVoice;u.lang=deVoice.lang;u.volume=1;u.rate=1.05;speechSynthesis.speak(u);return}catch(_){}}
   beep(660,.16,.5);setTimeout(()=>beep(990,.22,.5),200);
 }
@@ -1231,7 +1236,10 @@ function ensureAudio(){
   if(actx&&actx.state!=="running"){actx.resume().then(()=>{clearTimeout(sleepT);sleepT=setTimeout(()=>{try{actx.suspend()}catch(_){}},300)},()=>{})}
 }
 function tone(f,d,v){const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.type="square";g.gain.setValueAtTime(v,actx.currentTime);g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+d);o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+d)}
-function beep(f=880,d=.12,v=.25){if(!gv("sound")||!actx||document.hidden)return;try{
+/* Android-App: zeitgesteuerte Töne spielt der native Teil (zuverlässig, auch bei offener App). Die Seite piept nur direkt nach einem Tippen. */
+let lastTap=0;document.addEventListener("pointerdown",()=>{lastTap=Date.now()},true);
+const nativeSnd=()=>{try{const p=nativePlugin();return !!(p&&typeof p.scheduleEvents==="function")}catch(_){return false}};
+function beep(f=880,d=.12,v=.25){if(!gv("sound")||!actx||document.hidden)return;if(nativeSnd()&&Date.now()-lastTap>700)return;try{
   clearTimeout(sleepT);
   const go=()=>{try{tone(f,d,v)}catch(_){}sleepT=setTimeout(()=>{try{actx.suspend()}catch(_){}},Math.max(600,d*1000+400))};
   if(actx.state!=="running")actx.resume().then(go,()=>{});else go();

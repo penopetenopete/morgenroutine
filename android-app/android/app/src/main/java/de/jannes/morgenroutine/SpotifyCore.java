@@ -46,6 +46,21 @@ public class SpotifyCore {
         return instance;
     }
 
+    private final Context appCtx;
+    private android.speech.tts.TextToSpeech tts;
+    private boolean ttsReady;
+    private void initTts() {
+        if (tts != null) return;
+        try {
+            tts = new android.speech.tts.TextToSpeech(appCtx, status -> {
+                if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                    int r = tts.setLanguage(java.util.Locale.GERMAN);
+                    ttsReady = r != android.speech.tts.TextToSpeech.LANG_MISSING_DATA && r != android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED;
+                }
+            });
+        } catch (Exception ignored) { }
+    }
+
     private SpotifyCore(Context c) {
         prefs = c.getSharedPreferences("spotify_core", Context.MODE_PRIVATE);
         try { st = new JSONObject(prefs.getString("state", "{}")); } catch (JSONException e) { st = new JSONObject(); }
@@ -56,6 +71,8 @@ public class SpotifyCore {
         HandlerThread tt = new HandlerThread("tones");
         tt.start();
         toneHandler = new Handler(tt.getLooper());
+        appCtx = c.getApplicationContext();
+        toneHandler.post(this::initTts);
         if (st.has("auto")) scheduleAuto(); // Auto-Wechsel nach Neustart fortsetzen
         if (st.has("plan")) schedulePlan(); // Smart-Plan nach Neustart fortsetzen
     }
@@ -273,6 +290,12 @@ public class SpotifyCore {
             if (e == null) continue;
             long delay = e.optLong("at") - now;
             if (delay < -300) continue;
+            if ("sprache".equals(e.optString("typ"))) {
+                final String text = e.optString("text", "zehn");
+                initTts();
+                toneHandler.postAtTime(() -> speak(text), TONE, SystemClock.uptimeMillis() + Math.max(0, delay));
+                continue;
+            }
             int tone;
             if ("ton".equals(e.optString("typ"))) tone = ToneGenerator.TONE_PROP_BEEP;
             else if ("work".equals(e.optString("phase"))) tone = ToneGenerator.TONE_PROP_BEEP2;
@@ -283,14 +306,21 @@ public class SpotifyCore {
         }
     }
 
+    private void speak(String text) {
+        try {
+            if (tts != null && ttsReady) { tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "zehn"); return; }
+        } catch (Exception ignored) { }
+        beep(ToneGenerator.TONE_PROP_BEEP2); // ohne deutsche Stimme: Doppelton
+    }
+
     private long lastToneLog = 0;
+    /** Zeitgesteuerte Töne kommen in der Android-App immer von hier (auch bei offener App) – zuverlässiger als die Webseite. */
     private void beep(int tone) {
-        if (appVisible) return;
         try {
             ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_MUSIC, 90);
             boolean ok = tg.startTone(tone, 200);
             toneHandler.postDelayed(tg::release, 600);
-            if (!ok || System.currentTimeMillis() - lastToneLog > 20000) { lastToneLog = System.currentTimeMillis(); addLog(ok ? "Ton im Hintergrund gespielt" : "Ton im Hintergrund ging nicht", ok ? "o" : "e"); }
+            if (!ok || System.currentTimeMillis() - lastToneLog > 60000) { lastToneLog = System.currentTimeMillis(); addLog(ok ? "Ton gespielt (nativ)" : "Ton ging nicht", ok ? "o" : "e"); }
         } catch (Exception e) { addLog("Ton-Fehler: " + e.getMessage(), "e"); }
     }
 
