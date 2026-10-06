@@ -806,6 +806,7 @@ function plannedEvents(){
 }
 function nativePlugin(){const c=window.Capacitor;return c&&c.Plugins&&c.Plugins.Training}
 /* Stand für die Sperrbildschirm-Steuerung (Android-App): label = was gerade ist, ex = Übung, detail = Satz/Seite */
+let lastNotifImg="";
 function notifState(){
   if(!W||W.ended)return null;
   const s=steps[idx];if(!s)return null;
@@ -814,17 +815,21 @@ function notifState(){
   const st={workout:W.rname,paused:!!W.pauseAt,from:W.stepStart+W.pausedMs,ex:e.name||itemName(it)};
   if(W.pauseAt)st.pausedAt=W.pauseAt;
   st.detail=[sets>1?`Satz ${s.set||1}/${sets}`:"",side].filter(Boolean).join(" · ");
-  if(W.pending){st.label="Geschafft?";st.ex=W.pending.name;st.detail=`Satz ${W.pending.set} · Ziel ${W.pending.target} Wdh.`;st.main="Geschafft";return st}
+  const im=thumbOf({ex:ws.ex,o:ws.o});if(im&&im!==lastNotifImg){st.img=im;lastNotifImg=im}
+  if(W.pending){st.label="Geschafft?";st.ex=W.pending.name;st.detail=`Satz ${W.pending.set} · Ziel ${W.pending.target} Wdh.`;st.main="Geschafft";st.mode="start";return st}
+  const m=$("main").textContent.replace(/[▶✓]/g,"").trim();
+  st.main=W.pauseAt||m==="Pause"?"":m;
   if(s.type==="trans"){
     st.label=s.hub||s.kind==="next"?"Als Nächstes":({set:"Satzpause",side:"Seitenwechsel",umbau:"Umbau",link:"Pause"}[s.kind]||s.label);
-    if(s.dur!=null)st.end=stepEnd(s);else st.start=W.stepStart+W.pausedMs;
+    if(s.dur!=null)st.end=stepEnd(s);else{st.start=W.stepStart+W.pausedMs;st.mode="start"}
   }else{
     st.label=s.mode==="reps"?(s.o.reps?s.o.reps+" Wdh.":"Wiederholungen"):(e.timeWord?"Läuft":"Halten");
     if(s.mode==="reps")st.start=W.stepStart+W.pausedMs;else st.end=stepEnd(s);
-    if(W.stepStart+W.pausedMs>now()){st.label="Gleich geht's los";st.from=W.stepStart+W.pausedMs-LEAD_MS;st.end=W.stepStart+W.pausedMs;delete st.start}
+    if(W.stepStart+W.pausedMs>now()){ // Vorlauf: danach selbst auf die Übung umschalten (auch wenn die Seite schläft)
+      const then=Object.assign({},st);delete then.img;
+      st.label="Gleich geht's los";st.main="";st.from=W.stepStart+W.pausedMs-LEAD_MS;st.end=W.stepStart+W.pausedMs;delete st.start;st.then=then;
+    }
   }
-  const m=$("main").textContent.replace(/[▶✓]/g,"").trim();
-  st.main=W.pauseAt||m==="Pause"?"":m;
   return st;
 }
 function syncNative(){

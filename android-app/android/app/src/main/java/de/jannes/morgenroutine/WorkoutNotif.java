@@ -53,8 +53,15 @@ public final class WorkoutNotif {
         nm.createNotificationChannel(ch);
     }
 
+    private static Bitmap exImg;   // Bild der aktuellen/nächsten Übung (aus der App)
+
     static synchronized void setState(Context c, JSONObject s) {
         app = c.getApplicationContext();
+        if (s != null && s.optString("img").startsWith("data:image")) {
+            try { byte[] d = android.util.Base64.decode(s.optString("img").substring(s.optString("img").indexOf(',') + 1), android.util.Base64.DEFAULT);
+                  Bitmap b = BitmapFactory.decodeByteArray(d, 0, d.length); if (b != null) exImg = b; } catch (Exception ignored) { }
+            s.remove("img");
+        }
         state = s;
         H.removeCallbacksAndMessages(AUTO);
         post(app);
@@ -75,7 +82,9 @@ public final class WorkoutNotif {
         JSONObject s = state;
         if (s == null || s.optBoolean("paused") || (s.optLong("end", 0) <= 0 && s.optLong("start", 0) <= 0)) return;
         long now = System.currentTimeMillis(), next = 1000 - (now % 1000) + 20;
-        H.postAtTime(() -> { synchronized (WorkoutNotif.class) { if (app != null && state != null) post(app); tick(); } },
+        H.postAtTime(() -> { synchronized (WorkoutNotif.class) {
+                    if (state != null && state.optJSONObject("then") != null && state.optLong("end", 0) > 0 && System.currentTimeMillis() >= state.optLong("end")) state = state.optJSONObject("then");
+                    if (app != null && state != null) post(app); tick(); } },
                 TICK, SystemClock.uptimeMillis() + next);
     }
 
@@ -115,8 +124,8 @@ public final class WorkoutNotif {
                 else { s.put("label", "Halten"); if (end > 0) s.put("end", end); }
             } else {
                 s.put("label", "set".equals(art) ? "Satzpause" : "side".equals(art) ? "Seitenwechsel" : "umbau".equals(art) ? "Umbau" : "link".equals(art) ? "Pause" : "Als Nächstes");
-                if (end > 0) s.put("end", end); else s.put("start", at);
-                s.put("main", "next".equals(art) ? "Nächste Übung" : "Weiter");
+                if (end > 0) s.put("end", end); else { s.put("start", at); s.put("mode", "start"); }
+                s.put("main", "next".equals(art) ? "Nächste Übung" : "set".equals(art) ? "Nächster Satz" : "Weiter");
             }
         } catch (Exception ignored) { }
         return s;
@@ -146,7 +155,7 @@ public final class WorkoutNotif {
         if (session == null) {
             session = new MediaSession(c.getApplicationContext(), "training");
             session.setCallback(new MediaSession.Callback() {
-                @Override public void onPlay() { TrainingPlugin.sendAction("resume"); }
+                @Override public void onPlay() { JSONObject s = state; TrainingPlugin.sendAction(s != null && "start".equals(s.optString("mode")) ? "go" : "resume"); }
                 @Override public void onPause() { TrainingPlugin.sendAction("pause"); }
                 @Override public void onSkipToNext() { TrainingPlugin.sendAction("go"); }
                 @Override public void onCustomAction(String action, android.os.Bundle extras) { TrainingPlugin.sendAction(action); }
@@ -156,6 +165,7 @@ public final class WorkoutNotif {
     }
 
     private static Bitmap art(Context c) {
+        if (exImg != null) return exImg;
         if (art == null) { try { art = BitmapFactory.decodeResource(c.getResources(), R.mipmap.ic_launcher_foreground); } catch (Exception ignored) { } }
         return art;
     }
@@ -175,15 +185,22 @@ public final class WorkoutNotif {
                 .putLong(MediaMetadata.METADATA_KEY_DURATION, dur);
         Bitmap a = art(c); if (a != null) m.putBitmap(MediaMetadata.METADATA_KEY_ART, a);
         ms.setMetadata(m.build());
+        // „start“: nichts läuft (Zwischenseite, Bestätigen) → großer ▶ = Jetzt starten. Sonst ⏸ nur, wenn eine Zeit läuft.
+        boolean start = "start".equals(s.optString("mode"));
         PlaybackState.Builder p = new PlaybackState.Builder()
-                .setActions(done ? 0 : PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE)
-                .setState(paused ? PlaybackState.STATE_PAUSED : PlaybackState.STATE_PLAYING, pos, paused || dur <= 0 ? 0f : 1f);
-        if (!done) p.addCustomAction(new PlaybackState.CustomAction.Builder("go", goLabel(s), R.drawable.ic_tr_done).build());
+                .setActions(done ? 0 : start || paused ? PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_PAUSE : PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE)
+                .setState(start || paused ? PlaybackState.STATE_PAUSED : PlaybackState.STATE_PLAYING, pos, start || paused || dur <= 0 ? 0f : 1f);
+        if (!done && !start && !paused && !s.optString("main").isEmpty())
+            p.addCustomAction(new PlaybackState.CustomAction.Builder("go", goLabel(s), goIcon(s)).build());
+        else if (!done && !start && !paused && s.optLong("end", 0) > 0)
+            p.addCustomAction(new PlaybackState.CustomAction.Builder("go", "Überspringen", android.R.drawable.ic_media_next).build());
         ms.setPlaybackState(p.build());
         ms.setActive(true);
     }
 
     /** ✓-Knopf: Hauptaktion der App (Fertig, Nächster Satz, Nächste Übung …), sonst weiter zum nächsten Schritt. */
+    private static int goIcon(JSONObject s) { return goLabel(s).contains("Fertig") || goLabel(s).contains("Geschafft") ? R.drawable.ic_tr_done : android.R.drawable.ic_media_next; }
+
     private static String goLabel(JSONObject s) {
         String main = s.optString("main", "");
         return main.isEmpty() ? "Weiter" : main;
@@ -207,10 +224,14 @@ public final class WorkoutNotif {
         b.setContentTitle(title(s)).setContentText(text(s));
         if (!s.optString("workout").isEmpty()) b.setSubText(s.optString("workout"));
         Bitmap a = art(c); if (a != null) b.setLargeIcon(a);
-        if (!done) {
-            b.addAction(action(c, paused ? "resume" : "pause", paused ? "Weiter" : "Pause", paused ? android.R.drawable.ic_media_play : android.R.drawable.ic_media_pause));
-            b.addAction(action(c, "go", goLabel(s), R.drawable.ic_tr_done));
-            b.setStyle(new Notification.MediaStyle().setMediaSession(session(c).getSessionToken()).setShowActionsInCompactView(0, 1));
+        boolean start = "start".equals(s.optString("mode"));
+        if (!done && start) {
+            b.addAction(action(c, "go", goLabel(s), android.R.drawable.ic_media_play));
+            b.setStyle(new Notification.MediaStyle().setMediaSession(session(c).getSessionToken()).setShowActionsInCompactView(0));
+        } else if (!done) {
+            b.addAction(action(c, paused ? "resume" : "pause", paused ? "Weiter" : "Pausieren", paused ? android.R.drawable.ic_media_play : android.R.drawable.ic_media_pause));
+            if (!paused) b.addAction(action(c, "go", goLabel(s), goIcon(s)));
+            b.setStyle(new Notification.MediaStyle().setMediaSession(session(c).getSessionToken()).setShowActionsInCompactView(paused ? new int[]{0} : new int[]{0, 1}));
         } else {
             b.setStyle(new Notification.MediaStyle().setMediaSession(session(c).getSessionToken()));
         }
