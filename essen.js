@@ -122,7 +122,7 @@ function renderEssen(){
   $("eDays").innerHTML=h;
   $("eDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{curDay=b.dataset.d;editId=null;renderEssen()});
   const sd=$("eDays").querySelector('[aria-selected="true"]');if(sd)sd.scrollIntoView({inline:"center",block:"nearest"});
-  if(macro){renderMacro();essenMeta();return}
+  if(macro){renderMacro();renderSelBar();essenMeta();return}
   renderSum();
   const d=dayGet(curDay);let sh="";
   SLOTS.forEach(([sl,name])=>{
@@ -136,7 +136,7 @@ function renderEssen(){
         if(en.g){if(done[en.g.id])return;done[en.g.id]=1;
           const gl=list.filter(x=>x.g&&x.g.id===en.g.id),gs=sumE(gl),op=!!open[en.g.id];
           const strip=gl.slice(0,6).map(x=>iconOf(E.foods[x.food]).replace('class="eic"','class="emini"')).join("")+(gl.length>6?`<span class="emore">+${gl.length-6}</span>`:"");
-          sh+=`<div class="egrp${op?" open":""}"><div class="erow eghead" data-gt="${en.g.id}"><span class="emeal"><span class="enm">${esc(en.g.name)}</span><span class="estrip">${strip}</span></span><span class="ev">${nf(gs.kcal)}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>`;
+          sh+=`<div class="egrp${op?" open":""}"><div class="erow eghead${gl.every(x=>sel.has(x.id))?" sel":""}" data-gt="${en.g.id}"><span class="emeal"><span class="enm">${esc(en.g.name)}</span><span class="estrip">${strip}</span></span><span class="ev">${nf(gs.kcal)}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>`;
           if(op)sh+=`<div class="egin">`+gl.map(x=>rowH(x,true)).join("")+`<div class="egfoot"><button class="eaddin" data-gadd="${en.g.id}">＋ Zutat</button><button class="egm" data-gm="${en.g.id}" aria-label="Mahlzeit: mehr">${DOTS}</button></div></div>`;
           sh+=`</div>`;
         }else sh+=rowH(en);
@@ -147,7 +147,6 @@ function renderEssen(){
   });
   $("eSlots").innerHTML=sh;
   bindSlots();
-  if(editId){const i=$("eSlots").querySelector(".eedit input");if(i){i.focus();i.select()}}
   essenMeta();
 }
 function renderSum(){
@@ -183,115 +182,101 @@ function renderMacro(){
   $("eSlots").innerHTML=h||`<div class="note">Noch nichts eingetragen.</div>`;
 }
 function stepOf(f,u,amt){return (f&&f.base==="stk")||u==="stk"?0.5:amt<20?1:amt<200?5:10}
-function editorH(amt,unit){return `<span class="eedit"><button class="est" data-st="-1" aria-label="weniger">−</button><input type="number" inputmode="decimal" step="any" min="0" value="${amt}" aria-label="Menge"><span class="eu">${unit}</span><button class="est" data-st="1" aria-label="mehr">+</button></span>`}
-function rowH(en,sub){
-  const f=E.foods[en.food],n=nut(f,en.amt,en.u),pcs=(f&&f.base==="stk")||en.u==="stk",unit=pcs?"Stk":"g";
-  const ed=editId===en.id;
-  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span>${ed?editorH(en.amt,unit):`<span class="epill">${nf(en.amt,1)} ${unit}</span>`}<span class="ev">${nf(n.kcal)}</span></div></div>`;
+/* Waagerechtes Rad für Mengen: wischen, keine Tastatur */
+const RW=56;
+function rulerH(pcs){const vals=pcs?stkVals:gramVals;return `<div class="eruler"><div class="erscroll">${vals.map((v,i)=>`<span data-i="${i}">${nf(v,1)}</span>`).join("")}</div><i class="ermark"></i></div>`}
+function bindRuler(box,obj,pcs,onChange){
+  const sc=box.querySelector(".erscroll");if(!sc)return;const vals=pcs?stkVals:gramVals,items=[...sc.children];
+  let i0=0;vals.forEach((v,i)=>{if(Math.abs(v-obj.amt)<Math.abs(vals[i0]-obj.amt))i0=i});
+  let cur=i0,tmr=null;const mark=i=>items.forEach((s,j)=>s.className=j===i?"on":Math.abs(j-i)===1?"nb":"");
+  mark(cur);requestAnimationFrame(()=>{sc.scrollLeft=cur*RW});sc.scrollLeft=cur*RW;
+  sc.addEventListener("scroll",()=>{const i=Math.max(0,Math.min(vals.length-1,Math.round(sc.scrollLeft/RW)));
+    if(i!==cur){cur=i;mark(i);obj.amt=vals[i];onChange(false)}
+    clearTimeout(tmr);tmr=setTimeout(()=>{esave();onChange(true)},250)},{passive:true});
+  items.forEach(s=>s.onclick=()=>sc.scrollTo({left:+s.dataset.i*RW,behavior:"smooth"}));
 }
 const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
 const PLUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const CAM='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/><path d="M8 9v6M11 9v6M14 9v6M16.5 9v6"/></svg>';
-
-/* Menge direkt in der Zeile: Feld + −/+, kein Fenster */
-function bindEditor(box,obj,f,onChange){
-  const inp=box.querySelector("input");if(!inp)return;
-  const setV=v=>{v=Math.max(0,Math.round(v*10)/10);obj.amt=v;inp.value=v;esave();onChange()};
-  inp.addEventListener("input",()=>{const v=parseFloat(String(inp.value).replace(",","."));if(v>0){obj.amt=v;esave();onChange()}});
-  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();inp.blur()}});
-  box.querySelectorAll("[data-st]").forEach(b=>{
-    let rep=null,t=null;const go=()=>setV(obj.amt+(+b.dataset.st)*stepOf(f,obj.u,obj.amt));
-    b.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();go();t=setTimeout(()=>{rep=setInterval(go,90)},420)});
-    const stop=()=>{clearTimeout(t);clearInterval(rep)};b.addEventListener("pointerup",stop);b.addEventListener("pointerleave",stop);b.addEventListener("pointercancel",stop);
-  });
-  return inp;
+const CALI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>';
+const BIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
+let sel=new Set();
+function rowH(en,sub){
+  const f=E.foods[en.food],n=nut(f,en.amt,en.u),pcs=(f&&f.base==="stk")||en.u==="stk",unit=pcs?"Stk":"g",ed=editId===en.id;
+  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}${sel.has(en.id)?" sel":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}" data-pill="${en.id}">${nf(en.amt,1)} ${unit}</span><span class="ev">${nf(n.kcal)}</span></div></div>${ed?rulerH(pcs):""}`;
 }
 function bindSlots(){
   const S2=$("eSlots"),d=dayGet(curDay);
-  S2.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>openSearch({kind:"day",slot:b.dataset.add}));
+  S2.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{if(!sel.size)openSearch({kind:"day",slot:b.dataset.add})});
   S2.querySelectorAll("[data-sg]").forEach(b=>b.onclick=()=>{const [sl,i]=b.dataset.sg.split("|"),x=suggestions(sl,curDay)[+i];useSuggestion(x,sl)});
-  S2.querySelectorAll("[data-gm]").forEach(b=>b.onclick=e=>{e.stopPropagation();groupSheet(b.dataset.gm)});
+  S2.querySelectorAll("[data-gm]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(!sel.size)groupSheet(b.dataset.gm)});
   S2.querySelectorAll("[data-gadd]").forEach(b=>b.onclick=()=>{const en=d.e.find(x=>x.g&&x.g.id===b.dataset.gadd);openSearch({kind:"grp",gid:b.dataset.gadd,slot:en?en.slot:"sn"})});
   S2.querySelectorAll("[data-e],[data-gt]").forEach(r=>{
-    const list=()=>r.dataset.e?d.e.filter(x=>x.id===r.dataset.e):d.e.filter(x=>x.g&&x.g.id===r.dataset.gt);
+    const ids=()=>r.dataset.e?[r.dataset.e]:d.e.filter(x=>x.g&&x.g.id===r.dataset.gt).map(x=>x.id);
     gesture(r,{
-      tap:ev=>{
+      tap:()=>{
+        if(sel.size){const a=ids(),all=a.every(i=>sel.has(i));a.forEach(i=>all?sel.delete(i):sel.add(i));renderEssen();return}
         if(r.dataset.gt){open[r.dataset.gt]=!open[r.dataset.gt];renderEssen();return}
-        if(ev.target.closest(".eedit"))return;
         editId=editId===r.dataset.e?null:r.dataset.e;renderEssen();
       },
-      label:()=>{const l=list();return r.dataset.gt?l[0].g.name:foodName(E.foods[l[0].food])},
-      icon:()=>r.dataset.gt?"🍽️":r.querySelector(".eic").outerHTML,
-      drop:t=>dropTo(list(),t),
-      swipe:r.dataset.e?()=>delWithUndo(list()):null
+      long:()=>{editId=null;ids().forEach(i=>sel.add(i));try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}renderEssen()},
+      swipe:r.dataset.e?()=>delWithUndo(d.e.filter(x=>x.id===r.dataset.e)):null
     });
   });
-  const er=S2.querySelector(".erow.editing");
-  if(er){const en=d.e.find(x=>x.id===er.dataset.e),f=E.foods[en.food];
-    const inp=bindEditor(er,en,f,()=>{er.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
-      const sec=er.closest("[data-slothead]"),sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"});
-    inp.addEventListener("blur",()=>setTimeout(()=>{if(editId===en.id&&!er.contains(document.activeElement)){editId=null;renderEssen()}},150));
+  const ru=S2.querySelector(".eruler");
+  if(ru){const en=d.e.find(x=>x.id===editId),f=E.foods[en.food],pcs=(f&&f.base==="stk")||en.u==="stk",row=S2.querySelector(`[data-e="${editId}"]`);
+    bindRuler(ru,en,pcs,()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
+      const sec=row.closest("[data-slothead]"),sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"});
   }
+  renderSelBar();
 }
-/* Gesten: tippen · nach links wischen = löschen · lange drücken = sofort ziehen
-   Ziele beim Ziehen: unten links „Gestern“ / rechts „Morgen“ (verschieben), Mitte Kalender (duplizieren), oder eine andere Mahlzeit */
-function dock(on){
-  let dk=$("eDock");
-  if(!on){if(dk)dk.hidden=true;return}
-  if(!dk){dk=document.createElement("div");dk.id="eDock";dk.className="edock";document.body.appendChild(dk)}
-  dk.innerHTML=`<div class="edz" data-dz="prev"><b>‹</b><span>${dayLab(addDays(curDay,-1))}</span></div><div class="edz cal" data-dz="cal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>Duplizieren</span></div><div class="edz" data-dz="next"><span>${dayLab(addDays(curDay,1))}</span><b>›</b></div>`;
-  dk.hidden=false;
-}
-function gesture(el,{tap,label,icon,drop,swipe}){
+/* Gesten: tippen · nach links wischen = löschen · lange drücken = auswählen */
+function gesture(el,{tap,long,swipe}){
   el.addEventListener("pointerdown",ev=>{
-    if(ev.button>0||ev.target.closest(".eedit,.egm"))return;
-    const x0=ev.clientX,y0=ev.clientY;let mode=null,ghost=null,hot=null,dx=0;
-    const lt=setTimeout(()=>{ // lange gedrückt: sofort ziehen
-      mode="drag";try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}
-      el.classList.add("lifted");dock(true);
-      ghost=document.createElement("div");ghost.className="eghost";ghost.innerHTML=icon()+`<span>${esc(label())}</span>`;document.body.appendChild(ghost);
-      ghost.style.transform=`translate(${x0-30}px,${y0-56}px)`;
-    },380);
-    const tm=e=>{if(mode&&e.cancelable)e.preventDefault()};
-    document.addEventListener("touchmove",tm,{passive:false});
+    if(ev.button>0||ev.target.closest(".egm"))return;
+    const x0=ev.clientX,y0=ev.clientY;let mode=null,dx=0;
+    const lt=setTimeout(()=>{mode="long";long()},420);
     const mv=e=>{
       const ddx=e.clientX-x0,ddy=e.clientY-y0;
       if(!mode){
-        if(swipe&&Math.abs(ddx)>12&&Math.abs(ddx)>Math.abs(ddy)*1.5){clearTimeout(lt);mode="swipe"}
+        if(swipe&&!sel.size&&Math.abs(ddx)>12&&Math.abs(ddx)>Math.abs(ddy)*1.5){clearTimeout(lt);mode="swipe"}
         else if(Math.hypot(ddx,ddy)>9){clearTimeout(lt);end(false);return}
         else return;
       }
-      if(mode==="swipe"){dx=Math.min(0,ddx);el.style.transform=`translateX(${dx}px)`;el.parentElement.classList.toggle("armed",dx<-90);return}
-      ghost.style.transform=`translate(${e.clientX-30}px,${e.clientY-56}px)`;
-      const t=document.elementFromPoint(e.clientX,e.clientY),h=t&&(t.closest("[data-dz]")||t.closest("#eDays [data-d]")||t.closest("[data-slothead]"));
-      if(h!==hot){if(hot)hot.classList.remove("drophot");hot=h;if(hot)hot.classList.add("drophot")}
+      if(mode==="swipe"){dx=Math.min(0,ddx);el.style.transform=`translateX(${dx}px)`;el.parentElement.classList.toggle("armed",dx<-90)}
     };
     const end=(fire,e)=>{
-      clearTimeout(lt);document.removeEventListener("pointermove",mv);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",cc);document.removeEventListener("touchmove",tm);
-      if(ghost)ghost.remove();if(hot)hot.classList.remove("drophot");el.classList.remove("lifted");dock(false);
+      clearTimeout(lt);document.removeEventListener("pointermove",mv);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",cc);
       if(mode==="swipe"){el.parentElement.classList.remove("armed");
         if(fire&&dx<-90){el.style.transition="transform .18s";el.style.transform="translateX(-110%)";setTimeout(swipe,170)}
         else{el.style.transition="transform .18s";el.style.transform="";setTimeout(()=>el.style.transition="",200)}
         return}
-      if(!fire)return;
-      if(mode==="drag"){if(hot)drop(hot.dataset.dz?{dz:hot.dataset.dz}:hot.dataset.d?{day:hot.dataset.d}:{slot:hot.dataset.slothead});return}
-      tap(e);
+      if(fire&&!mode)tap(e);
     };
     const up=e=>end(true,e),cc=()=>end(false);
     document.addEventListener("pointermove",mv);document.addEventListener("pointerup",up);document.addEventListener("pointercancel",cc);
   });
 }
-function dropTo(list,t){
-  if(!list.length)return;const dd=day(curDay),n=list.length;
-  const moveTo=(k,slot)=>{
-    if(k===curDay){list.forEach(x=>x.slot=slot||x.slot)}
-    else{copyEntries(list,k,slot);dd.e=dd.e.filter(x=>!list.includes(x));tidyDay(curDay)}
-    esave();renderEssen();toast(`Verschoben → ${dayLab(k)}${slot?", "+SLOTN[slot]:""}`)};
-  if(t.dz==="prev")return moveTo(addDays(curDay,-1));
-  if(t.dz==="next")return moveTo(addDays(curDay,1));
-  if(t.day)return moveTo(t.day);
-  if(t.slot)return moveTo(curDay,t.slot);
-  if(t.dz==="cal")calPop(k=>{copyEntries(list,k);esave();renderEssen();toast(`Dupliziert → ${dayLab(k)}`)});
+/* Auswahl-Leiste unten: Gestern · Kalender · Morgen · Löschen */
+function renderSelBar(){
+  let bar=$("eSelBar");const on=!!sel.size&&!$("essen").hidden&&!macro;document.body.classList.toggle("esel",on);
+  if(!on){if(bar)bar.hidden=true;return}
+  if(!bar){bar=document.createElement("div");bar.id="eSelBar";bar.className="edock";document.body.appendChild(bar)}
+  bar.hidden=false;
+  bar.innerHTML=`<div class="edhead"><span>${selCount()} ausgewählt</span><button data-sb="x">Fertig</button></div>
+    <div class="edrow"><button class="edz" data-sb="prev"><b>‹</b><span>${dayLab(addDays(curDay,-1))}</span></button><button class="edz" data-sb="cal">${CALI}<span>Kalender</span></button><button class="edz" data-sb="next"><b>›</b><span>${dayLab(addDays(curDay,1))}</span></button><button class="edz del" data-sb="del">${BIN}<span>Löschen</span></button></div>`;
+  bar.querySelectorAll("[data-sb]").forEach(b=>b.onclick=()=>{
+    const a=b.dataset.sb,list=dayGet(curDay).e.filter(x=>sel.has(x.id));
+    if(a==="x"){sel.clear();renderEssen();return}
+    if(a==="del"){sel.clear();delWithUndo(list);return}
+    if(a==="prev"||a==="next"){sel.clear();moveTo(list,addDays(curDay,a==="prev"?-1:1));return}
+    if(a==="cal")calPop(k=>{sel.clear();copyEntries(list,k);esave();renderEssen();toast(`Dupliziert → ${dayLab(k)}`)});
+  });
+}
+function selCount(){const g=new Set();let n=0;dayGet(curDay).e.forEach(x=>{if(!sel.has(x.id))return;if(x.g){if(!g.has(x.g.id)){g.add(x.g.id);n++}}else n++});return n}
+function moveTo(list,k){
+  const dd=day(curDay);copyEntries(list,k);dd.e=dd.e.filter(x=>!list.includes(x));tidyDay(curDay);esave();renderEssen();
+  toast(`Verschoben → ${dayLab(k)}`);
 }
 /* schlanker Kalender ohne abgedunkelten Hintergrund */
 function calPop(onPick){
@@ -309,6 +294,7 @@ function calPop(onPick){
   const close=()=>{c.hidden=true;document.removeEventListener("pointerdown",out,true)};
   draw();c.hidden=false;setTimeout(()=>document.addEventListener("pointerdown",out,true),0);
 }
+
 /* Löschen mit Rückgängig */
 let undoT=null;
 function delWithUndo(list){
@@ -504,7 +490,7 @@ function drawRes(){
   const box=$("eRes");if(!box||!searchCtx)return;const ctx=searchCtx,raw=$("eQ").value,toks=norm(raw).split(" ").filter(Boolean);
   const u=usage(ctx.slot),uAll=usage(null),pick={};
   const foodRow=(f,key)=>{pick[key]=f;const a=added[key];
-    if(a){const pcs=f.base==="stk"||a.u==="stk",ed=edKey===key;return `<div class="erow eadded${ed?" editing":""}" data-key="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}</span>${ed?editorH(a.amt,pcs?"Stk":"g"):`<span class="epill on" data-ek="${esc(key)}">${nf(a.amt,1)} ${pcs?"Stk":"g"}</span>`}<button class="ermv" data-undo="${esc(key)}" aria-label="Wieder entfernen">×</button></div>`}
+    if(a){const pcs=f.base==="stk"||a.u==="stk",ed=edKey===key;return `<div class="erow eadded${ed?" editing":""}" data-key="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}</span><span class="epill on" data-ek="${esc(key)}">${nf(a.amt,1)} ${pcs?"Stk":"g"}</span><button class="ermv" data-undo="${esc(key)}" aria-label="Wieder entfernen">×</button></div>${ed?rulerH(pcs):""}`}
     return `<button class="erow" data-pick="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}${f.brand?` <small>${esc(f.brand)}</small>`:""}</span><span class="ev">${nf(f.kcal)}</span><span class="eplus">${PLUS}</span></button>`};
   const tplRow2=m=>{const k="t:"+m.id,s=sumE(m.items);
     return `<button class="erow${added[k]?" eadded":""}" data-tpl="${m.id}"><span class="eic">🍽️</span><span class="enm">${esc(m.name)}</span><span class="ev">${nf(s.kcal)}</span>${added[k]?`<span class="epill on">drin</span>`:`<span class="eplus">${PLUS}</span>`}</button>`};
@@ -530,9 +516,9 @@ function drawRes(){
   box.innerHTML=h;
   $("eDone").textContent=addedN?`Fertig · ${addedN} hinzugefügt`:"Fertig";
   box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;edKey=null;drawRes()});
-  box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=b.dataset.ek;drawRes();const i=$("eRes").querySelector(".eadded.editing input");if(i){i.focus();i.select()}});
+  box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;drawRes()});
   box.querySelectorAll("[data-undo]").forEach(b=>b.onclick=()=>{const k=b.dataset.undo;removeAdded(added[k],ctx);delete added[k];addedN--;drawRes()});
-  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,inp=bindEditor(r,added[k],pick[k],()=>{});inp.addEventListener("blur",()=>setTimeout(()=>{if(edKey===k&&!r.contains(document.activeElement)){edKey=null;drawRes()}},150))});
+  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";bindRuler(r.nextElementSibling,a,pcs,()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")})});
   box.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{const k="t:"+b.dataset.tpl;if(added[k])return;insertTpl(b.dataset.tpl,curDay,ctx.slot,true);added[k]=1;addedN++;drawRes()});
   if($("eOff"))$("eOff").onclick=()=>searchOFF(raw.trim());
   $("eNew").onclick=()=>{const c=searchCtx;searchCtx=null;foodForm({name:raw.trim()},f=>{openSearch(c);added[f.id]=addFood(f,c);addedN=1;drawRes()})};
@@ -761,7 +747,7 @@ async function shareEssen(){
   }catch(e){toast("Teilen ging nicht: "+e.message)}
 }
 window.addEventListener("hashchange",checkEssen);
-window.addEventListener("popstate",()=>setTimeout(()=>{if($("essen").hidden){editId=null;dock(false)}},0));
+window.addEventListener("popstate",()=>setTimeout(()=>{if($("essen").hidden){editId=null;sel.clear();renderSelBar()}},0));
 
 /* ---------- Hauptmenü-Karte, Navigation, Datenübertragung ---------- */
 function essenMeta(){
