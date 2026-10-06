@@ -111,7 +111,8 @@ function ring(key,v,goal,sub){
 }
 const dayLab=k=>{const t=today();return k===t?"Heute":k===addDays(t,-1)?"Gestern":k===addDays(t,1)?"Morgen":new Date(k+"T12:00").toLocaleDateString("de-DE",{weekday:"short",day:"numeric",month:"numeric"})};
 const gv=(n,m)=>m==="kcal"?nf(n.kcal):nf(n[m],1);
-function renderEssen(){
+function renderEssen(){const y=window.scrollY;renderEssen0();if(Math.abs(window.scrollY-y)>1)window.scrollTo(0,y)}
+function renderEssen0(){
   const el=$("essen");if(!el)return;
   const st=history.state;macro=st&&st.s==="essen"&&st.m?st.m:null;
   const t=today();
@@ -121,7 +122,7 @@ function renderEssen(){
     h+=`<button class="dtab eday${(E.days[k]&&E.days[k].e.length)?" has":""}" role="tab" data-d="${k}" aria-selected="${k===curDay}"><span class="nx">${lab}</span>${dt.getDate()}.</button>`}
   $("eDays").innerHTML=h;
   $("eDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{curDay=b.dataset.d;editId=null;renderEssen()});
-  const sd=$("eDays").querySelector('[aria-selected="true"]');if(sd)sd.scrollIntoView({inline:"center",block:"nearest"});
+  const sd=$("eDays").querySelector('[aria-selected="true"]'),bar=$("eDays");if(sd)bar.scrollLeft=sd.offsetLeft-bar.offsetLeft-(bar.clientWidth-sd.offsetWidth)/2; // nur waagerecht, Seite bleibt stehen
   if(macro){renderMacro();renderSelBar();essenMeta();return}
   renderSum();
   const d=dayGet(curDay);let sh="";
