@@ -550,13 +550,13 @@ function renderTimeline(box,Wk,h){
   }
   if(row.length)flush();
   const own=Object.keys(AM).length;
-  const sw=can?`<button class="tlsw" id="tlSw" aria-pressed="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span><i class="tlswk"></i></button>`:"";
-  const hint=can?`<div class="tlhint"><span>Antippen: Musik ↔ Podcast</span>${own?`<button class="lnk" id="tlAudReset">Alles auf Smart</button>`:""}</div>`:"";
+  const sw=can?`<div class="tlsw" id="tlSw" role="switch" tabindex="0" aria-checked="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span>${own?`<button class="tlrs" id="tlAudReset" aria-label="Alles auf Smart">↺</button>`:""}<i class="tlswk"></i></div>`:"";
   const copy=tlCopy&&!mus()?`<div class="tlcopy"><span>Pause <b>${pauseText(tlCopy.v)}</b> kopiert – andere Pausen antippen${tlCopy.n?` · ${tlCopy.n}× eingefügt`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
-  box.innerHTML=sw+copy+`<div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}">${hint}${html}</div>`;
+  box.innerHTML=sw+copy+`<div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}">${html}</div>`;
   const tl=box.querySelector(".tl");
-  if($("tlSw"))$("tlSw").onclick=()=>{tlMode=mus()?"pause":"music";tlCopy=null;const c=box.querySelector(".tlcopy");if(c)c.remove();tl.classList.remove("copying");tl.classList.toggle("mus",mus());$("tlSw").setAttribute("aria-pressed",mus())};
-  if($("tlAudReset"))$("tlAudReset").onclick=()=>{Object.keys(AM).forEach(k=>h.onAudio(k,null));toast("Alles auf Smart")};
+  const flip=()=>{tlMode=mus()?"pause":"music";tlCopy=null;const c=box.querySelector(".tlcopy");if(c)c.remove();tl.classList.remove("copying");tl.classList.toggle("mus",mus());$("tlSw").setAttribute("aria-checked",mus())};
+  if($("tlSw")){$("tlSw").onclick=flip;$("tlSw").onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();flip()}}}
+  if($("tlAudReset"))$("tlAudReset").onclick=e=>{e.stopPropagation();Object.keys(AM).forEach(k=>h.onAudio(k,null));toast("Alles auf Smart")};
   if($("tlCopyOk"))$("tlCopyOk").onclick=()=>{tlCopy=null;h.redraw()};
   box.querySelectorAll("[data-e]").forEach(b=>{
     const s=seq[+b.dataset.e].s;
