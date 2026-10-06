@@ -102,40 +102,42 @@ function iconOf(f){
 }
 
 /* ---------- Bildschirm ---------- */
-let curDay=today(),open={},metric="kcal",editId=null,sel=new Set(),selCopy=false;
-const MET={kcal:{n:"kcal",c:"var(--accent)"},c:{n:"KH",c:"#FF5C93"},p:{n:"Eiweiß",c:"#4DA3FF"},f:{n:"Fett",c:"#FF8A4C"}};
-const mval=(n,m)=>m==="kcal"?nf(n.kcal):nf(n[m],1);
-const munit=m=>m==="kcal"?"":" g";
+let curDay=today(),open={},editId=null,macro=null;
+const MET={kcal:{n:"Kalorien",u:"kcal",c:"var(--accent)",goal:"kcal"},c:{n:"Kohlenhydrate",s:"KH",u:"g",c:"#FF5C93",goal:"c"},p:{n:"Eiweiß",s:"Eiweiß",u:"g",c:"#4DA3FF",goal:"p"},f:{n:"Fett",s:"Fett",u:"g",c:"#FF8A4C",goal:"f"}};
+const RC=2*Math.PI*34;
+function ringSvg(v,goal){const p=goal?Math.min(1,v/goal):0;return `<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" class="rbg"/><circle cx="40" cy="40" r="34" class="rfg" stroke-dasharray="${RC.toFixed(1)}" stroke-dashoffset="${(RC*(1-p)).toFixed(1)}"/></svg>`}
 function ring(key,v,goal,sub){
-  const C=2*Math.PI*34,p=goal?Math.min(1,v/goal):0;
-  return `<button class="ering${metric===key?" on":""}" data-m="${key}" style="--rc:${MET[key].c}"><span class="rwrap"><svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" class="rbg"/><circle cx="40" cy="40" r="34" class="rfg" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C*(1-p)).toFixed(1)}"/></svg><span class="rin"><b>${goal?Math.round(v/goal*100):0}%</b><small>${MET[key].n}</small></span></span><span class="rsub">${sub}</span></button>`;
+  return `<button class="ering" data-m="${key}" style="--rc:${MET[key].c}"><span class="rwrap">${ringSvg(v,goal)}<span class="rin"><b>${goal?Math.round(v/goal*100):0}%</b><small>${MET[key].s}</small></span></span><span class="rsub">${sub}</span></button>`;
 }
 const dayLab=k=>{const t=today();return k===t?"Heute":k===addDays(t,-1)?"Gestern":k===addDays(t,1)?"Morgen":new Date(k+"T12:00").toLocaleDateString("de-DE",{weekday:"short",day:"numeric",month:"numeric"})};
+const gv=(n,m)=>m==="kcal"?nf(n.kcal):nf(n[m],1);
 function renderEssen(){
   const el=$("essen");if(!el)return;
+  const st=history.state;macro=st&&st.s==="essen"&&st.m?st.m:null;
   const t=today();
   $("eDate").textContent=curDay===t?"Heute":new Date(curDay+"T12:00").toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"});
   let h="";for(let i=-14;i<=1;i++){const k=addDays(t,i),dt=new Date(k+"T12:00");
     const lab=i===0?"Heute":i===-1?"Gestern":i===1?"Morgen":dt.toLocaleDateString("de-DE",{weekday:"short"}).replace(".","");
     h+=`<button class="dtab eday${(E.days[k]&&E.days[k].e.length)?" has":""}" role="tab" data-d="${k}" aria-selected="${k===curDay}"><span class="nx">${lab}</span>${dt.getDate()}.</button>`}
   $("eDays").innerHTML=h;
-  $("eDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{if(sel.size)return;curDay=b.dataset.d;editId=null;renderEssen()});
+  $("eDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{curDay=b.dataset.d;editId=null;renderEssen()});
   const sd=$("eDays").querySelector('[aria-selected="true"]');if(sd)sd.scrollIntoView({inline:"center",block:"nearest"});
+  if(macro){renderMacro();essenMeta();return}
   renderSum();
-  // Mahlzeiten
   const d=dayGet(curDay);let sh="";
   SLOTS.forEach(([sl,name])=>{
     const list=d.e.filter(en=>en.slot===sl),ss=sumE(list);
-    sh+=`<section class="eslot" data-slothead="${sl}"><div class="eshead"><h3>${name}</h3><span class="esk">${list.length?mval(ss,metric)+munit(metric):""}</span><button class="ic eadd" data-add="${sl}" aria-label="${name}: hinzufügen">${PLUS}</button></div>`;
+    sh+=`<section class="eslot" data-slothead="${sl}"><div class="eshead"><h3>${name}</h3><span class="esk">${list.length?nf(ss.kcal)+" kcal":""}</span><button class="ic eadd" data-add="${sl}" aria-label="${name}: hinzufügen">${PLUS}</button></div>`;
     if(!list.length){const sg=suggestions(sl,curDay);
       if(sg.length)sh+=`<div class="echips">${sg.map((x,i)=>`<button class="echip" data-sg="${sl}|${i}">＋ ${esc(x.label)}</button>`).join("")}</div>`;
     }else{
-      sh+=`<div class="list elist">`;const done={};
+      sh+=`<div class="elist">`;const done={};
       list.forEach(en=>{
         if(en.g){if(done[en.g.id])return;done[en.g.id]=1;
-          const gl=list.filter(x=>x.g&&x.g.id===en.g.id),gs=sumE(gl),op=!!open[en.g.id],allSel=gl.every(x=>sel.has(x.id));
-          sh+=`<div class="egrp${op?" open":""}"><div class="erow eghead${allSel?" sel":""}" data-gt="${en.g.id}"><span class="eic">🍽️</span><span class="enm">${esc(en.g.name)}</span><span class="ev">${mval(gs,metric)}${munit(metric)}</span><button class="egm" data-gm="${en.g.id}" aria-label="Mahlzeit: mehr">${DOTS}</button></div>`;
-          if(op)sh+=gl.map(x=>rowH(x,true)).join("")+`<button class="erow eaddin" data-gadd="${en.g.id}">＋</button>`;
+          const gl=list.filter(x=>x.g&&x.g.id===en.g.id),gs=sumE(gl),op=!!open[en.g.id];
+          const strip=gl.slice(0,6).map(x=>iconOf(E.foods[x.food]).replace('class="eic"','class="emini"')).join("")+(gl.length>6?`<span class="emore">+${gl.length-6}</span>`:"");
+          sh+=`<div class="egrp${op?" open":""}"><div class="erow eghead" data-gt="${en.g.id}"><span class="emeal"><span class="enm">${esc(en.g.name)}</span><span class="estrip">${strip}</span></span><span class="ev">${nf(gs.kcal)}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>`;
+          if(op)sh+=`<div class="egin">`+gl.map(x=>rowH(x,true)).join("")+`<div class="egfoot"><button class="eaddin" data-gadd="${en.g.id}">＋ Zutat</button><button class="egm" data-gm="${en.g.id}" aria-label="Mahlzeit: mehr">${DOTS}</button></div></div>`;
           sh+=`</div>`;
         }else sh+=rowH(en);
       });
@@ -144,28 +146,51 @@ function renderEssen(){
     sh+=`</section>`;
   });
   $("eSlots").innerHTML=sh;
-  bindSlots();renderSelBar();
+  bindSlots();
   if(editId){const i=$("eSlots").querySelector(".eedit input");if(i){i.focus();i.select()}}
   essenMeta();
 }
 function renderSum(){
   const d=dayGet(curDay),s=sumE(d.e),G=E.goals,b=burned(curDay),goal=G.kcal+(E.burnIn?b.kcal:0),rest=goal-s.kcal;
-  const left=(v,g)=>v<=g?nf(g-v)+" g übrig":nf(v)+" / "+nf(g)+" g";
-  $("eSum").innerHTML=`<button class="ekcal${metric==="kcal"?" on":""}" data-m="kcal"><span><b class="num">${nf(s.kcal)}</b> / ${nf(goal)} kcal</span><span class="erest${rest<0?" over":""}">${rest>=0?"noch "+nf(rest):nf(-rest)+" drüber"}</span><i class="ebar"><i style="width:${Math.min(100,s.kcal/goal*100).toFixed(1)}%"></i></i></button>
+  const left=(v,g)=>v<=g?nf(g-v)+" g übrig":nf(v)+"/"+nf(g)+" g";
+  $("eSum").innerHTML=`<button class="ekcal" data-m="kcal"><span><b class="num">${nf(s.kcal)}</b> / ${nf(goal)} kcal</span><span class="erest${rest<0?" over":""}">${rest>=0?"noch "+nf(rest):nf(-rest)+" drüber"}</span><i class="ebar"><i style="width:${Math.min(100,s.kcal/goal*100).toFixed(1)}%"></i></i></button>
     <div class="erings">${ring("c",s.c,G.c,left(s.c,G.c))}${ring("p",s.p,G.p,left(s.p,G.p))}${ring("f",s.f,G.f,left(s.f,G.f))}</div>
-    ${b.kcal?`<button class="eburn" id="eBurn">🔥 ${nf(b.kcal)} kcal Training<b>${E.burnIn?"✓":"+"}</b></button>`:""}`;
-  $("eSum").querySelectorAll("[data-m]").forEach(x=>x.onclick=()=>{metric=metric===x.dataset.m&&x.dataset.m!=="kcal"?"kcal":x.dataset.m;renderEssen()});
+    ${b.kcal?`<button class="eburn" id="eBurn">🔥 ${nf(b.kcal)} kcal Training <b>${E.burnIn?"✓":"+"}</b></button>`:""}`;
+  $("eSum").hidden=false;
+  $("eSum").querySelectorAll("[data-m]").forEach(x=>x.onclick=()=>openMacro(x.dataset.m));
   if($("eBurn"))$("eBurn").onclick=()=>{E.burnIn=!E.burnIn;esave();renderEssen();toast(E.burnIn?"Training aufs Ziel draufgerechnet":"Training nur als Info")};
+}
+/* Detailansicht pro Nährwert (wie in der alten App) – eigener Verlaufs-Eintrag, Zurück schließt sie */
+function openMacro(m){history.pushState({s:"essen",m},"");renderEssen();window.scrollTo(0,0)}
+function renderMacro(){
+  const m=macro,M=MET[m],d=dayGet(curDay),s=sumE(d.e),G=E.goals,goal=G[M.goal]+(m==="kcal"&&E.burnIn?burned(curDay).kcal:0),v=s[m];
+  $("eSum").hidden=false;
+  $("eSum").innerHTML=`<div class="emac" style="--rc:${M.c}"><span class="rwrap big">${ringSvg(v,goal)}<span class="rin"><b>${goal?Math.round(v/goal*100):0}%</b><small>${M.s||"kcal"}</small></span></span>
+    <div class="emacr"><div class="emsel">${Object.keys(MET).map(k=>`<button class="emb${k===m?" on":""}" data-mm="${k}" style="--rc:${MET[k].c}">${MET[k].s||"kcal"}</button>`).join("")}</div>
+    <div class="emv"><span>Ziel</span><b>${nf(goal)} ${M.u}</b></div><div class="emv"><span>Gegessen</span><b>${gv(s,m)} ${M.u}</b></div><div class="emv"><span>${v<=goal?"Übrig":"Drüber"}</span><b style="color:var(--rc)">${nf(Math.abs(goal-v),m==="kcal"?0:1)} ${M.u}</b></div></div></div>`;
+  $("eSum").querySelectorAll("[data-mm]").forEach(b=>b.onclick=()=>{history.replaceState({s:"essen",m:b.dataset.mm},"");renderEssen()});
+  let h="";
+  SLOTS.forEach(([sl,name])=>{
+    const list=d.e.filter(en=>en.slot===sl);if(!list.length)return;
+    const ss=sumE(list),pct=v?Math.round(ss[m]/v*100):0;
+    h+=`<section class="eslot"><div class="eshead"><h3>${name}</h3><span class="esk" style="color:${M.c}">${gv(ss,m)} ${M.u} · ${pct}%</span></div><div class="elist">`;
+    list.slice().sort((a,b)=>nut(E.foods[b.food],b.amt,b.u)[m]-nut(E.foods[a.food],a.amt,a.u)[m]).forEach(en=>{
+      const f=E.foods[en.food],n=nut(f,en.amt,en.u),pcs=(f&&f.base==="stk")||en.u==="stk";
+      h+=`<div class="erow emrow">${iconOf(f)}<span class="emeal"><span class="enm">${esc(foodName(f))}</span><span class="emsub"><b style="color:${M.c}">${gv(n,m)} ${M.u}</b> · ${nf(en.amt,1)} ${pcs?"Stk":"g"}</span></span></div>`;
+    });
+    h+=`</div></section>`;
+  });
+  $("eSlots").innerHTML=h||`<div class="note">Noch nichts eingetragen.</div>`;
 }
 function stepOf(f,u,amt){return (f&&f.base==="stk")||u==="stk"?0.5:amt<20?1:amt<200?5:10}
 function editorH(amt,unit){return `<span class="eedit"><button class="est" data-st="-1" aria-label="weniger">−</button><input type="number" inputmode="decimal" step="any" min="0" value="${amt}" aria-label="Menge"><span class="eu">${unit}</span><button class="est" data-st="1" aria-label="mehr">+</button></span>`}
 function rowH(en,sub){
   const f=E.foods[en.food],n=nut(f,en.amt,en.u),pcs=(f&&f.base==="stk")||en.u==="stk",unit=pcs?"Stk":"g";
   const ed=editId===en.id;
-  return `<div class="erow${sub?" sub":""}${sel.has(en.id)?" sel":""}${ed?" editing":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span>${ed?editorH(en.amt,unit):`<span class="epill">${nf(en.amt,1)} ${unit}</span>`}<span class="ev">${mval(n,metric)}${munit(metric)}</span></div>`;
+  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span>${ed?editorH(en.amt,unit):`<span class="epill">${nf(en.amt,1)} ${unit}</span>`}<span class="ev">${nf(n.kcal)}</span></div></div>`;
 }
 const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
-const PLUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+const PLUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const CAM='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/><path d="M8 9v6M11 9v6M14 9v6M16.5 9v6"/></svg>';
 
 /* Menge direkt in der Zeile: Feld + −/+, kein Fenster */
@@ -176,96 +201,123 @@ function bindEditor(box,obj,f,onChange){
   inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();inp.blur()}});
   box.querySelectorAll("[data-st]").forEach(b=>{
     let rep=null,t=null;const go=()=>setV(obj.amt+(+b.dataset.st)*stepOf(f,obj.u,obj.amt));
-    b.addEventListener("pointerdown",e=>{e.preventDefault();go();t=setTimeout(()=>{rep=setInterval(go,90)},420)});
+    b.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();go();t=setTimeout(()=>{rep=setInterval(go,90)},420)});
     const stop=()=>{clearTimeout(t);clearInterval(rep)};b.addEventListener("pointerup",stop);b.addEventListener("pointerleave",stop);b.addEventListener("pointercancel",stop);
   });
   return inp;
 }
 function bindSlots(){
   const S2=$("eSlots"),d=dayGet(curDay);
-  S2.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{if(sel.size)return;openSearch({kind:"day",slot:b.dataset.add})});
+  S2.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>openSearch({kind:"day",slot:b.dataset.add}));
   S2.querySelectorAll("[data-sg]").forEach(b=>b.onclick=()=>{const [sl,i]=b.dataset.sg.split("|"),x=suggestions(sl,curDay)[+i];useSuggestion(x,sl)});
-  S2.querySelectorAll("[data-gm]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(!sel.size)groupSheet(b.dataset.gm)});
+  S2.querySelectorAll("[data-gm]").forEach(b=>b.onclick=e=>{e.stopPropagation();groupSheet(b.dataset.gm)});
   S2.querySelectorAll("[data-gadd]").forEach(b=>b.onclick=()=>{const en=d.e.find(x=>x.g&&x.g.id===b.dataset.gadd);openSearch({kind:"grp",gid:b.dataset.gadd,slot:en?en.slot:"sn"})});
-  // Zeilen: Tippen = Menge ändern (oder Auswahl umschalten), lange drücken = auswählen + ziehen
   S2.querySelectorAll("[data-e],[data-gt]").forEach(r=>{
-    const ids=()=>r.dataset.e?[r.dataset.e]:d.e.filter(x=>x.g&&x.g.id===r.dataset.gt).map(x=>x.id);
-    pressable(r,{
+    const list=()=>r.dataset.e?d.e.filter(x=>x.id===r.dataset.e):d.e.filter(x=>x.g&&x.g.id===r.dataset.gt);
+    gesture(r,{
       tap:ev=>{
-        if(sel.size){const a=ids(),all=a.every(i=>sel.has(i));a.forEach(i=>all?sel.delete(i):sel.add(i));renderEssen();return}
         if(r.dataset.gt){open[r.dataset.gt]=!open[r.dataset.gt];renderEssen();return}
         if(ev.target.closest(".eedit"))return;
         editId=editId===r.dataset.e?null:r.dataset.e;renderEssen();
       },
-      long:()=>{editId=null;ids().forEach(i=>sel.add(i));try{navigator.vibrate&&navigator.vibrate(15)}catch(_){}renderEssen()},
-      drop:(target)=>moveSel(target)
+      label:()=>{const l=list();return r.dataset.gt?l[0].g.name:foodName(E.foods[l[0].food])},
+      icon:()=>r.dataset.gt?"🍽️":r.querySelector(".eic").outerHTML,
+      drop:t=>dropTo(list(),t),
+      swipe:r.dataset.e?()=>delWithUndo(list()):null
     });
   });
   const er=S2.querySelector(".erow.editing");
   if(er){const en=d.e.find(x=>x.id===er.dataset.e),f=E.foods[en.food];
-    const inp=bindEditor(er,en,f,()=>{er.querySelector(".ev").textContent=mval(nut(f,en.amt,en.u),metric)+munit(metric);renderSum();
-      const sec=er.closest("[data-slothead]"),sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=mval(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)),metric)+munit(metric)});
+    const inp=bindEditor(er,en,f,()=>{er.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
+      const sec=er.closest("[data-slothead]"),sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"});
     inp.addEventListener("blur",()=>setTimeout(()=>{if(editId===en.id&&!er.contains(document.activeElement)){editId=null;renderEssen()}},150));
   }
 }
-/* Tippen / lange drücken / nach langem Drücken ziehen (auf einen Tag oben oder eine andere Mahlzeit) */
-function pressable(el,{tap,long,drop}){
+/* Gesten: tippen · nach links wischen = löschen · lange drücken = sofort ziehen
+   Ziele beim Ziehen: unten links „Gestern“ / rechts „Morgen“ (verschieben), Mitte Kalender (duplizieren), oder eine andere Mahlzeit */
+function dock(on){
+  let dk=$("eDock");
+  if(!on){if(dk)dk.hidden=true;return}
+  if(!dk){dk=document.createElement("div");dk.id="eDock";dk.className="edock";document.body.appendChild(dk)}
+  dk.innerHTML=`<div class="edz" data-dz="prev"><b>‹</b><span>${dayLab(addDays(curDay,-1))}</span></div><div class="edz cal" data-dz="cal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>Duplizieren</span></div><div class="edz" data-dz="next"><span>${dayLab(addDays(curDay,1))}</span><b>›</b></div>`;
+  dk.hidden=false;
+}
+function gesture(el,{tap,label,icon,drop,swipe}){
   el.addEventListener("pointerdown",ev=>{
     if(ev.button>0||ev.target.closest(".eedit,.egm"))return;
-    const x0=ev.clientX,y0=ev.clientY;let longDone=false,moved=false,ghost=null,hot=null;
-    const lt=setTimeout(()=>{longDone=true;long();el=document.querySelector(`[data-e="${el.dataset.e}"],[data-gt="${el.dataset.gt}"]`)||el},450);
-    const tm=e=>{if(longDone&&e.cancelable)e.preventDefault()};
+    const x0=ev.clientX,y0=ev.clientY;let mode=null,ghost=null,hot=null,dx=0;
+    const lt=setTimeout(()=>{ // lange gedrückt: sofort ziehen
+      mode="drag";try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}
+      el.classList.add("lifted");dock(true);
+      ghost=document.createElement("div");ghost.className="eghost";ghost.innerHTML=icon()+`<span>${esc(label())}</span>`;document.body.appendChild(ghost);
+      ghost.style.transform=`translate(${x0-30}px,${y0-56}px)`;
+    },380);
+    const tm=e=>{if(mode&&e.cancelable)e.preventDefault()};
     document.addEventListener("touchmove",tm,{passive:false});
     const mv=e=>{
-      const dx=e.clientX-x0,dy=e.clientY-y0;
-      if(!longDone){if(Math.hypot(dx,dy)>9){clearTimeout(lt);end(false)}return}
-      if(!moved&&Math.hypot(dx,dy)<8)return;
-      moved=true;
-      if(!ghost){ghost=document.createElement("div");ghost.className="eghost";ghost.textContent=sel.size+(sel.size===1?" Eintrag":" Einträge");document.body.appendChild(ghost)}
-      ghost.style.transform=`translate(${e.clientX-40}px,${e.clientY-60}px)`;
-      const t=document.elementFromPoint(e.clientX,e.clientY),h=t&&(t.closest("#eDays [data-d]")||t.closest("[data-slothead]"));
+      const ddx=e.clientX-x0,ddy=e.clientY-y0;
+      if(!mode){
+        if(swipe&&Math.abs(ddx)>12&&Math.abs(ddx)>Math.abs(ddy)*1.5){clearTimeout(lt);mode="swipe"}
+        else if(Math.hypot(ddx,ddy)>9){clearTimeout(lt);end(false);return}
+        else return;
+      }
+      if(mode==="swipe"){dx=Math.min(0,ddx);el.style.transform=`translateX(${dx}px)`;el.parentElement.classList.toggle("armed",dx<-90);return}
+      ghost.style.transform=`translate(${e.clientX-30}px,${e.clientY-56}px)`;
+      const t=document.elementFromPoint(e.clientX,e.clientY),h=t&&(t.closest("[data-dz]")||t.closest("#eDays [data-d]")||t.closest("[data-slothead]"));
       if(h!==hot){if(hot)hot.classList.remove("drophot");hot=h;if(hot)hot.classList.add("drophot")}
     };
     const end=(fire,e)=>{
       clearTimeout(lt);document.removeEventListener("pointermove",mv);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",cc);document.removeEventListener("touchmove",tm);
-      if(ghost)ghost.remove();if(hot)hot.classList.remove("drophot");
+      if(ghost)ghost.remove();if(hot)hot.classList.remove("drophot");el.classList.remove("lifted");dock(false);
+      if(mode==="swipe"){el.parentElement.classList.remove("armed");
+        if(fire&&dx<-90){el.style.transition="transform .18s";el.style.transform="translateX(-110%)";setTimeout(swipe,170)}
+        else{el.style.transition="transform .18s";el.style.transform="";setTimeout(()=>el.style.transition="",200)}
+        return}
       if(!fire)return;
-      if(moved&&hot)drop(hot.dataset.d?{day:hot.dataset.d}:{slot:hot.dataset.slothead});
-      else if(!longDone)tap(e);
+      if(mode==="drag"){if(hot)drop(hot.dataset.dz?{dz:hot.dataset.dz}:hot.dataset.d?{day:hot.dataset.d}:{slot:hot.dataset.slothead});return}
+      tap(e);
     };
     const up=e=>end(true,e),cc=()=>end(false);
     document.addEventListener("pointermove",mv);document.addEventListener("pointerup",up);document.addEventListener("pointercancel",cc);
   });
 }
-/* Auswahl-Leiste unten */
-function renderSelBar(){
-  let bar=$("eSelBar");
-  if(!sel.size||$("essen").hidden){if(bar)bar.hidden=true;return}
-  if(!bar){bar=document.createElement("div");bar.id="eSelBar";bar.className="eselbar";document.body.appendChild(bar)}
-  bar.hidden=false;
-  const prev=addDays(curDay,-1),next=addDays(curDay,1);
-  bar.innerHTML=`<button class="esb x" data-sb="x" aria-label="Auswahl beenden">✕</button><span class="esn">${sel.size}</span>
-    <button class="esb cp${selCopy?" on":""}" data-sb="cp" aria-pressed="${selCopy}">Kopie</button>
-    <button class="esb" data-sb="prev">‹ ${dayLab(prev)}</button><button class="esb" data-sb="next">${dayLab(next)} ›</button>
-    <button class="esb del" data-sb="del" aria-label="Löschen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>`;
-  bar.querySelectorAll("[data-sb]").forEach(b=>b.onclick=()=>{const a=b.dataset.sb;
-    if(a==="x"){sel.clear();selCopy=false;renderEssen()}
-    else if(a==="cp"){selCopy=!selCopy;renderSelBar()}
-    else if(a==="prev")moveSel({day:prev});
-    else if(a==="next")moveSel({day:next});
-    else if(a==="del"){const dd=day(curDay),n=sel.size;dd.e=dd.e.filter(x=>!sel.has(x.id));sel.clear();tidyDay(curDay);esave();renderEssen();toast(n+" gelöscht")}
-  });
+function dropTo(list,t){
+  if(!list.length)return;const dd=day(curDay),n=list.length;
+  const moveTo=(k,slot)=>{
+    if(k===curDay){list.forEach(x=>x.slot=slot||x.slot)}
+    else{copyEntries(list,k,slot);dd.e=dd.e.filter(x=>!list.includes(x));tidyDay(curDay)}
+    esave();renderEssen();toast(`Verschoben → ${dayLab(k)}${slot?", "+SLOTN[slot]:""}`)};
+  if(t.dz==="prev")return moveTo(addDays(curDay,-1));
+  if(t.dz==="next")return moveTo(addDays(curDay,1));
+  if(t.day)return moveTo(t.day);
+  if(t.slot)return moveTo(curDay,t.slot);
+  if(t.dz==="cal")calPop(k=>{copyEntries(list,k);esave();renderEssen();toast(`Dupliziert → ${dayLab(k)}`)});
 }
-function moveSel(t){
-  const dd=day(curDay),list=dd.e.filter(x=>sel.has(x.id));if(!list.length)return;
-  const k=t.day||curDay;
-  if(k===curDay&&t.slot){ // gleiche Tag: nur Mahlzeit wechseln
-    if(selCopy)copyEntries(list,k,t.slot);else list.forEach(x=>x.slot=t.slot);
-  }else{
-    copyEntries(list,k,t.slot);if(!selCopy){dd.e=dd.e.filter(x=>!sel.has(x.id));tidyDay(curDay)}
-  }
-  const n=list.length;sel.clear();esave();renderEssen();
-  toast(`${n} ${selCopy?"kopiert":"verschoben"} → ${dayLab(k)}${t.slot?", "+SLOTN[t.slot]:""}`);selCopy=false;
+/* schlanker Kalender ohne abgedunkelten Hintergrund */
+function calPop(onPick){
+  let c=$("eCal");if(!c){c=document.createElement("div");c.id="eCal";c.className="ecal";document.body.appendChild(c)}
+  let [y,m]=curDay.split("-").map(Number);m--;
+  const draw=()=>{
+    const first=new Date(y,m,1),start=(first.getDay()+6)%7,days=new Date(y,m+1,0).getDate(),t=today();
+    let g="";for(let i=0;i<start;i++)g+="<i></i>";
+    for(let dnum=1;dnum<=days;dnum++){const k=ymd(new Date(y,m,dnum));g+=`<button class="${k===t?"tdy":""}${k===curDay?" cur":""}${E.days[k]&&E.days[k].e.length?" has":""}" data-ck="${k}">${dnum}</button>`}
+    c.innerHTML=`<div class="ecalh"><button data-cm="-1" aria-label="Monat zurück">‹</button><b>${first.toLocaleDateString("de-DE",{month:"long",year:"numeric"})}</b><button data-cm="1" aria-label="Monat vor">›</button></div><div class="ecalw">${["Mo","Di","Mi","Do","Fr","Sa","So"].map(w=>`<span>${w}</span>`).join("")}</div><div class="ecalg">${g}</div>`;
+    c.querySelectorAll("[data-cm]").forEach(b=>b.onclick=e=>{e.stopPropagation();m+=+b.dataset.cm;if(m<0){m=11;y--}if(m>11){m=0;y++}draw()});
+    c.querySelectorAll("[data-ck]").forEach(b=>b.onclick=e=>{e.stopPropagation();close();onPick(b.dataset.ck)});
+  };
+  const out=e=>{if(!c.contains(e.target))close()};
+  const close=()=>{c.hidden=true;document.removeEventListener("pointerdown",out,true)};
+  draw();c.hidden=false;setTimeout(()=>document.addEventListener("pointerdown",out,true),0);
+}
+/* Löschen mit Rückgängig */
+let undoT=null;
+function delWithUndo(list){
+  const dd=day(curDay),k=curDay,snap=dd.e.slice();
+  dd.e=dd.e.filter(x=>!list.includes(x));tidyDay(k);esave();editId=null;renderEssen();
+  let u=$("eUndo");if(!u){u=document.createElement("div");u.id="eUndo";u.className="eundo";document.body.appendChild(u)}
+  u.innerHTML=`<span>${esc(list.length===1?foodName(E.foods[list[0].food]):list.length+" Einträge")} gelöscht</span><button>Rückgängig</button>`;u.hidden=false;
+  u.querySelector("button").onclick=()=>{day(k).e=snap;esave();u.hidden=true;renderEssen()};
+  clearTimeout(undoT);undoT=setTimeout(()=>u.hidden=true,4000);
 }
 
 /* ---------- Einfügen ---------- */
@@ -421,7 +473,7 @@ function score(n,toks){let s=0;const w=" "+n;toks.forEach(t=>{if(w.includes(" "+
 let BLS=null,blsP=null;
 function loadBLS(){if(BLS)return Promise.resolve(BLS);if(!blsP)blsP=fetch("bls.json").then(r=>r.json()).then(a=>{BLS=a.map(x=>({code:x[0],name:x[1],kcal:x[2],p:x[3],c:x[4],f:x[5],fib:x[6],n:norm(x[1])}));return BLS}).catch(e=>{blsP=null;throw e});return blsP}
 const blsFood=b=>({id:"bls:"+b.code,name:b.name,brand:"",base:"g",src:"bls",kcal:b.kcal,p:b.p,c:b.c,f:b.f,fib:b.fib});
-let searchCtx=null,offRes=[],added={},addedN=0;
+let searchCtx=null,offRes=[],added={},addedN=0,edKey=null;
 function openSearch(ctx){
   searchCtx=ctx;offRes=[];added={};addedN=0;
   const where=ctx.kind==="tpl"?E.meals[ctx.tid].name:ctx.kind==="grp"?"Zur Mahlzeit":SLOTN[ctx.slot]+(curDay===today()?"":" · "+dayLab(curDay));
@@ -452,10 +504,10 @@ function drawRes(){
   const box=$("eRes");if(!box||!searchCtx)return;const ctx=searchCtx,raw=$("eQ").value,toks=norm(raw).split(" ").filter(Boolean);
   const u=usage(ctx.slot),uAll=usage(null),pick={};
   const foodRow=(f,key)=>{pick[key]=f;const a=added[key];
-    if(a){const pcs=f.base==="stk"||a.u==="stk";return `<div class="erow eadded" data-key="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}</span>${editorH(a.amt,pcs?"Stk":"g")}<button class="eok" data-undo="${esc(key)}" aria-label="Wieder entfernen">✓</button></div>`}
+    if(a){const pcs=f.base==="stk"||a.u==="stk",ed=edKey===key;return `<div class="erow eadded${ed?" editing":""}" data-key="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}</span>${ed?editorH(a.amt,pcs?"Stk":"g"):`<span class="epill on" data-ek="${esc(key)}">${nf(a.amt,1)} ${pcs?"Stk":"g"}</span>`}<button class="ermv" data-undo="${esc(key)}" aria-label="Wieder entfernen">×</button></div>`}
     return `<button class="erow" data-pick="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}${f.brand?` <small>${esc(f.brand)}</small>`:""}</span><span class="ev">${nf(f.kcal)}</span><span class="eplus">${PLUS}</span></button>`};
   const tplRow2=m=>{const k="t:"+m.id,s=sumE(m.items);
-    return `<button class="erow${added[k]?" eadded":""}" data-tpl="${m.id}"><span class="eic">🍽️</span><span class="enm">${esc(m.name)}</span><span class="ev">${nf(s.kcal)}</span>${added[k]?`<span class="eok">✓</span>`:`<span class="eplus">${PLUS}</span>`}</button>`};
+    return `<button class="erow${added[k]?" eadded":""}" data-tpl="${m.id}"><span class="eic">🍽️</span><span class="enm">${esc(m.name)}</span><span class="ev">${nf(s.kcal)}</span>${added[k]?`<span class="epill on">drin</span>`:`<span class="eplus">${PLUS}</span>`}</button>`};
   let h="";
   if(!toks.length){
     const ms=Object.values(E.meals).sort((a,b)=>(u.me[b.id]||0)-(u.me[a.id]||0)||(b.slot===ctx.slot)-(a.slot===ctx.slot));
@@ -477,10 +529,10 @@ function drawRes(){
   h+=`<button class="btn ghost" id="eNew">＋ Neues Lebensmittel</button>`;
   box.innerHTML=h;
   $("eDone").textContent=addedN?`Fertig · ${addedN} hinzugefügt`:"Fertig";
-  box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;drawRes();
-    const inp=$("eRes").querySelector(`[data-key="${CSS.escape(k)}"] input`);if(inp)inp.select()});
+  box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;edKey=null;drawRes()});
+  box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=b.dataset.ek;drawRes();const i=$("eRes").querySelector(".eadded.editing input");if(i){i.focus();i.select()}});
   box.querySelectorAll("[data-undo]").forEach(b=>b.onclick=()=>{const k=b.dataset.undo;removeAdded(added[k],ctx);delete added[k];addedN--;drawRes()});
-  box.querySelectorAll(".eadded[data-key]").forEach(r=>{const k=r.dataset.key;bindEditor(r,added[k],pick[k],()=>{})});
+  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,inp=bindEditor(r,added[k],pick[k],()=>{});inp.addEventListener("blur",()=>setTimeout(()=>{if(edKey===k&&!r.contains(document.activeElement)){edKey=null;drawRes()}},150))});
   box.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{const k="t:"+b.dataset.tpl;if(added[k])return;insertTpl(b.dataset.tpl,curDay,ctx.slot,true);added[k]=1;addedN++;drawRes()});
   if($("eOff"))$("eOff").onclick=()=>searchOFF(raw.trim());
   $("eNew").onclick=()=>{const c=searchCtx;searchCtx=null;foodForm({name:raw.trim()},f=>{openSearch(c);added[f.id]=addFood(f,c);addedN=1;drawRes()})};
@@ -709,7 +761,7 @@ async function shareEssen(){
   }catch(e){toast("Teilen ging nicht: "+e.message)}
 }
 window.addEventListener("hashchange",checkEssen);
-window.addEventListener("popstate",()=>setTimeout(()=>{if($("essen").hidden){sel.clear();editId=null;renderSelBar()}},0));
+window.addEventListener("popstate",()=>setTimeout(()=>{if($("essen").hidden){editId=null;dock(false)}},0));
 
 /* ---------- Hauptmenü-Karte, Navigation, Datenübertragung ---------- */
 function essenMeta(){
