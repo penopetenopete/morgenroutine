@@ -811,7 +811,7 @@ function notifState(){
   const s=steps[idx];if(!s)return null;
   const it=itemOf(s)||{},ws=s.type==="work"?s:(s.next||s),e=EXB[ws.ex]||{},sets=it.pair?1:((it.o&&it.o.sets)||1);
   const uni=e.uni?isUni(e,ws.o):false,side=uni&&!ws.both?(ws.side?" · rechts":" · links"):"";
-  const st={workout:W.rname,paused:!!W.pauseAt,canNext:true};
+  const st={workout:W.rname,paused:!!W.pauseAt,canNext:true,from:W.stepStart+W.pausedMs};if(W.pauseAt)st.pausedAt=W.pauseAt;
   const satz=sets>1?`Satz ${s.set||1}/${sets}`:"";
   if(W.pending){st.titel=W.pending.name;st.text=`Satz ${W.pending.set} · Ziel ${W.pending.target} Wdh.`;st.main="Geschafft ✓";st.canNext=false;return st}
   if(s.type==="trans"){
@@ -820,8 +820,8 @@ function notifState(){
     if(s.dur!=null)st.end=stepEnd(s);else st.start=W.stepStart+W.pausedMs;
   }else{
     st.titel=e.name;st.text=(satz+side+(s.mode==="reps"?" · "+(s.o.reps||"")+" Wdh.":"")).replace(/^ · /,"");
-    if(W.stepStart>now())st.text="Gleich geht's los"+(st.text?" · "+st.text:"");
     if(s.mode==="reps")st.start=Math.max(W.stepStart+W.pausedMs,0);else st.end=stepEnd(s);
+    if(W.stepStart+W.pausedMs>now()){st.text="Gleich geht's los"+(st.text?" · "+st.text:"");st.from=W.stepStart+W.pausedMs-LEAD_MS;st.end=W.stepStart+W.pausedMs;delete st.start}
   }
   st.main=W.pauseAt?"":$("main").textContent.trim();if(st.main==="Pause")st.main="";
   return st;
