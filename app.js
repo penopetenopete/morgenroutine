@@ -1245,7 +1245,7 @@ function drawPlayer(dt){
     $("sideChip").textContent=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"beginnt mit ":"")+SIDE[side];$("sideChip").className="chip warn";
     $("repChip").hidden=true;
     if(!paused&&sec!==leadSec&&sec>0)beep(740,.1,.5);leadSec=sec;
-    return;
+    F.render();return;
   }else{
     if(leadSec>0){leadSec=-1;beep(1046,.2,.6);buzz(60)}
     const c=clip,pre=F.seqDur(c.pre);
@@ -1371,13 +1371,54 @@ async function pasteImport(emptyId){
 window.addEventListener("hashchange",checkImport);
 window.TrainingApp.routineLink=id=>routineLink(rawRoutine(id));
 
+/* ---- Alle Daten übertragen (z. B. Web-App → Android-App): Routinen, Einstellungen, Statistik ---- */
+async function dataLink(){
+  let cat={};try{cat=JSON.parse(localStorage.getItem(CAT)||"{}")}catch(_){}
+  const p={v:1,all:true,S,cat};
+  return APP_URL+"#d="+b64u.enc(await zip(JSON.stringify(p)));
+}
+async function exportAll(){
+  try{
+    const link=await dataLink(),txt="Alle Daten meiner Trainings-App:\n"+link;
+    try{await navigator.clipboard.writeText(link);toast("Kopiert – in der anderen App unter Einstellungen → „Daten einfügen“")}
+    catch(_){if(navigator.share)await navigator.share({title:"Trainings-Daten",text:txt});}
+  }catch(e){toast("Ging nicht: "+e.message)}
+}
+async function readData(t){
+  const m=String(t||"").match(/[#&?]d=([A-Za-z0-9_-]+)/)||String(t||"").trim().match(/^([A-Za-z0-9_-]{40,})$/);
+  if(!m)throw new Error("Kein Daten-Link");
+  const p=JSON.parse(await zip(b64u.dec(m[1]),true));if(!p||!p.all||!p.S)throw new Error("Kein Daten-Link");return p;
+}
+function offerData(p){
+  const r=(p.S.routines||[]).length,w=(p.S.log||[]).length;
+  openSheet("Daten übertragen","Alles übernehmen?",`<div class="note">${r} eigene ${r===1?"Routine":"Routinen"}, ${w} ${w===1?"Workout":"Workouts"} in der Statistik, Einstellungen und Morgenroutine.</div><div class="note warnbox">Ersetzt alles, was in dieser App gespeichert ist.</div><button class="btn primary big" id="dtOk">Alles ersetzen</button><button class="btn ghost" id="dtNo">Abbrechen</button>`);
+  $("dtOk").onclick=()=>{
+    try{localStorage.setItem(KEY,JSON.stringify(p.S));if(p.cat)localStorage.setItem(CAT,JSON.stringify(p.cat));localStorage.removeItem(ACT)}catch(e){toast("Speichern ging nicht");return}
+    closeSheet();location.replace(location.pathname);
+  };
+  $("dtNo").onclick=closeSheet;
+}
+async function pasteData(){
+  let t="";try{t=await navigator.clipboard.readText()}catch(_){}
+  try{offerData(await readData(t));return}catch(_){}
+  openSheet("Daten übertragen","Daten einfügen",`<textarea class="pksearch" id="dtTxt" rows="4" placeholder="Kopierten Daten-Link hier einfügen"></textarea><button class="btn primary big" id="dtGo">Weiter</button>`);
+  $("dtGo").onclick=async()=>{try{const p=await readData($("dtTxt").value);closeSheet();setTimeout(()=>offerData(p),80)}catch(e){toast("Kein gültiger Daten-Link")}};
+}
+$("dtExport").onclick=exportAll;$("dtImport").onclick=pasteData;
+async function checkData(){
+  if(!/[#&]d=/.test(location.hash))return;
+  const h=location.hash;history.replaceState(history.state,"",location.pathname+location.search);
+  try{offerData(await readData(h))}catch(e){toast("Link kaputt: "+e.message)}
+}
+window.addEventListener("hashchange",checkData);
+
 /* =================== START =================== */
 F.mount($("stage"));F.setShade(gv("shade"));muteIcon();
 history.replaceState({s:"home"},"");
 renderHome();
 const a=loadActive();if(a)startPlayer(a);
 requestAnimationFrame(frame);
-checkImport();
+checkImport();checkData();
 /* Test-Hilfe (Playwright) */
 window.__app={get W(){return W},get idx(){return idx},steps:()=>steps,S:()=>S,shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
 })();
