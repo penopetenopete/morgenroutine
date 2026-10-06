@@ -1089,7 +1089,7 @@ function renderPlan(box,{hub,rerender}){
     let tags="",extra="";
     if(isCur)tags+='<span class="tag now">jetzt</span>';
     if(isNext&&!hub)tags+='<span class="tag now">als Nächstes</span>';
-    if(isNext);else if(past&&!rm){if(r&&r.sets.length){tags+='<span class="tag done">erledigt</span>';extra=`<span class="lastv">${esc(setsText({sets:r.sets}))}</span>`}else tags+='<span class="tag skip">übersprungen</span>'}
+    if(isNext);else if(past&&!rm){if(r&&r.sets.length){tags+='<span class="tag done">erledigt</span>';extra=`<span class="lastv">${setsText({sets:r.sets})}</span>`}else tags+='<span class="tag skip">übersprungen</span>'}
     if(it.deleted)tags+='<span class="tag rm">gelöscht</span>';
     else if(rm)tags+='<span class="tag skip">heute übersprungen</span>';
     if(it.status==="added")tags+='<span class="tag add">neu</span>';
@@ -1465,6 +1465,8 @@ async function checkData(){
 window.addEventListener("hashchange",checkData);
 
 
+/* Im Hintergrund (Homescreen, gesperrt) läuft requestAnimationFrame nicht – Ablauf trotzdem jede Sekunde nachziehen */
+setInterval(()=>{if(document.hidden&&W&&!W.ended&&!$("player").hidden){try{catchUp()}catch(_){}}},1000);
 /* Knöpfe aus der Benachrichtigung (Sperrbildschirm) */
 (function(){const pl=nativePlugin();if(!pl||typeof pl.addListener!=="function")return;
   pl.addListener("notifAction",d=>{

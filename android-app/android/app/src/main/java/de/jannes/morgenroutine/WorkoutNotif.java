@@ -95,7 +95,7 @@ public final class WorkoutNotif {
             JSONObject e = events.optJSONObject(i);
             if (e == null || !"phase".equals(e.optString("typ"))) continue;
             long at = e.optLong("at");
-            if (at <= now + 300) continue;
+            if (at < now - 1500) continue; // Phasen „genau jetzt“ (z. B. 0 s Seitenwechsel) nicht verwerfen
             long end = 0;
             for (int j = i + 1; j < events.length(); j++) {
                 JSONObject n = events.optJSONObject(j);
@@ -103,7 +103,7 @@ public final class WorkoutNotif {
             }
             final JSONObject s = fromEvent(e, end);
             H.postAtTime(() -> { synchronized (WorkoutNotif.class) { if (state != null && !state.optBoolean("paused")) { state = s; post(app); tick(); } } },
-                    AUTO, SystemClock.uptimeMillis() + (at - now));
+                    AUTO, SystemClock.uptimeMillis() + Math.max(0, at - now));
         }
     }
 

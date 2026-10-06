@@ -283,13 +283,15 @@ public class SpotifyCore {
         }
     }
 
+    private long lastToneLog = 0;
     private void beep(int tone) {
         if (appVisible) return;
         try {
             ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_MUSIC, 90);
-            tg.startTone(tone, 200);
+            boolean ok = tg.startTone(tone, 200);
             toneHandler.postDelayed(tg::release, 600);
-        } catch (Exception ignored) { }
+            if (!ok || System.currentTimeMillis() - lastToneLog > 20000) { lastToneLog = System.currentTimeMillis(); addLog(ok ? "Ton im Hintergrund gespielt" : "Ton im Hintergrund ging nicht", ok ? "o" : "e"); }
+        } catch (Exception e) { addLog("Ton-Fehler: " + e.getMessage(), "e"); }
     }
 
     // ---------- Steuerknöpfe ----------
