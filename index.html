@@ -30,10 +30,11 @@
     <h3>Eigene Routinen</h3>
     <div class="cards" id="customList"></div>
   </section>
-  <section class="card">
-    <div class="eyebrow">Einstellungen</div>
+  <details class="card setcard">
+    <summary class="eyebrow">Einstellungen</summary>
     <div id="gPauses" style="display:flex;flex-direction:column;gap:10px"></div>
     <label class="toggle"><span>Wiederholungen bestätigen<small>„Geschafft“ oder „Andere Zahl“ nach jedem Satz</small></span><input type="checkbox" id="gConfirm"></label>
+    <label class="toggle"><span>3 s Vorlauf<small>Nach „Nächste Übung“ erst 3-2-1, dann geht es los</small></span><input type="checkbox" id="gLead"></label>
     <div class="seg" role="group" aria-label="Schattierung">
       <button class="sbtn" data-shade="2">Gegenlicht</button>
       <button class="sbtn" data-shade="1">Comic</button>
@@ -41,7 +42,7 @@
     </div>
     <label class="toggle"><span>Töne</span><input type="checkbox" id="snd"></label>
     <label class="toggle"><span>Vibration</span><input type="checkbox" id="vib"></label>
-  </section>
+  </details>
   <button class="rcard" id="openStats"><span class="nm">Statistik</span><span class="meta" id="lastAll"></span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></button>
 </main>
 
@@ -92,9 +93,8 @@
     <div class="bar"><i id="bar"></i></div>
     <!-- Zwischenseite nach jeder Übung -->
     <section class="hub" id="hub" hidden>
-      <div class="hubhead"><div><div class="eyebrow" id="hubDone"></div><div class="hubnext">Als Nächstes: <b id="hubNext"></b></div></div><div class="hubclock num" id="hubClock" title="Pause">0:00</div></div>
-      <div class="hublist" id="hubList"></div>
-      <button class="btn ghost small-btn" id="hubEdit">Übersicht bearbeiten</button>
+      <div class="hubhead"><img id="hubImg" alt="" width="64" height="64"><div class="hubtx"><div class="eyebrow" id="hubDone"></div><div class="hubnext">Als Nächstes: <b id="hubNext"></b></div><div class="hubval" id="hubVal"></div></div><div class="hubclock num" id="hubClock" title="Pause">0:00</div></div>
+      <div class="hublist plbox" id="hubList"></div>
     </section>
     <div class="stagebox" id="stagebox"><div class="stage" id="stage">
       <div class="hud"><span class="chip on" id="sideChip">Seite 1</span><span class="chip" id="repChip"></span></div>

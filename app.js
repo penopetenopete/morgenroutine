@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1";
 const MAX_SLOTS=5;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true};
+const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
 const MORGEN={id:"morgen",name:"Morgenroutine",settings:{umbau:10,satz:30,wechsel:15,confirm:false},items:[
@@ -324,7 +324,7 @@ function renderHome(){
   document.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>openRoutine(b.dataset.r));
   document.querySelectorAll("[data-new]").forEach(b=>b.onclick=newRoutine);
   document.querySelectorAll("[data-shade]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.shade===gv("shade")));
-  $("snd").checked=gv("sound");$("vib").checked=gv("vib");$("gConfirm").checked=gv("confirm");
+  $("snd").checked=gv("sound");$("vib").checked=gv("vib");$("gConfirm").checked=gv("confirm");$("gLead").checked=gv("lead");
   $("gPauses").innerHTML=wheelRow("gRest","Pause nach jedem Satz",EXB.balance,"rest")+wheelRow("gSide","Pause zwischen den Seiten",EXB.balance,"sw");
   $("gPauses").querySelectorAll(".wheelrow").forEach(row=>{const k=row.dataset.k==="rest"?"rest":"side";initWheel(row,EXB.balance,{get:()=>gv(k),set:v=>setG(k,v)})});
   const a=loadActive();
@@ -337,6 +337,7 @@ document.querySelectorAll("[data-shade]").forEach(b=>b.onclick=()=>{setG("shade"
 $("snd").onchange=e=>{setG("sound",e.target.checked);muteIcon()};
 $("vib").onchange=e=>setG("vib",e.target.checked);
 $("gConfirm").onchange=e=>setG("confirm",e.target.checked);
+$("gLead").onchange=e=>setG("lead",e.target.checked);
 $("resume").onclick=()=>{const a=loadActive();if(a)startPlayer(a)};
 function newRoutine(){
   if(S.routines.length>=MAX_SLOTS)return;
@@ -538,7 +539,7 @@ function renderTimeline(box,Wk,h){
     const s=x.s,open=s.dur==null,dn=curI>=0&&x.i<curI;
     const lab=open?"▶":pauseText(s.dur);
     const src=tlCopy&&tlCopy.pk===s.pk?" src":"";
-    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${src}" ${dn||(open&&!can)?"disabled":""} data-e="${seq.indexOf(x)}"${audA(s)} aria-label="Pause ${lab}"><i></i><span>${aud(s)}<b>${lab}</b></span></button>`};
+    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${src}" ${open&&(dn||!can)?"disabled":""} data-e="${seq.indexOf(x)}"${audA(s)} aria-label="Pause ${lab}"><i></i><span>${aud(s)}<b>${lab}</b></span></button>`};
   let html="",row=[],ri=0;
   const flush=()=>{html+=`<div class="tlrow${ri%2?" rev":""}">${row.join("")}</div>`;row=[];ri++};
   let bi=0;
@@ -812,7 +813,7 @@ function enter(i,at,opts={}){
   if(s.type==="work"){W.visited=W.visited||[];if(!W.visited.includes(s.uid))W.visited.push(s.uid)}
   if(!opts.quiet){
     stepUI();
-    if(s.type==="work"){beep(1046,.2,.6);buzz(60)}
+    if(s.type==="work"&&!(W.stepStart>now())){beep(1046,.2,.6);buzz(60)}
     onPhase(s.type==="work"?"work":"rest",phaseInfo(s,opts.info));
     syncNative();
   }
@@ -823,6 +824,8 @@ function advance(at,natural,quiet){
   if(s.type==="work"&&s.mode!=="reps")recordHold(s,el,natural);
   if(idx+1>=steps.length){finish(at);return}
   if(!quiet&&s.type==="work"){beep(660,.15,.55);setTimeout(()=>beep(990,.22,.55),170);buzz([80,60,80])}
+  const n=steps[idx+1];
+  if(!at&&!quiet&&s.type==="trans"&&s.kind==="next"&&n.type==="work"&&gv("lead")){enter(idx+1,now()+LEAD_MS);return} // 3 s Vorlauf
   enter(idx+1,at,{quiet});
 }
 /* Abgelaufene Zeit-Schritte nachholen (z. B. nach gesperrtem Bildschirm) */
@@ -923,7 +926,7 @@ function stepUI(){
   $("plus10").hidden=!(s.type==="trans"&&s.dur!=null);
   $("pzEdit").hidden=!(s.type==="trans"&&s.dur!=null&&s.pk);
   const hub=!!(s.type==="trans"&&s.hub);
-  $("hub").hidden=!hub;$("stagebox").hidden=hub;$("readout").hidden=hub;$("tips").hidden=hub;
+  $("plan").hidden=hub;$("hub").hidden=!hub;$("stagebox").hidden=hub;$("readout").hidden=hub;$("tips").hidden=hub;
   if(hub)renderHub(s);
   updateMain();
 }
@@ -1027,76 +1030,79 @@ function editW(it,set,after){
     onClose:()=>{rebuildKeep();saveW();after&&after()}});
 }
 let planView="list";
+/* Übersicht im Workout – im Sheet (mitten in der Übung) und direkt auf der Zwischenseite (hub) */
+function renderPlan(box,{hub,rerender}){
+  const hubNow=atHub(),curUid=hubNow?null:steps[idx].uid,vis=W.visited||[];
+  const nextUid=hubNow?steps[idx].uid:null;
+  const firstFree=W.items.reduce((m,x,i)=>vis.includes(x.uid)?i+1:m,0),curPos=W.items.findIndex(x=>x.uid===curUid);
+  const free=j=>j>=firstFree&&W.items[j]&&W.items[j].status!=="removed"&&!W.items[j].pair;
+  const linkedIn=i=>i>0&&W.items[i-1].link&&W.items[i-1].status!=="removed";
+  const sc=box.querySelector(".plscroll"),top=sc?sc.scrollTop:0;
+  let h=`<div class="seg plview" role="group" aria-label="Ansicht"><button class="sbtn" data-v="list" aria-pressed="${planView==="list"}">Liste</button><button class="sbtn" data-v="tl" aria-pressed="${planView==="tl"}">Timeline</button></div><div class="plscroll">`;
+  if(planView==="tl")h+=`<div class="pltl"></div>`;
+  else h+=`<div class="list pllist">`+W.items.map((it,i)=>{
+    const r=W.res[it.uid],isCur=i===curPos,isNext=it.uid===nextUid,past=i<firstFree&&!isCur,rm=it.status==="removed",ended=it.cut!=null&&vis.includes(it.uid);
+    let tags="",extra="";
+    if(isCur)tags+='<span class="tag now">jetzt</span>';
+    if(isNext&&!hub)tags+='<span class="tag now">als Nächstes</span>';
+    if(isNext);else if(past&&!rm){if(r&&r.sets.length){tags+='<span class="tag done">erledigt</span>';extra=`<span class="lastv">${esc(setsText({sets:r.sets}))}</span>`}else tags+='<span class="tag skip">übersprungen</span>'}
+    if(it.deleted)tags+='<span class="tag rm">gelöscht</span>';
+    else if(rm)tags+='<span class="tag skip">heute übersprungen</span>';
+    if(it.status==="added")tags+='<span class="tag add">neu</span>';
+    const pick=hub&&!past&&!isNext&&!rm&&!vis.includes(it.uid)&&!linkedIn(i);
+    let action=past||it.deleted||(isCur&&ended)?"":rm?`<button class="act restore" data-unskip="${i}">Rückgängig</button>`:`<button class="act" data-skip="${i}" aria-label="${isCur?"Übung beenden":"Heute überspringen"}">${ICON.skip}</button>`;
+    if(pick)action=`<button class="act nxbtn" data-nx="${i}" aria-label="Als Nächstes">▶</button>`+action;
+    return rowHTML(it,i,{lock:i<firstFree||rm,cls:(rm?"off ":"")+(past?"done-row ":"")+(isNext?"nx-row ":"")+linkCls(W.items,i),tags,extra,action,link:free(i)&&free(i+1)?it.link:null});
+  }).join("")+`</div>`;
+  h+=`<button class="btn ghost" data-pladd>＋ Übung hinzufügen</button></div>`;
+  box.innerHTML=h;
+  const sc2=box.querySelector(".plscroll");sc2.scrollTop=top;
+  box.querySelectorAll(".plview [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;tlCopy=null;rerender()});
+  const after=()=>{rebuildKeep();saveW();rerender()};
+  if(planView==="tl"){
+    const tl=box.querySelector(".pltl");
+    renderTimeline(tl,W,{curKey:W.cur,
+      onPause:(pk,v)=>{W.pauses=W.pauses||{};if(v==null)delete W.pauses[pk];else W.pauses[pk]=v;setPause(W.rid,pk,v);after()},
+      onAudio:W.rid==="morgen"?null:(ak,v)=>{W.audio=W.audio||{};if(v==null)delete W.audio[ak];else W.audio[ak]=v;setAudio(W.rid,ak,v);saveW();syncNative();rerender()},
+      redraw:rerender,
+      onEdit:(it,set)=>editW(it,set,rerender)});
+    tl.insertAdjacentHTML("beforeend",skipLineHTML(W.items));
+    tl.querySelectorAll("[data-unskip]").forEach(b=>b.onclick=()=>{skipW(W.items.find(x=>x.uid===b.dataset.unskip),false);after()});
+  }else{
+    const list=box.querySelector(".pllist");
+    list.querySelectorAll("[data-skip]").forEach(b=>b.onclick=e=>{e.stopPropagation();const it=W.items[+b.dataset.skip];if(skipW(it,true)){toast(startedW(it)?itemName(it)+" beendet":itemName(it)+" heute übersprungen");if(W)after()}});
+    list.querySelectorAll("[data-unskip]").forEach(b=>b.onclick=e=>{e.stopPropagation();skipW(W.items[+b.dataset.unskip],false);after()});
+    list.querySelectorAll("[data-nx]").forEach(b=>b.onclick=e=>{e.stopPropagation();
+      const [a,z]=blockRange(W.items,+b.dataset.nx),seg=W.items.splice(a,z-a+1);
+      const tgt=W.items.findIndex(x=>x.uid===steps[idx].uid);W.items.splice(tgt,0,...seg);
+      toast(itemName(seg[0])+" ist jetzt als Nächstes dran");after()});
+    bindTaps(list,i=>editW(W.items[i],0,rerender));
+    makeSortable(list,{min:firstFree,onDrop:(a,b)=>{moveArr(W.items,a,b);orderItems(W.rid,W.day,W.items.filter(x=>!x.deleted).map(x=>x.uid));after()}});
+    bindLinks(list,i=>{const it=W.items[i];it.link=!it.link;linkItem(W.rid,W.day,it.uid,it.link);after()});
+  }
+  box.querySelector("[data-pladd]").onclick=()=>openPicker(ids=>{
+    addItems(W.rid,W.day,ids).forEach(x=>W.items.push(Object.assign(x,{pair:null,status:"added",planned:false})));
+    save();after();
+  });
+}
 function openPlan(){
   if(!W)return;
-  const render=()=>{
-    const hub=atHub(),curUid=hub?null:steps[idx].uid,vis=W.visited||[];
-    const firstFree=W.items.reduce((m,x,i)=>vis.includes(x.uid)?i+1:m,0),curPos=W.items.findIndex(x=>x.uid===curUid);
-    const h=`<div class="seg" id="plView"><button class="sbtn" data-v="list" aria-pressed="${planView==="list"}">Liste</button><button class="sbtn" data-v="tl" aria-pressed="${planView==="tl"}">Timeline</button></div><div id="plTl"${planView==="tl"?"":" hidden"}></div><div class="list"${planView==="tl"?" hidden":""} id="plList">`+
-      W.items.map((it,i)=>{
-        const r=W.res[it.uid],isCur=i===curPos,past=i<firstFree&&!isCur,rm=it.status==="removed",ended=it.cut!=null&&vis.includes(it.uid);
-        let tags="";
-        if(isCur)tags+='<span class="tag now">jetzt</span>';
-        else if(past&&!rm)tags+=r&&r.sets.length?'<span class="tag done">erledigt</span>':'<span class="tag skip">übersprungen</span>';
-        if(it.deleted)tags+='<span class="tag rm">gelöscht</span>';
-        else if(rm)tags+='<span class="tag skip">heute übersprungen</span>';
-        if(it.status==="added")tags+='<span class="tag add">neu</span>';
-        const action=past||it.deleted||(isCur&&ended)?"":rm?`<button class="act restore" data-unskip="${i}">Rückgängig</button>`:`<button class="act" data-skip="${i}" aria-label="${isCur?"Übung beenden":"Heute überspringen"}">${ICON.skip}</button>`;
-        const free=j=>j>=firstFree&&W.items[j]&&W.items[j].status!=="removed"&&!W.items[j].pair;
-        return rowHTML(it,i,{lock:i<firstFree||rm,cls:(rm?"off ":"")+(past?"done-row":"")+linkCls(W.items,i),tags,action,link:free(i)&&free(i+1)?it.link:null});
-      }).join("")+`</div><button class="btn ghost" id="plAdd">＋ Übung hinzufügen</button><button class="btn primary big" id="plOk">Zurück zum Workout</button>`;
-    const body=openSheet(W.rname,"Übersicht",h,{onClose:()=>rebuildKeep()});
-    body.querySelectorAll("#plView [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;tlCopy=null;render()});
-    if(planView==="tl"){
-      renderTimeline($("plTl"),W,{curKey:W.cur,
-        onPause:(pk,v)=>{W.pauses=W.pauses||{};if(v==null)delete W.pauses[pk];else W.pauses[pk]=v;setPause(W.rid,pk,v);rebuildKeep();saveW();openPlan()},
-        onAudio:W.rid==="morgen"?null:(ak,v)=>{W.audio=W.audio||{};if(v==null)delete W.audio[ak];else W.audio[ak]=v;setAudio(W.rid,ak,v);saveW();syncNative();openPlan()},
-        redraw:openPlan,
-        onEdit:(it,set)=>editW(it,set,openPlan)});
-      $("plTl").insertAdjacentHTML("beforeend",skipLineHTML(W.items));
-      $("plTl").querySelectorAll("[data-unskip]").forEach(b=>b.onclick=()=>{skipW(W.items.find(x=>x.uid===b.dataset.unskip),false);render()});
-    }
-    const list=$("plList");
-    list.querySelectorAll("[data-skip]").forEach(b=>b.onclick=e=>{e.stopPropagation();const it=W.items[+b.dataset.skip];if(skipW(it,true)){if(W)render();toast(startedW(it)?itemName(it)+" beendet":itemName(it)+" heute übersprungen")}});
-    list.querySelectorAll("[data-unskip]").forEach(b=>b.onclick=e=>{e.stopPropagation();skipW(W.items[+b.dataset.unskip],false);render()});
-    bindTaps(list,i=>editW(W.items[i],0,openPlan));
-    makeSortable(list,{min:firstFree,onDrop:(a,b)=>{moveArr(W.items,a,b);orderItems(W.rid,W.day,W.items.filter(x=>!x.deleted).map(x=>x.uid));rebuildKeep();saveW();render()}});
-    bindLinks(list,i=>{const it=W.items[i];it.link=!it.link;linkItem(W.rid,W.day,it.uid,it.link);rebuildKeep();saveW();render()});
-    $("plAdd").onclick=()=>openPicker(ids=>{
-      addItems(W.rid,W.day,ids).forEach(x=>W.items.push(Object.assign(x,{pair:null,status:"added",planned:false})));
-      save();rebuildKeep();saveW();openPlan();
-    });
-    $("plOk").onclick=closeSheet;
-  };
-  render();
+  if(atHub()){closeSheet();return} // auf der Zwischenseite ist die Übersicht schon da
+  const body=openSheet(W.rname,"Übersicht",`<div id="plBox" class="plbox"></div><button class="btn primary big" id="plOk">Zurück zum Workout</button>`,{onClose:()=>rebuildKeep()});
+  const rr=()=>{if($("plBox"))renderPlan($("plBox"),{hub:false,rerender:rr})};
+  rr();$("plOk").onclick=closeSheet;
 }
 
-/* ---- Zwischenseite nach jeder Übung: was erledigt ist + Weiter-Knopf ---- */
+/* ---- Zwischenseite nach jeder Übung: als Nächstes (mit Bild) + volle Übersicht (Liste | Timeline) ---- */
 function renderHub(s){
-  const nextPos=W.items.findIndex(x=>x.uid===s.uid),vis=W.visited||[],prev=vis.length?W.items.find(x=>x.uid===vis[vis.length-1]):null;
+  const nx=W.items.find(x=>x.uid===s.uid),vis=W.visited||[],prev=vis.length?W.items.find(x=>x.uid===vis[vis.length-1]):null;
   const pr=prev&&W.res[prev.uid]&&W.res[prev.uid].sets.length;
   $("hubDone").textContent=prev?itemName(prev)+(pr?" erledigt":" übersprungen"):"Pause";
-  $("hubNext").textContent=itemName(W.items[nextPos]);
-  $("hubList").innerHTML=W.items.map((it,i)=>{
-    const r=W.res[it.uid]||{sets:[]},rm=it.status==="removed",isNext=i===nextPos,past=i<nextPos||((W.visited||[]).includes(it.uid)&&!isNext);
-    let ic,cls="",det;
-    if(rm){ic="–";cls="rm";det=it.deleted?"gelöscht":"heute übersprungen"}
-    else if(past&&r.sets.length){ic="✓";cls="ok";det=setsText({sets:r.sets})||"erledigt"}
-    else if(past){ic="›";cls="skip";det="übersprungen"}
-    else if(isNext){ic="▶";cls="nx";det=esc(itemText(it))}
-    else{ic=String(W.items.slice(0,i+1).filter(x=>x.status!=="removed").length);det=esc(itemText(it))}
-    const pick=!past&&!isNext&&!rm&&!(W.visited||[]).includes(it.uid)&&!(i>0&&W.items[i-1].link&&W.items[i-1].status!=="removed");
-    const lk=(it.link&&!rm)||(i>0&&W.items[i-1].link&&W.items[i-1].status!=="removed");
-    return `<div class="hrow ${cls}${lk?" lk":""}"><span class="hic">${ic}</span><span class="hmid"><span class="hnm">${esc(itemName(it))}${it.status==="added"?'<span class="tag add">neu</span>':""}${isNext?'<span class="tag now">als Nächstes</span>':""}${lk?'<span class="tag">Supersatz</span>':""}</span><span class="hdt">${det}</span></span>${pick?`<button class="hpick" data-nx="${i}">Als Nächstes</button>`:""}</div>`;
-  }).join("");
-  $("hubList").querySelectorAll("[data-nx]").forEach(b=>b.onclick=()=>{
-    const [a,z]=blockRange(W.items,+b.dataset.nx),seg=W.items.splice(a,z-a+1);
-    const tgt=W.items.findIndex(x=>x.uid===steps[idx].uid);W.items.splice(tgt,0,...seg);
-    rebuildKeep();saveW();toast(itemName(seg[0])+" ist jetzt als Nächstes dran");
-  });
-  const nx=$("hubList").querySelector(".hrow.nx");if(nx)nx.scrollIntoView({block:"nearest"});
+  $("hubNext").textContent=itemName(nx);
+  $("hubVal").textContent=itemText(nx);
+  const im=$("hubImg"),src=thumbOf(nx);if(im.dataset.src!==src){im.src=src;im.dataset.src=src}
+  renderPlan($("hubList"),{hub:true,rerender:()=>{if(W&&atHub())renderHub(steps[idx])}});
 }
-$("hubEdit").onclick=()=>openPlan();
 /* „Übung beenden“: restliche Sätze fallen heute weg (Statistik zeigt z. B. 2 von 3 Sätzen) */
 const doneSets=it=>{const r=W.res[it.uid];return r&&r.sets.length?Math.max(...r.sets.map(x=>x.set)):0};
 $("endEx").onclick=()=>{
@@ -1213,6 +1219,7 @@ function frame(t){
   }
   requestAnimationFrame(frame);
 }
+const LEAD_MS=3000;let leadSec=-1;
 function drawPlayer(dt){
   if(F.previewing)return;
   const s=steps[idx];if(!s||!clip)return;
@@ -1230,7 +1237,16 @@ function drawPlayer(dt){
     $("sideChip").textContent=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"beginnt mit ":"")+SIDE[side];$("sideChip").className="chip warn";
     $("repChip").hidden=true;
     const sec=Math.ceil(left);if(!open&&!paused&&sec!==lastSec){if(sec===10&&curDur(s)>10)say10();else if(sec<=5&&sec>0)beep(740,.1,.5)}lastSec=sec;
+  }else if(W.stepStart+W.pausedMs>(W.pauseAt||now())){ // Vorlauf: Startposition, 3-2-1
+    const left=(W.stepStart+W.pausedMs-(W.pauseAt||now()))/1000,sec=Math.ceil(left);
+    const P0=firstPose(clip);F.draw(["",1,P0,P0],1);animT=0;
+    $("clock").textContent=String(sec);$("phase").textContent="Gleich geht's los";$("phase").className="phase trans";
+    $("sideChip").textContent=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"beginnt mit ":"")+SIDE[side];$("sideChip").className="chip warn";
+    $("repChip").hidden=true;
+    if(!paused&&sec!==leadSec&&sec>0)beep(740,.1,.5);leadSec=sec;
+    return;
   }else{
+    if(leadSec>0){leadSec=-1;beep(1046,.2,.6);buzz(60)}
     const c=clip,pre=F.seqDur(c.pre);
     if(animT<pre){const [ph,k]=F.segAt(c.pre,animT);F.draw(ph,k)}
     else{
