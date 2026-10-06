@@ -154,6 +154,8 @@
   // ---------- Smart ----------
   let lastPhase = null;
   function smartTarget(phase, info) {
+    // Plan aus der Timeline (Musik/Podcast pro Satz und Pause) hat Vorrang vor der Grundregel
+    if (phase !== "done" && info && (info.audio === "music" || info.audio === "podcast")) return info.audio;
     if (phase === "work") return "music";
     if (phase === "rest") { const p = (info && info.pauseSek) || 0; return p === 0 || p >= (S.short || 0) ? "podcast" : "music"; }
     return null;

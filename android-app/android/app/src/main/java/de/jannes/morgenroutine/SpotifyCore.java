@@ -47,20 +47,6 @@ public class SpotifyCore {
     }
 
     private final Context appCtx;
-    private android.speech.tts.TextToSpeech tts;
-    private boolean ttsReady;
-    private void initTts() {
-        if (tts != null) return;
-        try {
-            tts = new android.speech.tts.TextToSpeech(appCtx, status -> {
-                if (status == android.speech.tts.TextToSpeech.SUCCESS) {
-                    int r = tts.setLanguage(java.util.Locale.GERMAN);
-                    ttsReady = r != android.speech.tts.TextToSpeech.LANG_MISSING_DATA && r != android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED;
-                }
-            });
-        } catch (Exception ignored) { }
-    }
-
     private SpotifyCore(Context c) {
         prefs = c.getSharedPreferences("spotify_core", Context.MODE_PRIVATE);
         try { st = new JSONObject(prefs.getString("state", "{}")); } catch (JSONException e) { st = new JSONObject(); }
@@ -72,7 +58,7 @@ public class SpotifyCore {
         tt.start();
         toneHandler = new Handler(tt.getLooper());
         appCtx = c.getApplicationContext();
-        toneHandler.post(this::initTts);
+        toneHandler.post(this::initPool);
         if (st.has("auto")) scheduleAuto(); // Auto-Wechsel nach Neustart fortsetzen
         if (st.has("plan")) schedulePlan(); // Smart-Plan nach Neustart fortsetzen
     }
@@ -267,7 +253,8 @@ public class SpotifyCore {
         for (int i = 0; i < ev.length(); i++) {
             JSONObject e = ev.optJSONObject(i);
             if (e == null || !"phase".equals(e.optString("typ"))) continue;
-            String target = smartTarget(e.optString("phase"), e.optInt("pauseSek", 0), shortSec);
+            String au = e.optString("audio", ""); // Plan aus der Timeline hat Vorrang
+            String target = "done".equals(e.optString("phase")) ? null : ("music".equals(au) || "podcast".equals(au)) ? au : smartTarget(e.optString("phase"), e.optInt("pauseSek", 0), shortSec);
             if (target == null || target.equals(last)) continue;
             last = target;
             try {
@@ -282,45 +269,53 @@ public class SpotifyCore {
         schedulePlan();
     }
 
+    // Einheitliches Ton-Set (res/raw/tr_*.wav, gleiche Dateien wie in der Web-App)
+    private android.media.SoundPool pool;
+    private int sTick, sGo, sRest, sDone;
+    private void initPool() {
+        if (pool != null) return;
+        try {
+            android.media.AudioAttributes aa = new android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
+            pool = new android.media.SoundPool.Builder().setMaxStreams(3).setAudioAttributes(aa).build();
+            sTick = pool.load(appCtx, R.raw.tr_tick, 1);
+            sGo = pool.load(appCtx, R.raw.tr_go, 1);
+            sRest = pool.load(appCtx, R.raw.tr_rest, 1);
+            sDone = pool.load(appCtx, R.raw.tr_done, 1);
+        } catch (Exception e) { addLog("Töne laden ging nicht: " + e.getMessage(), "e"); }
+    }
+
     private void scheduleTones(JSONArray ev) {
         toneHandler.removeCallbacksAndMessages(TONE);
+        initPool();
         long now = System.currentTimeMillis();
         for (int i = 0; i < ev.length(); i++) {
             JSONObject e = ev.optJSONObject(i);
             if (e == null) continue;
             long delay = e.optLong("at") - now;
             if (delay < -300) continue;
-            if ("sprache".equals(e.optString("typ"))) {
-                final String text = e.optString("text", "zehn");
-                initTts();
-                toneHandler.postAtTime(() -> speak(text), TONE, SystemClock.uptimeMillis() + Math.max(0, delay));
-                continue;
-            }
-            int tone;
-            if ("ton".equals(e.optString("typ"))) tone = ToneGenerator.TONE_PROP_BEEP;
-            else if ("work".equals(e.optString("phase"))) tone = ToneGenerator.TONE_PROP_BEEP2;
-            else if ("done".equals(e.optString("phase"))) tone = ToneGenerator.TONE_PROP_ACK;
+            String typ = e.optString("typ"), phase = e.optString("phase");
+            int snd;
+            if ("ton".equals(typ)) snd = 1;                 // Countdown 3-2-1
+            else if (!"phase".equals(typ)) continue;
+            else if ("work".equals(phase)) snd = 2;         // Satz startet
+            else if ("rest".equals(phase)) snd = 3;         // Satz geschafft / Pause
+            else if ("done".equals(phase)) snd = 4;         // Workout fertig
             else continue;
-            final int t = tone;
-            toneHandler.postAtTime(() -> beep(t), TONE, SystemClock.uptimeMillis() + Math.max(0, delay));
+            final int which = snd;
+            toneHandler.postAtTime(() -> play(which), TONE, SystemClock.uptimeMillis() + Math.max(0, delay));
         }
     }
 
-    private void speak(String text) {
-        try {
-            if (tts != null && ttsReady) { tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "zehn"); return; }
-        } catch (Exception ignored) { }
-        beep(ToneGenerator.TONE_PROP_BEEP2); // ohne deutsche Stimme: Doppelton
-    }
-
     private long lastToneLog = 0;
-    /** Zeitgesteuerte Töne kommen in der Android-App immer von hier (auch bei offener App) – zuverlässiger als die Webseite. */
-    private void beep(int tone) {
+    /** Zeitgesteuerte Töne kommen in der Android-App immer von hier (auch bei offener App). */
+    private void play(int which) {
         try {
-            ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_MUSIC, 90);
-            boolean ok = tg.startTone(tone, 200);
-            toneHandler.postDelayed(tg::release, 600);
-            if (!ok || System.currentTimeMillis() - lastToneLog > 60000) { lastToneLog = System.currentTimeMillis(); addLog(ok ? "Ton gespielt (nativ)" : "Ton ging nicht", ok ? "o" : "e"); }
+            initPool();
+            int id = which == 1 ? sTick : which == 2 ? sGo : which == 3 ? sRest : sDone;
+            int r = pool.play(id, 1f, 1f, 1, 0, 1f);
+            if (r == 0 || System.currentTimeMillis() - lastToneLog > 60000) { lastToneLog = System.currentTimeMillis(); addLog(r != 0 ? "Ton gespielt (nativ)" : "Ton ging nicht", r != 0 ? "o" : "e"); }
         } catch (Exception e) { addLog("Ton-Fehler: " + e.getMessage(), "e"); }
     }
 

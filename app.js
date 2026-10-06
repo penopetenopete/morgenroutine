@@ -803,8 +803,7 @@ function plannedEvents(){
     const s=steps[i];
     if(i>idx){out.push(Object.assign({at:t,typ:"phase",phase:s.type==="work"?"work":"rest"},phaseInfo(s,{endetUm:null,pauseSek:s.type==="trans"?s.dur:0})));t+=(s.dur||0)*1000}
     if(!timed(s))break;
-    for(const k of [5,4,3,2,1])out.push({at:(i===idx?stepEnd(s):t)-k*1000,typ:"ton",ton:"countdown"});
-    if(s.type==="trans"&&(i===idx?curDur(s):s.dur)>10)out.push({at:(i===idx?stepEnd(s):t)-10000,typ:"sprache",text:"zehn"});
+    for(const k of [3,2,1])out.push({at:(i===idx?stepEnd(s):t)-k*1000,typ:"ton",ton:"countdown"});
     if(i===steps.length-1)out.push({at:i===idx?stepEnd(s):t,typ:"phase",phase:"done"});
   }
   return out.filter(e=>e.at>now()-500);
@@ -861,7 +860,7 @@ function enter(i,at,opts={}){
   if(s.type==="work"){W.visited=W.visited||[];if(!W.visited.includes(s.uid))W.visited.push(s.uid)}
   if(!opts.quiet){
     stepUI();
-    if(s.type==="work"&&!(W.stepStart>now())){beep(1046,.2,.6);buzz(60)}
+    if(s.type==="work"&&!(W.stepStart>now())){snd("go");buzz(60)}
     onPhase(s.type==="work"?"work":"rest",phaseInfo(s,opts.info));
     syncNative();
   }
@@ -871,7 +870,7 @@ function advance(at,natural,quiet){
   const s=steps[idx],el=natural?curDur(s):elapsed();
   if(s.type==="work"&&s.mode!=="reps")recordHold(s,el,natural);
   if(idx+1>=steps.length){finish(at);return}
-  if(!quiet&&s.type==="work"){beep(660,.15,.55);setTimeout(()=>beep(990,.22,.55),170);buzz([80,60,80])}
+  if(!quiet&&s.type==="work"){snd("rest");buzz([80,60,80])}
   const n=steps[idx+1];
   if(!at&&!quiet&&s.type==="trans"&&s.kind==="next"&&n.type==="work"&&gv("lead")){enter(idx+1,now()+LEAD_MS);return} // 3 s Vorlauf
   enter(idx+1,at,{quiet});
@@ -1185,7 +1184,7 @@ function finish(at){
   sheetClose=null;sheetLocked=false;$("scrim").hidden=true;
   $("player").hidden=true;$("done").hidden=false;
   renderDone(entry);
-  beep(784,.15,.5);setTimeout(()=>beep(988,.15,.5),160);setTimeout(()=>beep(1318,.3,.5),320);
+  snd("done");
 }
 function setsText(x){
   if(!x.sets.length)return "";
@@ -1233,6 +1232,7 @@ function say10(){
 let actx=null,wake=null,sleepT=null;
 function ensureAudio(){
   if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)()}catch(_){}}
+  loadSnd();
   if(actx&&actx.state!=="running"){actx.resume().then(()=>{clearTimeout(sleepT);sleepT=setTimeout(()=>{try{actx.suspend()}catch(_){}},300)},()=>{})}
 }
 function tone(f,d,v){const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.type="square";g.gain.setValueAtTime(v,actx.currentTime);g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+d);o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+d)}
@@ -1242,6 +1242,14 @@ const nativeSnd=()=>{try{const p=nativePlugin();return !!(p&&typeof p.scheduleEv
 function beep(f=880,d=.12,v=.25){if(!gv("sound")||!actx||document.hidden)return;if(nativeSnd()&&Date.now()-lastTap>700)return;try{
   clearTimeout(sleepT);
   const go=()=>{try{tone(f,d,v)}catch(_){}sleepT=setTimeout(()=>{try{actx.suspend()}catch(_){}},Math.max(600,d*1000+400))};
+  if(actx.state!=="running")actx.resume().then(go,()=>{});else go();
+}catch(_){}}
+/* Einheitliches Ton-Set (gleiche Dateien wie in der Android-App): tick = Countdown 3-2-1, go = Satz startet, rest = Satz geschafft/Pause, done = Workout fertig */
+const SND={};let sndLoad=false;
+function loadSnd(){if(sndLoad||!actx)return;sndLoad=true;["tick","go","rest","done"].forEach(n=>fetch("sounds/"+n+".wav").then(r=>r.arrayBuffer()).then(b=>actx.decodeAudioData(b)).then(buf=>{SND[n]=buf}).catch(()=>{}))}
+function snd(name){if(!gv("sound")||!actx||document.hidden)return;if(nativeSnd()&&Date.now()-lastTap>700)return;loadSnd();const b=SND[name];if(!b)return;try{
+  clearTimeout(sleepT);
+  const go=()=>{try{const src=actx.createBufferSource(),g=actx.createGain();src.buffer=b;g.gain.value=.9;src.connect(g);g.connect(actx.destination);src.start()}catch(_){}sleepT=setTimeout(()=>{try{actx.suspend()}catch(_){}},b.duration*1000+400)};
   if(actx.state!=="running")actx.resume().then(go,()=>{});else go();
 }catch(_){}}
 function buzz(p){if(gv("vib")&&navigator.vibrate&&!document.hidden)try{navigator.vibrate(p)}catch(_){}}
@@ -1288,17 +1296,17 @@ function drawPlayer(dt){
     $("phase").textContent=s.label;$("phase").className="phase trans";
     $("sideChip").textContent=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"beginnt mit ":"")+SIDE[side];$("sideChip").className="chip warn";
     $("repChip").hidden=true;
-    const sec=Math.ceil(left);if(!open&&!paused&&sec!==lastSec){if(sec===10&&curDur(s)>10)say10();else if(sec<=5&&sec>0)beep(740,.1,.5)}lastSec=sec;
+    const sec=Math.ceil(left);if(!open&&!paused&&sec!==lastSec){if(sec<=3&&sec>0)snd("tick")}lastSec=sec;
   }else if(W.stepStart+W.pausedMs>(W.pauseAt||now())){ // Vorlauf: Startposition, 3-2-1
     const left=(W.stepStart+W.pausedMs-(W.pauseAt||now()))/1000,sec=Math.ceil(left);
     const P0=firstPose(clip);F.draw(["",1,P0,P0],1);animT=0;
     $("clock").textContent=String(sec);$("phase").textContent="Gleich geht's los";$("phase").className="phase trans";
     $("sideChip").textContent=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"beginnt mit ":"")+SIDE[side];$("sideChip").className="chip warn";
     $("repChip").hidden=true;
-    if(!paused&&sec!==leadSec&&sec>0)beep(740,.1,.5);leadSec=sec;
+    if(!paused&&sec!==leadSec&&sec>0)snd("tick");leadSec=sec;
     F.render();return;
   }else{
-    if(leadSec>0){leadSec=-1;beep(1046,.2,.6);buzz(60);syncNative()}
+    if(leadSec>0){leadSec=-1;snd("go");buzz(60);syncNative()}
     const c=clip,pre=F.seqDur(c.pre);
     if(animT<pre){const [ph,k]=F.segAt(c.pre,animT);F.draw(ph,k)}
     else{
@@ -1323,7 +1331,7 @@ function drawPlayer(dt){
     }else{
       const left=curDur(s)-el;$("clock").textContent=fmt(Math.ceil(left));
       $("phase").textContent=s.stage!=null?`Stufe ${s.stage+1} von 3`:e.timedReps?"Wiederholungen · "+SIDE[side]:(e.timeWord?"Läuft":"Halten")+(uniS?" · "+SIDE[side]:"");
-      const sec=Math.ceil(left);if(!paused&&sec!==lastSec&&sec<=5&&sec>0)beep(880,.1,.5);lastSec=sec;
+      const sec=Math.ceil(left);if(!paused&&sec!==lastSec&&sec<=3&&sec>0)snd("tick");lastSec=sec;
     }
     $("phase").className="phase";
   }
