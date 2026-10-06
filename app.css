@@ -395,66 +395,85 @@ textarea.pksearch{width:100%;resize:vertical;font:inherit;min-height:96px}
 .dtrow{display:flex;flex-direction:column;gap:8px}.dtrow small{display:block;color:var(--muted);font-size:.85rem}.dtbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}.dtbtns .btn{margin:0}
 #musMeta.bad{color:var(--bad);font-weight:600}
 
-/* Ernährung (07.10.2026) – Kalorien und Eiweiß groß, Fett/KH klein, nichts Rotes */
-.eday{min-width:58px;line-height:1.15;padding:4px 10px;min-height:46px;position:relative}
-.eday.has::after{content:"";position:absolute;left:50%;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--accent);transform:translateX(-50%)}
-.esum{gap:8px}
-.esk1{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
-.ebig{font-family:var(--f-display);font-weight:700;font-size:2.3rem;line-height:1}
-.emid{font-family:var(--f-display);font-weight:700;font-size:1.5rem;line-height:1}
-.eof{font-family:var(--f-display);color:var(--muted);font-size:.95rem}
-.erest{font-family:var(--f-display);font-size:.95rem;color:var(--accent);white-space:nowrap}
-.erest.over{color:var(--rest)}
-.erest.ok{color:var(--ok)}
-.ebar{height:8px;border-radius:8px;background:var(--line);overflow:hidden}
-.ebar i{display:block;height:100%;background:var(--accent);border-radius:8px;transition:width .3s}
-.ebar.ep i{background:var(--ok)}
-.esk1.ep{margin-top:6px}
-.emacro{font-family:var(--f-display);font-size:.92rem;color:var(--muted)}
-.eburn{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px dashed var(--line);background:none;border-radius:10px;padding:8px 12px;min-height:44px;cursor:pointer;text-align:left;font-size:.92rem}
-.eburn b{font-family:var(--f-display);font-weight:600;color:var(--accent);white-space:nowrap}
-.eslot{display:flex;flex-direction:column;gap:8px;margin-top:6px}
-.eshead{display:flex;align-items:center;gap:8px;min-height:44px}
-.eshead h3{flex:none}
-.esk{flex:1;font-family:var(--f-display);font-size:.88rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.eshead .ic{width:44px;height:44px}
-.eshead .eadd{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
-.elist:empty{display:none}
-.erow{display:flex;align-items:center;gap:10px;width:100%;min-height:60px;padding:8px 14px;border:0;border-top:1px solid var(--line);background:var(--card);text-align:left;cursor:pointer}
+/* Ernährung (07.10.2026, Runde 2) – minimal: Ringe, Symbole, Menge direkt in der Zeile */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+#essen{font-size:15px;gap:12px}
+#essen h1{font-size:1.35rem}
+.eday{min-width:50px;min-height:44px;padding:3px 8px;line-height:1.1;position:relative;font-size:.9rem}
+.eday .nx{font-size:.6rem}
+.eday.has::after{content:"";position:absolute;left:50%;bottom:3px;width:4px;height:4px;border-radius:50%;background:var(--accent);transform:translateX(-50%)}
+.eday.drophot{border-color:var(--accent);background:rgba(0,229,255,.25);color:var(--fg)}
+.esum{gap:12px;padding:12px 14px}
+.ekcal{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:baseline;border:0;background:none;padding:0;text-align:left;cursor:pointer;font-family:var(--f-display);color:var(--muted);font-size:.9rem}
+.ekcal b{font-size:1.6rem;color:var(--fg)}
+.ekcal .ebar{grid-column:1/3;display:block;height:6px;border-radius:6px;background:var(--line);overflow:hidden}
+.ekcal .ebar i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.erest{color:var(--accent);white-space:nowrap}.erest.over{color:var(--rest)}
+.erings{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.ering{border:0;background:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--fg)}
+.rwrap{position:relative;width:min(84px,24vw);aspect-ratio:1}
+.rwrap svg{width:100%;height:100%;transform:rotate(-90deg)}
+.rbg{fill:none;stroke:var(--line);stroke-width:7}
+.rfg{fill:none;stroke:var(--rc);stroke-width:7;stroke-linecap:round;transition:stroke-dashoffset .4s}
+.rin{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05}
+.rin b{font-family:var(--f-display);font-size:1.05rem;color:var(--rc)}
+.rin small{font-size:.66rem;color:var(--rc);font-family:var(--f-display)}
+.rsub{font-family:var(--f-display);font-size:.78rem;color:var(--muted);white-space:nowrap}
+.ering.on .rwrap,.ekcal.on b{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--rc,var(--accent)) 60%,transparent))}
+.ering.on .rsub{color:var(--rc)}
+.eburn{display:flex;justify-content:center;gap:10px;align-items:center;border:0;background:none;padding:2px;min-height:34px;cursor:pointer;font-family:var(--f-display);font-size:.85rem;color:var(--muted)}
+.eburn b{color:var(--accent)}
+.eslot{display:flex;flex-direction:column;gap:6px;border-radius:14px;transition:background .15s}
+.eslot.drophot{background:rgba(0,229,255,.08);outline:1px dashed var(--accent)}
+.eshead{display:flex;align-items:center;gap:10px;min-height:40px}
+.esk{flex:1;font-family:var(--f-display);font-size:.85rem;color:var(--muted)}
+.eshead .eadd{width:40px;height:40px;color:var(--accent);background:none}
+.erow{display:flex;align-items:center;gap:10px;width:100%;min-height:54px;padding:6px 12px;border:0;border-top:1px solid var(--line);background:var(--card);text-align:left;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:pan-y;color:var(--fg);font:inherit}
 .elist>.erow:first-child,.elist>.egrp:first-child>.erow:first-child{border-top:0}
-.erow .emid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:1rem;font-weight:400;font-family:var(--f-body)}
-.erow .nm{font-weight:600;line-height:1.2;overflow-wrap:anywhere}
-.erow .nm small{font-weight:400;color:var(--muted);font-size:.85rem}
-.erow .val{font-family:var(--f-display);font-size:.92rem;color:var(--muted)}
-.ekc{flex:none;text-align:right;font-family:var(--f-display);font-size:.85rem;color:var(--muted);line-height:1.2}
-.ekc b{color:var(--fg);font-size:1.05rem}
-.ekc small{display:block;color:var(--ok);font-size:.82rem}
-.erow.sub{padding-left:28px;background:color-mix(in srgb,var(--bg) 40%,var(--card))}
-.egrp{position:relative;border-top:1px solid var(--line)}
-.elist>.egrp:first-child{border-top:0}
-.egrp>.eghead{border-top:0;padding-right:62px}
-.egrp>.eghead .nm{font-family:var(--f-display);font-weight:700}
-.egrp .chev{flex:none;width:18px;height:18px;color:var(--accent);transition:transform .2s}
-.egrp.open .chev{transform:rotate(180deg)}
-.egrp>.egm{position:absolute;right:8px;top:8px;width:44px;height:44px;background:none;border-color:transparent;color:var(--muted)}
-.egrp.open{box-shadow:inset 3px 0 0 var(--accent)}
-.eaddin{min-height:48px;padding-left:28px;color:var(--accent);font-family:var(--f-display);font-size:.92rem;background:color-mix(in srgb,var(--bg) 40%,var(--card))}
-.eplus{flex:none;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;color:var(--accent)}
-.eplus svg{width:16px;height:16px}
+.eic{flex:none;width:34px;height:34px;border-radius:9px;background:var(--bg);display:grid;place-items:center;font-size:1.15rem;object-fit:cover}
+img.eic{background:#fff}
+.enm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.enm small{color:var(--muted);font-weight:400}
+.epill{flex:none;font-family:var(--f-display);font-size:.88rem;color:var(--muted);padding:4px 10px;border-radius:999px;background:var(--bg)}
+.ev{flex:none;min-width:44px;text-align:right;font-family:var(--f-display);font-size:.9rem}
+.erow.sub{padding-left:22px;background:color-mix(in srgb,var(--bg) 35%,var(--card))}
+.erow.sel{background:rgba(0,229,255,.14);box-shadow:inset 3px 0 0 var(--accent)}
+.erow.editing{background:color-mix(in srgb,var(--accent) 7%,var(--card))}
+.egrp{border-top:1px solid var(--line)}.elist>.egrp:first-child{border-top:0}
+.eghead .enm{font-family:var(--f-display);font-weight:600}
+.egm{flex:none;width:34px;height:34px;border:0;background:none;color:var(--muted);display:grid;place-items:center;cursor:pointer;padding:0}
+.egm svg{width:18px;height:18px}
+.egrp.open .eghead{box-shadow:inset 3px 0 0 var(--accent)}
+.eaddin{min-height:42px;justify-content:center;color:var(--accent);background:color-mix(in srgb,var(--bg) 35%,var(--card));font-size:1.1rem}
+.eedit{flex:none;display:flex;align-items:center;gap:4px}
+.eedit input{width:62px;min-height:38px;border-radius:9px;border:1px solid var(--accent);background:var(--bg);text-align:center;font-family:var(--f-display);font-size:1rem;padding:0 4px;-moz-appearance:textfield}
+.eedit input::-webkit-outer-spin-button,.eedit input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.eedit .eu{font-family:var(--f-display);font-size:.8rem;color:var(--muted);min-width:20px}
+.est{width:38px;height:38px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--accent);font-size:1.2rem;cursor:pointer;touch-action:manipulation;padding:0}
+.eplus{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;color:var(--accent)}
+.eplus svg{width:18px;height:18px}
+.eok{flex:none;width:32px;height:32px;border-radius:50%;border:0;background:var(--ok);color:#05200F;font-weight:700;display:grid;place-items:center;cursor:pointer;padding:0}
+.erow.eadded{background:color-mix(in srgb,var(--ok) 8%,var(--card))}
 .echips{display:flex;flex-wrap:wrap;gap:8px}
-.echip{border:1px dashed color-mix(in srgb,var(--accent) 55%,var(--line));background:none;color:var(--accent);border-radius:999px;min-height:44px;padding:0 16px;font-family:var(--f-display);font-size:.92rem;cursor:pointer}
-.echip:active{background:rgba(0,229,255,.08)}
-.esbar{display:flex;gap:8px;align-items:flex-start;position:sticky;top:0;z-index:3;background:var(--card)}
+.echip{border:1px dashed color-mix(in srgb,var(--accent) 55%,var(--line));background:none;color:var(--accent);border-radius:999px;min-height:42px;padding:0 14px;font-family:var(--f-display);font-size:.9rem;cursor:pointer}
+.esbar{display:flex;gap:8px;position:sticky;top:0;z-index:3;background:var(--card);padding-bottom:4px}
 .esbar .pksearch{position:static;margin:0;flex:1}
 .esbar .ic{width:50px;height:50px;color:var(--accent)}
 #eRes{display:flex;flex-direction:column;gap:10px}
-#eRes h3{margin-top:4px}
+#eRes .btn.ghost{min-height:44px;font-size:.9rem}
+.edone{position:sticky;bottom:-1px;background:var(--card);padding-top:8px}
+.eselbar{position:fixed;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));z-index:15;display:flex;align-items:center;gap:6px;padding:6px;border-radius:16px;background:#1A2430;border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.5);max-width:calc(100% - 20px)}
+.esn{font-family:var(--f-display);font-weight:700;min-width:22px;text-align:center}
+.esb{min-height:44px;padding:0 12px;border-radius:11px;border:1px solid var(--line);background:var(--card);font-family:var(--f-display);font-size:.88rem;cursor:pointer;white-space:nowrap;color:var(--fg)}
+.esb.x{width:40px;padding:0;border:0;background:none;color:var(--muted)}
+.esb.cp.on{border-color:var(--accent);color:var(--accent)}
+.esb.del{width:44px;padding:0;display:grid;place-items:center;color:var(--rest)}
+.esb.del svg{width:18px;height:18px}
+.eghost{position:fixed;left:0;top:0;z-index:30;pointer-events:none;padding:8px 14px;border-radius:999px;background:var(--accent);color:#03141A;font-family:var(--f-display);font-weight:600;box-shadow:0 8px 20px rgba(0,0,0,.5)}
 .enut{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;font-family:var(--f-display);color:var(--muted);font-size:.95rem}
-.enut b{color:var(--fg);font-size:1.6rem}
-.enut span:nth-child(2) b{color:var(--ok)}
+.enut b{color:var(--fg);font-size:1.5rem}
 .ewheel .wl{gap:10px}
-.eamt{width:110px;min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font-family:var(--f-display);font-size:1.15rem}
-.eamt:focus{outline:2px solid var(--accent);outline-offset:1px}
+.eamt{width:110px;min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font-family:var(--f-display);font-size:1.1rem}
 .egrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .egrid .field input{width:100%;min-width:0}
 .eslotseg{flex-wrap:wrap}.eslotseg .sbtn{flex:1 1 40%}
