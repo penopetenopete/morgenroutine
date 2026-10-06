@@ -18,25 +18,11 @@ public class WorkoutService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        NotificationManager nm = getSystemService(NotificationManager.class);
-        if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel ch = new NotificationChannel(CHANNEL, "Training läuft", NotificationManager.IMPORTANCE_LOW);
-            ch.setShowBadge(false);
-            nm.createNotificationChannel(ch);
-        }
-        Intent open = new Intent(this, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
-        Notification n = b.setContentTitle("Training läuft")
-                .setContentText("Timer und Spotify laufen auch bei gesperrtem Bildschirm")
-                .setSmallIcon(android.R.drawable.ic_media_play)
-                .setContentIntent(pi)
-                .setOngoing(true)
-                .build();
+        Notification n = WorkoutNotif.build(this);
         if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            startForeground(WorkoutNotif.ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
-            startForeground(1, n);
+            startForeground(WorkoutNotif.ID, n);
         }
         if (wakeLock == null) {
             PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);

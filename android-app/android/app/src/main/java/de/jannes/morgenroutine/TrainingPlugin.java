@@ -14,6 +14,27 @@ public class TrainingPlugin extends Plugin {
 
     private SpotifyCore core() { return SpotifyCore.get(getContext()); }
 
+    private static TrainingPlugin instance;
+    @Override public void load() { instance = this; }
+
+    /** Knopf aus der Benachrichtigung an die Seite weitergeben ("main" | "pause" | "resume" | "next"). */
+    static void sendAction(String what) {
+        TrainingPlugin p = instance; if (p == null) return;
+        JSObject d = new JSObject(); d.put("action", what);
+        p.notifyListeners("notifAction", d, true);
+        if (p.getBridge() != null && p.getBridge().getWebView() != null) {
+            p.getBridge().getWebView().post(() -> { p.getBridge().getWebView().onResume(); p.getBridge().getWebView().resumeTimers(); });
+        }
+    }
+
+    /** Aktueller Stand für die Benachrichtigung (null/leer = kein Workout). */
+    @PluginMethod
+    public void setNotif(PluginCall call) {
+        JSObject s = call.getObject("state");
+        WorkoutNotif.setState(getContext(), s == null || s.length() == 0 ? null : s);
+        call.resolve();
+    }
+
     @PluginMethod
     public void getState(PluginCall call) {
         try { call.resolve(JSObject.fromJSONObject(core().snapshotState())); }
@@ -95,6 +116,7 @@ public class TrainingPlugin extends Plugin {
         try {
             org.json.JSONArray ev = call.getArray("events");
             core().setEvents(ev == null ? new org.json.JSONArray() : ev, call.getBoolean("sound", core().soundOn()));
+            WorkoutNotif.setEvents(getContext(), ev);
             call.resolve();
         } catch (Exception e) { call.reject(e.getMessage()); }
     }

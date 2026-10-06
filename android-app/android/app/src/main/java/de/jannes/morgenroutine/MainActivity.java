@@ -12,6 +12,9 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         // Schrift wie in Chrome: Android-Schriftgröße nicht zusätzlich auf die Seite anwenden (sonst alles zu groß/gequetscht)
         if (bridge != null && bridge.getWebView() != null) bridge.getWebView().getSettings().setTextZoom(100);
+        // Android 13+: Benachrichtigungen erlauben (Steuerung auf dem Sperrbildschirm)
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 7);
         // Test-Version: Dienst "Training läuft" startet mit der App und hält sie im Hintergrund wach.
         Intent i = new Intent(this, WorkoutService.class);
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);

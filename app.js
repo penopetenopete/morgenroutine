@@ -354,10 +354,14 @@ $("openStats").onclick=()=>show("stats");
 function musMeta(){const el=$("musMeta");if(!el)return;try{const T=window.TrainingSpotify,st=T&&T.state();
   if(!T){el.textContent="Spotify";return}
   if(!(st.tok||st.hasAuth)){el.textContent="Mit Spotify verbinden";return}
+  const dv=T.device?T.device():{};
+  el.classList.toggle("bad",!!(dv.known&&!dv.name));
+  if(dv.known&&!dv.name){el.textContent="Kein Gerät verbunden – antippen";return}
   el.textContent=[st.music&&st.music.name?"♫ "+st.music.name:"",st.pod&&st.pod.name?"🎙 "+st.pod.name:""].filter(Boolean).join(" · ")||"Verbunden – Musik und Podcast wählen";
 }catch(_){el.textContent="Spotify"}}
+window.musMeta=musMeta;
 $("openMusic").onclick=()=>{if(window.TrainingSpotify)window.TrainingSpotify.openMenu();else toast("Spotify lädt noch …")};
-setTimeout(musMeta,800);
+setTimeout(()=>{musMeta();try{window.TrainingSpotify&&window.TrainingSpotify.checkDev()}catch(_){}},800);
 document.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{stTab=b.dataset.st;renderStats()});
 function exStats(){
   const ag={};
@@ -801,8 +805,30 @@ function plannedEvents(){
   return out.filter(e=>e.at>now()-500);
 }
 function nativePlugin(){const c=window.Capacitor;return c&&c.Plugins&&c.Plugins.Training}
+/* Stand für die Benachrichtigung / Sperrbildschirm (Android-App) */
+function notifState(){
+  if(!W||W.ended)return null;
+  const s=steps[idx];if(!s)return null;
+  const it=itemOf(s)||{},ws=s.type==="work"?s:(s.next||s),e=EXB[ws.ex]||{},sets=it.pair?1:((it.o&&it.o.sets)||1);
+  const uni=e.uni?isUni(e,ws.o):false,side=uni&&!ws.both?(ws.side?" · rechts":" · links"):"";
+  const st={workout:W.rname,paused:!!W.pauseAt,canNext:true};
+  const satz=sets>1?`Satz ${s.set||1}/${sets}`:"";
+  if(W.pending){st.titel=W.pending.name;st.text=`Satz ${W.pending.set} · Ziel ${W.pending.target} Wdh.`;st.main="Geschafft ✓";st.canNext=false;return st}
+  if(s.type==="trans"){
+    st.titel=(s.hub||s.kind==="next"?"Gleich: ":s.label+" · gleich: ")+(e.name||itemName(it));
+    st.text=(satz+side).replace(/^ · /,"");
+    if(s.dur!=null)st.end=stepEnd(s);else st.start=W.stepStart+W.pausedMs;
+  }else{
+    st.titel=e.name;st.text=(satz+side+(s.mode==="reps"?" · "+(s.o.reps||"")+" Wdh.":"")).replace(/^ · /,"");
+    if(W.stepStart>now())st.text="Gleich geht's los"+(st.text?" · "+st.text:"");
+    if(s.mode==="reps")st.start=Math.max(W.stepStart+W.pausedMs,0);else st.end=stepEnd(s);
+  }
+  st.main=W.pauseAt?"":$("main").textContent.trim();if(st.main==="Pause")st.main="";
+  return st;
+}
 function syncNative(){
   const pl=nativePlugin();if(!pl)return;
+  try{if(typeof pl.setNotif==="function")Promise.resolve(pl.setNotif({state:notifState()||{}})).catch(()=>{})}catch(_){}
   try{if(W&&!W.ended&&typeof pl.scheduleEvents==="function")Promise.resolve(pl.scheduleEvents({events:plannedEvents(),workout:{name:W.rname,startedAt:W.startedAt}})).catch(()=>{});
       else if((!W||W.ended)&&typeof pl.clearEvents==="function")Promise.resolve(pl.clearEvents()).catch(()=>{})}catch(_){}
 }
@@ -1010,6 +1036,7 @@ function commitPending(actual){
   putSet(p.uid,{set:p.set,side:p.side,stage:null,part:0,mode:"reps",target:p.target,actual,kg:p.kg,secs:p.secs});
   W.pending=null;saveW();sheetLocked=false;closeSheet();
   if(p.last){advance();return}
+  syncNative();
   if(actual!==p.target)toast(actual<p.target?`${actual} von ${p.target} gespeichert`:`${actual} Wdh. – stark!`);
 }
 
@@ -1257,7 +1284,7 @@ function drawPlayer(dt){
     if(!paused&&sec!==leadSec&&sec>0)beep(740,.1,.5);leadSec=sec;
     F.render();return;
   }else{
-    if(leadSec>0){leadSec=-1;beep(1046,.2,.6);buzz(60)}
+    if(leadSec>0){leadSec=-1;beep(1046,.2,.6);buzz(60);syncNative()}
     const c=clip,pre=F.seqDur(c.pre);
     if(animT<pre){const [ph,k]=F.segAt(c.pre,animT);F.draw(ph,k)}
     else{
@@ -1431,6 +1458,17 @@ async function checkData(){
 }
 window.addEventListener("hashchange",checkData);
 
+
+/* Knöpfe aus der Benachrichtigung (Sperrbildschirm) */
+(function(){const pl=nativePlugin();if(!pl||typeof pl.addListener!=="function")return;
+  pl.addListener("notifAction",d=>{
+    if(!W||W.ended)return;const a=d&&d.action;
+    if(a==="pause"){if(!W.pauseAt)setPaused(true);return}
+    if(a==="resume"){if(W.pauseAt)setPaused(false);return}
+    if(a==="next"){if(W.pending)return;if(W.pauseAt)setPaused(false);advance();return}
+    if(a==="main"){if(W.pending){commitPending(W.pending.target);return}catchUp();$("main").click()}
+  });
+})();
 /* =================== START =================== */
 F.mount($("stage"));F.setShade(gv("shade"));muteIcon();
 history.replaceState({s:"home"},"");

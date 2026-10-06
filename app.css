@@ -393,3 +393,4 @@ textarea.pksearch{width:100%;resize:vertical;font:inherit;min-height:96px}
 .act.nxbtn:active{color:var(--accent)}
 .setcard>summary.eyebrow{margin:0}.setcard:not([open]){gap:0}
 .dtrow{display:flex;flex-direction:column;gap:8px}.dtrow small{display:block;color:var(--muted);font-size:.85rem}.dtbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}.dtbtns .btn{margin:0}
+#musMeta.bad{color:var(--bad);font-weight:600}
