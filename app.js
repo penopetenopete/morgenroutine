@@ -518,6 +518,7 @@ function pauseText(v){return v===0?"0 s":fmtSecs(v)}
 const audKey=s=>s.type==="work"?"w|"+[s.uid,s.set||1,s.side||0,s.part||0].join("|"):(s.pk||s.uid+"|"+(s.kind||"next"));
 const smartShort=()=>{try{const v=window.TrainingSpotify&&window.TrainingSpotify.state().short;return v==null?20:+v}catch(_){return 20}};
 function audioOf(s,map){
+  if(s.type==="trans"&&s.kind==="next"&&!s.hub&&s.next)return audioOf(s.next,map); // „Mach dich bereit“ vor der ersten Übung = wie der erste Satz
   const v=map&&map[audKey(s)];if(v)return v;
   if(s.type==="work")return "music";
   return s.dur==null||s.dur>=smartShort()?"podcast":"music";
