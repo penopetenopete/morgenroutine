@@ -461,16 +461,17 @@ function grpView(gid,full){
     remove:it=>{const d=day(curDay);d.e=d.e.filter(x=>x!==it);tidyDay(curDay)},
     add:()=>openSearch({kind:"grp",gid,slot:first.slot,back:()=>grpView(gid,full)}),
     onClose:()=>renderEssen(),
-    actions:()=>!full?"":`<div class="emact">${tpl()?`<button class="btn" id="gUpd">Vorlage speichern</button>`:""}<button class="btn" id="gNew">Neue Vorlage</button>
+    actions:()=>!full?`<div class="emact"><button class="btn" id="gCopy">Kopieren …</button><button class="btn danger" id="gDel">Löschen</button></div>`:`<div class="emact">${tpl()?`<button class="btn" id="gUpd">Vorlage speichern</button>`:""}<button class="btn" id="gNew">Neue Vorlage</button>
       <button class="btn" id="gRen">Umbenennen</button><button class="btn" id="gCopy">Kopieren …</button>
       <button class="btn ghost" id="gSplit">Auflösen</button><button class="btn danger" id="gDel">Löschen</button></div>`,
-    bind:(body,draw)=>{if(!full)return;
+    bind:(body,draw)=>{
+      $("gDel").onclick=()=>{const list=gl();closeSheet();delWithUndo(list)};
+      $("gCopy").onclick=()=>copySheet(gl(),g().name);
+      if(!full)return;
       if($("gUpd"))$("gUpd").onclick=()=>{tpl().items=toTpl(gl());esave();toast("„"+tpl().name+"“ aktualisiert")};
       $("gNew").onclick=()=>askName("Neue Vorlage",g().name+(tpl()?" (neu)":""),n=>{const id=nid();E.meals[id]={id,name:n,slot:first.slot,items:toTpl(gl())};gl().forEach(x=>x.g.tpl=id);esave();toast("Vorlage „"+n+"“ gespeichert");grpView(gid,true)});
       $("gRen").onclick=()=>askName("Umbenennen",g().name,n=>{gl().forEach(x=>x.g.name=n);esave();grpView(gid,true)});
-      $("gCopy").onclick=()=>copySheet(gl(),g().name);
       $("gSplit").onclick=()=>{gl().forEach(x=>delete x.g);esave();closeSheet()};
-      $("gDel").onclick=()=>{const list=gl();closeSheet();delWithUndo(list)};
     }});
 }
 function slotSheet(sl){
