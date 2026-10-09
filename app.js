@@ -442,7 +442,9 @@ function renderRoutine(){
         const B=arr.find(x=>x.uid===tu),q=tr,n=B?(B.o.sets||1):0;
         if(!moveSetIn(arr,su,sr,tu,tr,dup,ids,x=>x)){toast("Gleiche Übung – nichts zu verschieben");return}
         if(B&&q<n&&arr.some(x=>x.uid===ids.b2)){remapSplit(raw.pauses,tu,q,ids.b2);remapSplit(raw.audio,tu,q,ids.b2)}
-        save();renderRoutine();toast(dup?"Satz kopiert":"Satz verschoben")},
+        const mg=findMerges(arr);applyMerges(arr,mg,[raw.pauses,raw.audio]);
+        if(mg.length)tlFocus=null;
+        save();renderRoutine();toast(mg.length?"Satz verschoben – zusammengeführt":dup?"Satz kopiert":"Satz verschoben")},
       onEdit:(it,set)=>editR(it,set)});
   }
   const list=$("rList");
@@ -519,7 +521,9 @@ function rememberValues(it){S.exLast=S.exLast||{};S.exLast[it.ex]=Object.assign(
 /* =================== TIMELINE: jeder Satz ein Kästchen, Pausen als Linien =================== */
 let rView="list";
 document.querySelectorAll("#rView [data-v]").forEach(b=>b.onclick=()=>{rView=b.dataset.v;tlCopy=null;tlMove=null;renderRoutine()});
-const TL_COL=["#00E5FF","#FFB547","#5BE38C","#B18CFF","#FF7AB6","#F2E863","#6FA8FF","#FF8F6B"];
+const TL_COL=["#00E5FF","#FFB547","#5BE38C","#B18CFF","#FF7AB6","#F2E863","#6FA8FF","#FF8F6B","#4FD1C5","#E879F9","#A3E635","#F87171"];
+/* feste Farbe pro Übung (nach Katalog-Reihenfolge) – bleibt beim Verschieben gleich, gleiche Übung = gleiche Farbe */
+const exColor=ex=>{const i=Math.max(0,(F.EX||[]).findIndex(e=>e.id===ex));return TL_COL[(i*5)%TL_COL.length]};
 function pauseText(v){return v===0?"0 s":fmtSecs(v)}
 /* Musik/Podcast pro Stelle: Schlüssel wie bei den Pausen; ohne eigenen Wert gilt Smart (Satz = Musik, Pause ab X s = Podcast) */
 const audKey=s=>s.type==="work"?"w|"+[s.uid,s.set||1,s.side||0,s.part||0].join("|"):(s.pk||s.uid+"|"+(s.kind||"next"));
@@ -551,7 +555,7 @@ function renderTimeline(box,Wk,h){
   const mus=()=>can&&tlMode==="music";
   if(mus()||!h.onMove)tlMove=null;
   const curI=h.curKey?steps.findIndex(x=>x.key===h.curKey):-1;
-  Wk.items.forEach(it=>{if(!it.deleted)colOf[it.uid]=TL_COL[ci++%TL_COL.length]});
+  Wk.items.forEach(it=>{if(!it.deleted)colOf[it.uid]=exColor(it.ex)});
   const seq=[];let lastBox=null;
   steps.forEach((s,i)=>{
     if(s.type==="work"){
@@ -570,7 +574,7 @@ function renderTimeline(box,Wk,h){
   const aud=s=>{if(!can)return "";const v=audioOf(s,AM);return `<em class="au au-${v}" aria-label="${v==="music"?"Musik":"Podcast"}">${AUD_SVG[v]}</em>`};
   const isSrc=s=>tlMove&&tlMove.uid===s.uid&&tlMove.set===s.set;
   const srcIt=drag&&Wk.items.find(x=>x.uid===drag.src.uid);
-  if(drag){colOf.__ph=colOf[drag.src.uid];if(drag.splitUid)colOf.__b2=colOf[drag.splitUid]}
+  if(drag){colOf.__ph=colOf[drag.src.uid];if(drag.splitUid)colOf.__b2=colOf[drag.splitUid];W3.items.forEach(it=>{if(!colOf[it.uid])colOf[it.uid]=exColor(it.ex)})}
   /* Slot-Nummern (Reihenfolge der Sätze ohne den gezogenen) für die Zielsuche */
   let slotN=-1,lastSK="";const slotOf=new Map();
   boxes.forEach(b=>{const ph=b.s.uid==="__ph"||(drag&&drag.t===drag.t0&&b.s.uid===drag.src.uid&&b.s.set===drag.src.set);const k=b.s.uid+"|"+b.s.set;if(ph){slotOf.set(b,"ph");return}if(k!==lastSK){slotN++;lastSK=k}slotOf.set(b,slotN)});
@@ -714,6 +718,25 @@ function moveSetIn(arr,src,r,tgt,q,dup,ids,mk){
   }else arr.splice(ti+1,0,C);
   if(!dup){const ai=arr.indexOf(A);if((A.o.sets||1)<=1){if(ai>0&&arr[ai-1].link&&!A.link)arr[ai-1].link=false;arr.splice(ai,1)}else delSet(A,r)}
   return true;
+}
+/* gleiche Übung direkt hintereinander → eine Übung mit mehr Sätzen (abweichende Werte = „gemischt“) */
+function findMerges(arr){
+  const out=[];let i=0;
+  while(i<arr.length-1){const a=arr[i],b=arr[i+1];
+    if(a.ex===b.ex&&!a.pair&&!b.pair&&!a.link&&!a.deleted&&!b.deleted&&a.status!=="removed"&&b.status!=="removed"&&a.cut==null&&b.cut==null){out.push([a.uid,b.uid]);arr=arr.slice(0,i+1).concat(arr.slice(i+2))}else i++}
+  return out;
+}
+function applyMerges(arr,pairs,maps){
+  pairs.forEach(([au,bu])=>{
+    const a=arr.find(x=>x.uid===au),bi=arr.findIndex(x=>x.uid===bu);if(!a||bi<0)return;const b=arr[bi];
+    const n=a.o.sets||1,m=b.o.sets||1,so=Object.assign({},a.so||{});
+    for(let k=1;k<=m;k++){const d=diff(setOpt(b,k),Object.assign({},a.o,{sets:undefined}));delete d.sets;if(Object.keys(d).length)so[n+k]=d}
+    a.so=so;a.o.sets=n+m;a.link=!!b.link;arr.splice(bi,1);
+    (maps||[]).forEach(map=>{if(!map)return;Object.keys(map).forEach(k=>{const p=k.split("|");
+      if(p[0]===bu&&(p[1]==="set"||p[1]==="side")){map[au+"|"+p[1]+"|"+(+p[2]+n)]=map[k];delete map[k]}
+      else if(p[0]==="w"&&p[1]===bu){p[1]=au;p[2]=String(+p[2]+n);map[p.join("|")]=map[k];delete map[k]}
+      else if(p[0]===bu){delete map[k]}})});
+  });
 }
 /* eigene Pausen/Musik-Schlüssel beim Teilen mitnehmen (B Satz r>q → B2 Satz r-q) */
 function remapSplit(map,b,q,b2){
@@ -1246,8 +1269,11 @@ function renderPlan(box,{hub,rerender}){
         const mkW=(x,from)=>Object.assign({base:from.base?clone(from.base):null,pair:null,status:dup?"added":(from.status==="added"?"added":"plan"),planned:!dup},x,{o:clone(x.o)});
         if(!moveSetIn(W.items,su,sr,tu,tr,dup,ids,mkW)){toast("Gleiche Übung – nichts zu verschieben");return}
         const arr=rawItems(W.rid,W.day);if(arr)moveSetIn(arr,su,sr,tu,tr,dup,ids,x=>x);
-        if(B&&q<n&&W.items.some(x=>x.uid===ids.b2)){const raw=rawRoutine(W.rid);[W.pauses,W.audio,raw&&raw.pauses,raw&&raw.audio].forEach(m=>remapSplit(m,tu,q,ids.b2))}
-        save();toast(dup?"Satz kopiert":"Satz verschoben");after()},
+        const raw=rawRoutine(W.rid);
+        if(B&&q<n&&W.items.some(x=>x.uid===ids.b2)){[W.pauses,W.audio,raw&&raw.pauses,raw&&raw.audio].forEach(m=>remapSplit(m,tu,q,ids.b2))}
+        const vis=W.visited||[],mg=findMerges(W.items).filter(([a,b])=>!vis.includes(b));
+        applyMerges(W.items,mg,[W.pauses,W.audio]);if(arr)applyMerges(arr,mg,[raw&&raw.pauses,raw&&raw.audio]);
+        save();toast(mg.length?"Satz verschoben – zusammengeführt":dup?"Satz kopiert":"Satz verschoben");after()},
       onEdit:(it,set)=>editW(it,set,rerender)});
   }else{
     const list=box.querySelector(".pllist");
