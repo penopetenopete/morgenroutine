@@ -581,9 +581,9 @@ function renderTimeline(box,Wk,h){
   let slotN=-1,lastSK="";const slotOf=new Map();
   boxes.forEach(b=>{const pl=drag&&drag.plan;const ph=b.s.uid==="__ph"||(drag&&(!pl||pl.kind==="none")&&b.s.uid===drag.src.uid&&b.s.set===drag.src.set)||(pl&&pl.kind==="reorder"&&b.s.uid===pl.uid&&b.s.set===pl.to);const k=b.s.uid+"|"+b.s.set;if(ph){slotOf.set(b,"ph");return}if(k!==lastSK){slotN++;lastSK=k}slotOf.set(b,slotN)});
   const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,sk=skipped.has(s.uid),st=sk?" skip":curI<0?"":last<curI?" done":b.i<=curI?" now":b===firstNext?" next":"",it=Wk.items.find(x=>x.uid===s.uid)||(s.uid==="__ph"?srcIt:Wk.items.find(x=>x.uid===(drag&&drag.splitUid)))||{},e=EXB[s.ex],uni=isUni(EXB[s.ex],s.o);
-    const sl=slotOf.get(b);if(sl==="ph")return `<span class="tlb ph" style="--c:${colOf[drag.src.uid]}"><b>${esc(e.name)}</b><small>hierhin</small></span>`;
+    const sl=slotOf.get(b),fk=drag?` data-fk="${sl}|${s.side||0}|${s.part||0}"`:"";if(sl==="ph")return `<span class="tlb ph" style="--c:${colOf[drag.src.uid]}"${fk}><b>${esc(e.name)}</b><small>hierhin</small></span>`;
     const side=s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
-    return `<button class="tlb${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}" data-slot="${sl}"${audA(s)}${st===" done"?" disabled":""}>${aud(s)}<b>${esc(e.name)}</b><small>${sk?"übersprungen":"S"+s.set+(side?" · "+side:"")}</small></button>`};
+    return `<button class="tlb${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}" data-slot="${sl}"${fk}${audA(s)}${st===" done"?" disabled":""}>${aud(s)}<b>${esc(e.name)}</b><small>${sk?"übersprungen":"S"+s.set+(side?" · "+side:"")}</small></button>`};
   const nextBox=x=>{for(let j=seq.indexOf(x)+1;j<seq.length;j++)if(seq[j].box)return seq[j];return null};
   const sameSet=x=>{const pb=prevBox(x),nb=nextBox(x);return !!(pb&&nb&&pb.s.uid===nb.s.uid&&pb.s.set===nb.s.set)};
   const dropOk=x=>{const pb=prevBox(x);if(!pb||sameSet(x))return false;if(skipped.has(pb.s.uid))return false;if(curI>=0&&(pb.i2!=null?pb.i2:pb.i)<=curI)return false;return true};
@@ -606,8 +606,12 @@ function renderTimeline(box,Wk,h){
   const own=Object.keys(AM).length;
   const sw=can?`<div class="tlsw" id="tlSw" role="switch" tabindex="0" aria-checked="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span>${own?`<button class="tlrs" id="tlAudReset" aria-label="Alles auf Smart">↺</button>`:""}<i class="tlswk"></i></div>`:"";
   const copy=tlCopy&&!mus()?`<div class="tlcopy"><span>Pause <b>${pauseText(tlCopy.v)}</b> kopiert – andere Pausen antippen${tlCopy.n?` · ${tlCopy.n}× eingefügt`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
+  const oldR=drag?new Map([...box.querySelectorAll("[data-fk]")].map(e=>[e.dataset.fk,e.getBoundingClientRect()])):null;
   box.innerHTML=`<div class="tlhead">${sw}${copy}</div><div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}${drag?" moving":""}">${html}</div>`;
   const tl=box.querySelector(".tl");
+  if(oldR&&oldR.size)box.querySelectorAll("[data-fk]").forEach(e=>{const o=oldR.get(e.dataset.fk);if(!o)return;const n=e.getBoundingClientRect(),dx=o.left-n.left,dy=o.top-n.top;
+    if(Math.abs(dx)<1&&Math.abs(dy)<1)return;e.style.transition="none";e.style.transform=`translate(${dx}px,${dy}px)`;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{e.style.transition="transform .2s ease";e.style.transform=""}))});
   if(!box._tmBlock){box._tmBlock=1;box.addEventListener("touchmove",e=>{if(tlDrag)e.preventDefault()},{passive:false})}
   const flip=()=>{tlMode=mus()?"pause":"music";tlCopy=null;tlMove=null;h.redraw()};
   if($("tlSw")){$("tlSw").onclick=flip;$("tlSw").onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();flip()}}}
@@ -657,21 +661,28 @@ function renderTimeline(box,Wk,h){
     // im Workout: nicht vor/zwischen erledigte oder die laufende Übung
     let minT=0;if(curI>=0){slots.forEach((x,j)=>{if(x.lock)minT=j+1});const cur=steps[curI];if(cur&&cur.type==="work"){slots.forEach((x,j)=>{if(x.uid===cur.uid)minT=Math.max(minT,j+1)})}}
     // das berührte Kästchen selbst hängt am Finger (bleibt im Dokument, sonst kommen die Fingerbewegungen nicht mehr an)
-    const r=el.getBoundingClientRect(),gh=el;
-    gh.classList.add("ghost");gh.removeAttribute("data-slot");gh.removeAttribute("data-b");gh.style.setProperty("--c",el.style.getPropertyValue("--c"));Object.assign(gh.style,{position:"fixed",left:"0px",top:"0px",width:r.width+"px",height:r.height+"px",margin:0,zIndex:1000,pointerEvents:"none",willChange:"transform",transform:`translate3d(${r.left}px,${r.top}px,0) scale(1.06)`});
+    // das berührte Kästchen (+ die andere Seite bei L/R) hängt zusammen am Finger
+    const r=el.getBoundingClientRect(),gh=document.createElement("div");gh.className="tlghost";
+    const mates=[...box.querySelectorAll(`.tlb[data-k="${CSS.escape(el.dataset.k)}"]`)].filter(x=>x!==el).map(x=>{const c=x.cloneNode(true);c.removeAttribute("data-slot");c.removeAttribute("data-b");c.removeAttribute("data-fk");return c});
+    [el,...mates].forEach(x=>{x.classList.add("ghost");x.removeAttribute("data-slot");x.removeAttribute("data-b");x.removeAttribute("data-fk");Object.assign(x.style,{width:r.width+"px",height:r.height+"px",flex:"none",margin:0})});
+    const side=x=>/· R$/.test((x.querySelector("small")||{}).textContent||"")?1:0;
+    [el,...mates].sort((a,b)=>side(a)-side(b)).forEach(x=>gh.appendChild(x));
     document.body.appendChild(gh);
+    const ex0=el.offsetLeft;
+    Object.assign(gh.style,{transform:`translate3d(${r.left-ex0}px,${r.top}px,0) scale(1.04)`});
     const pt=ev&&ev.clientX!=null?{x:ev.clientX,y:ev.clientY}:{x:r.left+r.width/2,y:r.top+r.height/2};
-    const off={x:pt.x-r.left,y:pt.y-r.top};
-    tlDrag={box,src:{uid:s.uid,set:s.set},slots,t0,t:t0,minT,ghost:gh,pt,splitUid:null,plan:{kind:"none"}};
+    const off={x:pt.x-r.left+ex0,y:pt.y-r.top};
+    tlDrag={box,src:{uid:s.uid,set:s.set},slots,t0,t:t0,minT,ghost:gh,pt,hold:0,splitUid:null,plan:{kind:"none"}};
     buzz(30);renderTimeline(box,Wk,h);
     const scroller=(()=>{let e=box.parentElement;while(e&&e!==document.body){const cs=getComputedStyle(e);if(/(auto|scroll)/.test(cs.overflowY)&&e.scrollHeight>e.clientHeight+2)return e;e=e.parentElement}return null})();
     let aimT=0;
-    const move=(x,y)=>{if(!tlDrag)return;tlDrag.pt={x,y};gh.style.transform=`translate3d(${x-off.x}px,${y-off.y}px,0) scale(1.06)`;
+    const move=(x,y)=>{if(!tlDrag)return;tlDrag.pt={x,y};gh.style.transform=`translate3d(${x-off.x}px,${y-off.y}px,0) scale(1.04)`;
       if(!aimT)aimT=requestAnimationFrame(()=>{aimT=0;if(tlDrag)aim()})}; // Ziel höchstens einmal pro Bild neu berechnen
     function aim(){
       const {x,y}=tlDrag.pt,hit=document.elementFromPoint(x,y);
       let t=null;const bx=hit&&hit.closest&&hit.closest(".tlb[data-slot]");
-      if(bx&&box.contains(bx))t=+bx.dataset.slot; // Satz nimmt den Platz dieses Kästchens ein, das rückt nach hinten
+      if(performance.now()<tlDrag.hold)return; // Kästchen rutschen noch
+      if(bx&&box.contains(bx)){const k=+bx.dataset.slot;t=k>=tlDrag.t?k+1:k} // Platz dieses Kästchens nehmen, es rutscht dahin, wo der Satz war
       else if(hit&&hit.closest&&hit.closest(".tlb.ph"))return;
       else{ // hinter das letzte Kästchen = ans Ende
         const all=[...box.querySelectorAll(".tlb[data-slot],.tlb.ph")];if(!all.length)return;
@@ -679,7 +690,7 @@ function renderTimeline(box,Wk,h){
         if(y>lr.bottom&&y<tlr.bottom+40||(y>=lr.top&&y<=lr.bottom&&Math.abs(x-(lr.left+lr.width/2))>lr.width/2))t=slots.length;else return;
       }
       if(t<tlDrag.minT)return;
-      if(t!==tlDrag.t){tlDrag.t=t;tlDrag.plan=planFor(t);tlDrag.splitUid=tlDrag.plan.kind==="move"&&tlDrag.plan.split?tlDrag.plan.split:null;buzz(10);renderTimeline(box,Wk,h)}
+      if(t!==tlDrag.t){tlDrag.hold=performance.now()+230;setTimeout(()=>{if(tlDrag)aim()},240);tlDrag.t=t;tlDrag.plan=planFor(t);tlDrag.splitUid=tlDrag.plan.kind==="move"&&tlDrag.plan.split?tlDrag.plan.split:null;buzz(10);renderTimeline(box,Wk,h)}
     }
     /* t = Einfügestelle in der Satzfolge (ohne den gezogenen Satz) → verschieben, innerhalb der Übung umsortieren oder nichts */
     function planFor(t){
