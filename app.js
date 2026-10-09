@@ -602,6 +602,7 @@ function renderTimeline(box,Wk,h){
   const copy=tlCopy&&!mus()?`<div class="tlcopy"><span>Pause <b>${pauseText(tlCopy.v)}</b> kopiert – andere Pausen antippen${tlCopy.n?` · ${tlCopy.n}× eingefügt`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
   box.innerHTML=`<div class="tlhead">${sw}${copy}</div><div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}${drag?" moving":""}">${html}</div>`;
   const tl=box.querySelector(".tl");
+  if(!box._tmBlock){box._tmBlock=1;box.addEventListener("touchmove",e=>{if(tlDrag)e.preventDefault()},{passive:false})}
   const flip=()=>{tlMode=mus()?"pause":"music";tlCopy=null;tlMove=null;h.redraw()};
   if($("tlSw")){$("tlSw").onclick=flip;$("tlSw").onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();flip()}}}
   if($("tlAudReset"))$("tlAudReset").onclick=e=>{e.stopPropagation();Object.keys(AM).forEach(k=>h.onAudio(k,null));toast("Alles auf Smart")};
@@ -649,15 +650,18 @@ function renderTimeline(box,Wk,h){
       slots.push({uid:b.s.uid,set:b.s.set,lock:skipped.has(b.s.uid)&&false||(curI>=0&&last<=curI)})});
     // im Workout: nicht vor/zwischen erledigte oder die laufende Übung
     let minT=0;if(curI>=0){slots.forEach((x,j)=>{if(x.lock)minT=j+1});const cur=steps[curI];if(cur&&cur.type==="work"){slots.forEach((x,j)=>{if(x.uid===cur.uid)minT=Math.max(minT,j+1)})}}
-    const r=el.getBoundingClientRect(),gh=el.cloneNode(true);
-    gh.className+=" ghost";gh.removeAttribute("data-slot");Object.assign(gh.style,{position:"fixed",left:r.left+"px",top:r.top+"px",width:r.width+"px",height:r.height+"px",margin:0,zIndex:1000,pointerEvents:"none"});
+    // das berührte Kästchen selbst hängt am Finger (bleibt im Dokument, sonst kommen die Fingerbewegungen nicht mehr an)
+    const r=el.getBoundingClientRect(),gh=el;
+    gh.classList.add("ghost");gh.removeAttribute("data-slot");gh.removeAttribute("data-b");gh.style.setProperty("--c",el.style.getPropertyValue("--c"));Object.assign(gh.style,{position:"fixed",left:"0px",top:"0px",width:r.width+"px",height:r.height+"px",margin:0,zIndex:1000,pointerEvents:"none",willChange:"transform",transform:`translate3d(${r.left}px,${r.top}px,0) scale(1.06)`});
     document.body.appendChild(gh);
     const pt=ev&&ev.clientX!=null?{x:ev.clientX,y:ev.clientY}:{x:r.left+r.width/2,y:r.top+r.height/2};
     const off={x:pt.x-r.left,y:pt.y-r.top};
     tlDrag={box,src:{uid:s.uid,set:s.set},slots,t0,t:t0,minT,ghost:gh,pt,splitUid:null};
     buzz(30);renderTimeline(box,Wk,h);
     const scroller=(()=>{let e=box.parentElement;while(e&&e!==document.body){const cs=getComputedStyle(e);if(/(auto|scroll)/.test(cs.overflowY)&&e.scrollHeight>e.clientHeight+2)return e;e=e.parentElement}return null})();
-    const move=(x,y)=>{tlDrag.pt={x,y};gh.style.left=(x-off.x)+"px";gh.style.top=(y-off.y)+"px";aim()};
+    let aimT=0;
+    const move=(x,y)=>{if(!tlDrag)return;tlDrag.pt={x,y};gh.style.transform=`translate3d(${x-off.x}px,${y-off.y}px,0) scale(1.06)`;
+      if(!aimT)aimT=requestAnimationFrame(()=>{aimT=0;if(tlDrag)aim()})}; // Ziel höchstens einmal pro Bild neu berechnen
     function aim(){
       const {x,y}=tlDrag.pt,hit=document.elementFromPoint(x,y),bx=hit&&hit.closest&&hit.closest(".tlb[data-slot]");
       if(!bx||!box.contains(bx))return;
@@ -669,15 +673,17 @@ function renderTimeline(box,Wk,h){
       if(t!==tlDrag.t){tlDrag.t=t;const tg2=t>0?slots[t-1]:null,B=tg2&&Wk.items.find(z=>z.uid===tg2.uid);tlDrag.splitUid=B&&tg2.set<(B.o.sets||1)?B.uid:null;buzz(10);renderTimeline(box,Wk,h)}
     }
     let raf=0;const loop=()=>{if(!tlDrag)return;const {y}=tlDrag.pt,top=scroller?scroller.getBoundingClientRect().top:0,bot=scroller?scroller.getBoundingClientRect().bottom:innerHeight;
-      const d=y<top+70?-12:y>bot-70?12:0;if(d){if(scroller)scroller.scrollTop+=d;else window.scrollBy(0,d);aim()}raf=requestAnimationFrame(loop)};raf=requestAnimationFrame(loop);
+      const Z=80,d=y<top+Z?-Math.ceil(9*(top+Z-y)/Z):y>bot-Z?Math.ceil(9*(y-(bot-Z))/Z):0;
+      if(d){const before=scroller?scroller.scrollTop:scrollY;if(scroller)scroller.scrollTop+=d;else window.scrollBy(0,d);if((scroller?scroller.scrollTop:scrollY)!==before)aim()}
+      raf=requestAnimationFrame(loop)};raf=requestAnimationFrame(loop);
     const pm=e=>move(e.clientX,e.clientY);
     const tm=e=>{if(e.touches&&e.touches[0]){e.preventDefault();move(e.touches[0].clientX,e.touches[0].clientY)}};
-    const end=()=>{window.removeEventListener("pointermove",pm);window.removeEventListener("touchmove",tm);window.removeEventListener("pointerup",end);window.removeEventListener("touchend",end);
-      cancelAnimationFrame(raf);gh.remove();const d=tlDrag;tlDrag=null;
+    const end=()=>{window.removeEventListener("pointermove",pm);window.removeEventListener("touchmove",tm);window.removeEventListener("pointerup",end);window.removeEventListener("touchend",end);window.removeEventListener("touchcancel",end);
+      cancelAnimationFrame(raf);gh.remove();const d=tlDrag;tlDrag=null;if(!d)return;
       if(d.t!==d.t0){const tg=d.t>0?d.slots[d.t-1]:null;tlFocus="b|"+d.src.uid+"|"+d.src.set;h.onMove(d.src.uid,d.src.set,tg&&tg.uid,tg&&tg.set,false)}
       else renderTimeline(box,Wk,h)};
     window.addEventListener("pointermove",pm);window.addEventListener("touchmove",tm,{passive:false});
-    window.addEventListener("pointerup",end);window.addEventListener("touchend",end);
+    window.addEventListener("pointerup",end);window.addEventListener("touchend",end);window.addEventListener("touchcancel",end);
   }
   /* antippen = umschalten; entspricht es danach wieder Smart, wird der eigene Wert gelöscht */
   function toggleAud(s){
