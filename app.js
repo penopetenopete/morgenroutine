@@ -445,6 +445,7 @@ function renderRoutine(){
         const mg=findMerges(arr);applyMerges(arr,mg,[raw.pauses,raw.audio]);
         if(mg.length)tlFocus=null;
         save();renderRoutine();toast(mg.length?"Satz verschoben – zusammengeführt":dup?"Satz kopiert":"Satz verschoben")},
+      onReorder:R.preset?null:(uid,from,to)=>{const it=rawItems(R.id,rDay).find(x=>x.uid===uid);if(it){reorderSets(it,from,to);save();renderRoutine();toast("Satz "+from+" ist jetzt Satz "+to)}},
       onEdit:(it,set)=>editR(it,set)});
   }
   const list=$("rList");
@@ -545,10 +546,11 @@ function renderTimeline(box,Wk,h){
   /* Ziehen: Vorschau mit dem Satz an der neuen Stelle (Platzhalter) */
   const drag=tlDrag&&tlDrag.box===box?tlDrag:null;
   let W3=W2;
-  if(drag&&drag.t!==drag.t0){
+  if(drag&&drag.plan&&drag.plan.kind!=="none"){
     const its=W2.items.map(it=>Object.assign({},it,{o:Object.assign({},it.o),so:Object.assign({},it.so||{})}));
-    const tg=drag.t===0?null:drag.slots[drag.t-1];
-    if(moveSetIn(its,drag.src.uid,drag.src.set,tg&&tg.uid,tg&&tg.set,false,{c:"__ph",b2:"__b2"},(x,from)=>Object.assign({status:"plan",pair:null,base:from.base},x)))W3=Object.assign({},W2,{items:its});
+    const pl=drag.plan;
+    if(pl.kind==="reorder"){const it=its.find(x=>x.uid===pl.uid);if(it){reorderSets(it,pl.from,pl.to);W3=Object.assign({},W2,{items:its})}}
+    else if(moveSetIn(its,drag.src.uid,drag.src.set,pl.after&&pl.after.uid,pl.after&&pl.after.set,false,{c:"__ph",b2:"__b2"},(x,from)=>Object.assign({status:"plan",pair:null,base:from.base},x)))W3=Object.assign({},W2,{items:its});
   }
   const steps=buildSteps(W3),colOf={};let ci=0;
   const can=!!h.onAudio,AM=Wk.audio||{};
@@ -577,7 +579,7 @@ function renderTimeline(box,Wk,h){
   if(drag){colOf.__ph=colOf[drag.src.uid];if(drag.splitUid)colOf.__b2=colOf[drag.splitUid];W3.items.forEach(it=>{if(!colOf[it.uid])colOf[it.uid]=exColor(it.ex)})}
   /* Slot-Nummern (Reihenfolge der Sätze ohne den gezogenen) für die Zielsuche */
   let slotN=-1,lastSK="";const slotOf=new Map();
-  boxes.forEach(b=>{const ph=b.s.uid==="__ph"||(drag&&drag.t===drag.t0&&b.s.uid===drag.src.uid&&b.s.set===drag.src.set);const k=b.s.uid+"|"+b.s.set;if(ph){slotOf.set(b,"ph");return}if(k!==lastSK){slotN++;lastSK=k}slotOf.set(b,slotN)});
+  boxes.forEach(b=>{const pl=drag&&drag.plan;const ph=b.s.uid==="__ph"||(drag&&(!pl||pl.kind==="none")&&b.s.uid===drag.src.uid&&b.s.set===drag.src.set)||(pl&&pl.kind==="reorder"&&b.s.uid===pl.uid&&b.s.set===pl.to);const k=b.s.uid+"|"+b.s.set;if(ph){slotOf.set(b,"ph");return}if(k!==lastSK){slotN++;lastSK=k}slotOf.set(b,slotN)});
   const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,sk=skipped.has(s.uid),st=sk?" skip":curI<0?"":last<curI?" done":b.i<=curI?" now":b===firstNext?" next":"",it=Wk.items.find(x=>x.uid===s.uid)||(s.uid==="__ph"?srcIt:Wk.items.find(x=>x.uid===(drag&&drag.splitUid)))||{},e=EXB[s.ex],uni=isUni(EXB[s.ex],s.o);
     const sl=slotOf.get(b);if(sl==="ph")return `<span class="tlb ph" style="--c:${colOf[drag.src.uid]}"><b>${esc(e.name)}</b><small>hierhin</small></span>`;
     const side=s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
@@ -660,21 +662,33 @@ function renderTimeline(box,Wk,h){
     document.body.appendChild(gh);
     const pt=ev&&ev.clientX!=null?{x:ev.clientX,y:ev.clientY}:{x:r.left+r.width/2,y:r.top+r.height/2};
     const off={x:pt.x-r.left,y:pt.y-r.top};
-    tlDrag={box,src:{uid:s.uid,set:s.set},slots,t0,t:t0,minT,ghost:gh,pt,splitUid:null};
+    tlDrag={box,src:{uid:s.uid,set:s.set},slots,t0,t:t0,minT,ghost:gh,pt,splitUid:null,plan:{kind:"none"}};
     buzz(30);renderTimeline(box,Wk,h);
     const scroller=(()=>{let e=box.parentElement;while(e&&e!==document.body){const cs=getComputedStyle(e);if(/(auto|scroll)/.test(cs.overflowY)&&e.scrollHeight>e.clientHeight+2)return e;e=e.parentElement}return null})();
     let aimT=0;
     const move=(x,y)=>{if(!tlDrag)return;tlDrag.pt={x,y};gh.style.transform=`translate3d(${x-off.x}px,${y-off.y}px,0) scale(1.06)`;
       if(!aimT)aimT=requestAnimationFrame(()=>{aimT=0;if(tlDrag)aim()})}; // Ziel höchstens einmal pro Bild neu berechnen
     function aim(){
-      const {x,y}=tlDrag.pt,hit=document.elementFromPoint(x,y),bx=hit&&hit.closest&&hit.closest(".tlb[data-slot]");
-      if(!bx||!box.contains(bx))return;
-      const j=+bx.dataset.slot,rs=[...box.querySelectorAll(`.tlb[data-slot="${j}"]`)].map(e=>e.getBoundingClientRect());
-      const L=Math.min(...rs.map(q=>q.left)),R=Math.max(...rs.map(q=>q.right)),rev=!!bx.closest(".tlrow.rev");
-      const after=rev?x<(L+R)/2:x>(L+R)/2;
-      let t=after?j+1:j;if(t<tlDrag.minT)return;
-      const tg=t>0?slots[t-1]:null;if(tg&&tg.uid===s.uid)t=tlDrag.t0;
-      if(t!==tlDrag.t){tlDrag.t=t;const tg2=t>0?slots[t-1]:null,B=tg2&&Wk.items.find(z=>z.uid===tg2.uid);tlDrag.splitUid=B&&tg2.set<(B.o.sets||1)?B.uid:null;buzz(10);renderTimeline(box,Wk,h)}
+      const {x,y}=tlDrag.pt,hit=document.elementFromPoint(x,y);
+      let t=null;const bx=hit&&hit.closest&&hit.closest(".tlb[data-slot]");
+      if(bx&&box.contains(bx))t=+bx.dataset.slot; // Satz nimmt den Platz dieses Kästchens ein, das rückt nach hinten
+      else if(hit&&hit.closest&&hit.closest(".tlb.ph"))return;
+      else{ // hinter das letzte Kästchen = ans Ende
+        const all=[...box.querySelectorAll(".tlb[data-slot],.tlb.ph")];if(!all.length)return;
+        const lr=all[all.length-1].getBoundingClientRect(),tlr=tl.getBoundingClientRect();
+        if(y>lr.bottom&&y<tlr.bottom+40||(y>=lr.top&&y<=lr.bottom&&Math.abs(x-(lr.left+lr.width/2))>lr.width/2))t=slots.length;else return;
+      }
+      if(t<tlDrag.minT)return;
+      if(t!==tlDrag.t){tlDrag.t=t;tlDrag.plan=planFor(t);tlDrag.splitUid=tlDrag.plan.kind==="move"&&tlDrag.plan.split?tlDrag.plan.split:null;buzz(10);renderTimeline(box,Wk,h)}
+    }
+    /* t = Einfügestelle in der Satzfolge (ohne den gezogenen Satz) → verschieben, innerhalb der Übung umsortieren oder nichts */
+    function planFor(t){
+      if(t===t0)return {kind:"none"};
+      const prev=t>0?slots[t-1]:null,next=slots[t]||null,A=Wk.items.find(z=>z.uid===s.uid);
+      if((prev&&prev.uid===s.uid)||(next&&next.uid===s.uid)){ // gleiche Übung: Reihenfolge der Sätze ändern
+        const to=slots.slice(0,t).filter(z=>z.uid===s.uid).length+1;return to===s.set?{kind:"none"}:{kind:"reorder",uid:s.uid,from:s.set,to}}
+      const B=prev&&Wk.items.find(z=>z.uid===prev.uid);
+      return {kind:"move",after:prev,split:B&&prev.set<(B.o.sets||1)?B.uid:null};
     }
     let raf=0;const loop=()=>{if(!tlDrag)return;const {y}=tlDrag.pt,top=scroller?scroller.getBoundingClientRect().top:0,bot=scroller?scroller.getBoundingClientRect().bottom:innerHeight;
       const Z=80,d=y<top+Z?-Math.ceil(9*(top+Z-y)/Z):y>bot-Z?Math.ceil(9*(y-(bot-Z))/Z):0;
@@ -684,7 +698,9 @@ function renderTimeline(box,Wk,h){
     const tm=e=>{if(e.touches&&e.touches[0]){e.preventDefault();move(e.touches[0].clientX,e.touches[0].clientY)}};
     const end=()=>{window.removeEventListener("pointermove",pm);window.removeEventListener("touchmove",tm);window.removeEventListener("pointerup",end);window.removeEventListener("touchend",end);window.removeEventListener("touchcancel",end);
       cancelAnimationFrame(raf);gh.remove();const d=tlDrag;tlDrag=null;if(!d)return;
-      if(d.t!==d.t0){const tg=d.t>0?d.slots[d.t-1]:null;tlFocus="b|"+d.src.uid+"|"+d.src.set;h.onMove(d.src.uid,d.src.set,tg&&tg.uid,tg&&tg.set,false)}
+      const pl=d.plan||{kind:"none"};
+      if(pl.kind==="move"){tlFocus="b|"+d.src.uid+"|"+d.src.set;h.onMove(d.src.uid,d.src.set,pl.after&&pl.after.uid,pl.after&&pl.after.set,false)}
+      else if(pl.kind==="reorder"&&h.onReorder){tlFocus="b|"+pl.uid+"|"+pl.to;h.onReorder(pl.uid,pl.from,pl.to)}
       else renderTimeline(box,Wk,h)};
     window.addEventListener("pointermove",pm);window.addEventListener("touchmove",tm,{passive:false});
     window.addEventListener("pointerup",end);window.addEventListener("touchend",end);window.addEventListener("touchcancel",end);
@@ -718,6 +734,11 @@ function moveSetIn(arr,src,r,tgt,q,dup,ids,mk){
   }else arr.splice(ti+1,0,C);
   if(!dup){const ai=arr.indexOf(A);if((A.o.sets||1)<=1){if(ai>0&&arr[ai-1].link&&!A.link)arr[ai-1].link=false;arr.splice(ai,1)}else delSet(A,r)}
   return true;
+}
+/* Satz from an Stelle to innerhalb einer Übung (eigene Werte der Sätze wandern mit) */
+function reorderSets(it,from,to){
+  const n=it.o.sets||1,so=it.so||{},ov=[];for(let k=1;k<=n;k++)ov.push(so[k]||null);
+  const [x]=ov.splice(from-1,1);ov.splice(to-1,0,x);const nso={};ov.forEach((v,i)=>{if(v)nso[i+1]=v});it.so=nso;
 }
 /* gleiche Übung direkt hintereinander → eine Übung mit mehr Sätzen (abweichende Werte = „gemischt“) */
 function findMerges(arr){
@@ -1274,6 +1295,7 @@ function renderPlan(box,{hub,rerender}){
         const vis=W.visited||[],mg=findMerges(W.items).filter(([a,b])=>!vis.includes(b));
         applyMerges(W.items,mg,[W.pauses,W.audio]);if(arr)applyMerges(arr,mg,[raw&&raw.pauses,raw&&raw.audio]);
         save();toast(mg.length?"Satz verschoben – zusammengeführt":dup?"Satz kopiert":"Satz verschoben");after()},
+      onReorder:W.rid==="morgen"?null:(uid,from,to)=>{const it=W.items.find(x=>x.uid===uid),arr=rawItems(W.rid,W.day),r=arr&&arr.find(x=>x.uid===uid);if(it)reorderSets(it,from,to);if(r)reorderSets(r,from,to);save();toast("Satz "+from+" ist jetzt Satz "+to);after()},
       onEdit:(it,set)=>editW(it,set,rerender)});
   }else{
     const list=box.querySelector(".pllist");
