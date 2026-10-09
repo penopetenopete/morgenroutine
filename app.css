@@ -327,9 +327,7 @@ body{font-size:17px}
 .au svg{width:100%;height:100%}
 .tle span{display:inline-flex;align-items:center}
 .tle span b{font-weight:inherit}
-.tle[data-au="podcast"] .au{display:inline-flex}
 .tlb .au{position:absolute;top:5px;right:5px}
-.tlb[data-au="podcast"] .au{display:inline-flex}
 /* hervorgehoben */
 .tl.mus{--mu:#5BE38C;--po:#B18CFF}
 .tl.mus [data-au="music"]{--a:var(--mu)}.tl.mus [data-au="podcast"]{--a:var(--po)}
@@ -550,3 +548,22 @@ img.emini{background:#fff}
 .escan{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:14px;border:1px solid var(--line);background:#000}
 .esrc{font-size:.75rem!important;opacity:.8}
 body.esel #essen{padding-bottom:170px}
+
+/* Timeline 09.10.2026: Kopf mitlaufend, übersprungen, verschieben/kopieren, aktuelle Übung */
+.tlhead{position:sticky;top:0;z-index:6;background:var(--bg);padding:2px 0 6px;margin-top:-2px}
+.tlhead .tlsw{margin-bottom:6px}.tlhead .tlcopy{margin-bottom:0}
+#plBox .tlhead,.hublist .tlhead{background:var(--card)}
+.sheet .tlhead{background:var(--card)}
+.hublist .tlhead{background:var(--bg)}
+.tlb{scroll-margin-top:84px}
+.tlb.skip{opacity:.45;border-style:dashed;filter:saturate(.3)}
+.tle.skip{opacity:.3}
+.tlb.next{box-shadow:0 0 0 2px var(--accent)}
+.tlb.src{outline:3px solid var(--fg);outline-offset:2px}
+.tl.moving .tlb:not(.src){opacity:.75}
+.tle.drop span{background:var(--accent);color:var(--bg);border-radius:999px;padding:0 9px;font-weight:700;outline:0}
+.tle.drop i{background:var(--accent);opacity:.5}
+.tle.drop.no{opacity:.15}
+.tle.drop.no span{background:var(--line);color:var(--muted)}
+.tlmove{flex-wrap:wrap}.tlmove .seg{flex:1 1 100%;margin:0}.tlmove span{font-size:.9rem;color:var(--muted)}
+.plscroll>*{flex:none}

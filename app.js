@@ -436,8 +436,14 @@ function renderRoutine(){
       onPause:(pk,v)=>{setPause(R.id,pk,v);renderRoutine()},
       onAudio:R.preset?null:(ak,v)=>{setAudio(R.id,ak,v);renderRoutine()},
       redraw:renderRoutine,
+      onUnskip:uid=>{setSkip(uid,false);renderRoutine()},
+      onMove:R.preset?null:(su,sr,tu,tr,dup)=>{
+        const raw=rawRoutine(R.id),arr=rawItems(R.id,rDay),ids={c:uidGen(),b2:uidGen()};
+        const B=arr.find(x=>x.uid===tu),q=tr,n=B?(B.o.sets||1):0;
+        if(!moveSetIn(arr,su,sr,tu,tr,dup,ids,x=>x)){toast("Gleiche Übung – nichts zu verschieben");return}
+        if(B&&q<n&&arr.some(x=>x.uid===ids.b2)){remapSplit(raw.pauses,tu,q,ids.b2);remapSplit(raw.audio,tu,q,ids.b2)}
+        save();renderRoutine();toast(dup?"Satz kopiert":"Satz verschoben")},
       onEdit:(it,set)=>editR(it,set)});
-    $("rTl").insertAdjacentHTML("beforeend",skipLineHTML(items));
   }
   const list=$("rList");
   list.innerHTML=items.length?items.map((it,i)=>{
@@ -512,7 +518,7 @@ function rememberValues(it){S.exLast=S.exLast||{};S.exLast[it.ex]=Object.assign(
 
 /* =================== TIMELINE: jeder Satz ein Kästchen, Pausen als Linien =================== */
 let rView="list";
-document.querySelectorAll("#rView [data-v]").forEach(b=>b.onclick=()=>{rView=b.dataset.v;tlCopy=null;renderRoutine()});
+document.querySelectorAll("#rView [data-v]").forEach(b=>b.onclick=()=>{rView=b.dataset.v;tlCopy=null;tlMove=null;renderRoutine()});
 const TL_COL=["#00E5FF","#FFB547","#5BE38C","#B18CFF","#FF7AB6","#F2E863","#6FA8FF","#FF8F6B"];
 function pauseText(v){return v===0?"0 s":fmtSecs(v)}
 /* Musik/Podcast pro Stelle: Schlüssel wie bei den Pausen; ohne eigenen Wert gilt Smart (Satz = Musik, Pause ab X s = Podcast) */
@@ -527,12 +533,17 @@ function audioOf(s,map){
 const AUD_SVG={music:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3" fill="currentColor"/><circle cx="17" cy="16" r="3" fill="currentColor"/></svg>',
   podcast:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>'};
 let tlMode="pause",tlCopy=null; // tlCopy = {v, n} solange „Pause kopieren“ läuft
+let tlFocus=null,tlAutoKey=null,tlMove=null; // tlFocus: Element nach dem Neuzeichnen zeigen · tlMove: {uid,set,dup} Satz verschieben/duplizieren
 function renderTimeline(box,Wk,h){
-  const steps=buildSteps(Wk),colOf={};let ci=0;
+  /* übersprungene Übungen bleiben sichtbar (grau, antippen = wieder rein) */
+  const skipped=new Set(Wk.items.filter(it=>it.status==="removed"&&!it.deleted).map(it=>it.uid));
+  const W2=Object.assign({},Wk,{items:Wk.items.map(it=>skipped.has(it.uid)?Object.assign({},it,{status:"plan"}):it)});
+  const steps=buildSteps(W2),colOf={};let ci=0;
   const can=!!h.onAudio,AM=Wk.audio||{};
   const mus=()=>can&&tlMode==="music";
+  if(mus()||!h.onMove)tlMove=null;
   const curI=h.curKey?steps.findIndex(x=>x.key===h.curKey):-1;
-  Wk.items.forEach(it=>{if(it.status!=="removed")colOf[it.uid]=TL_COL[ci++%TL_COL.length]});
+  Wk.items.forEach(it=>{if(!it.deleted)colOf[it.uid]=TL_COL[ci++%TL_COL.length]});
   const seq=[];let lastBox=null;
   steps.forEach((s,i)=>{
     if(s.type==="work"){
@@ -542,26 +553,36 @@ function renderTimeline(box,Wk,h){
       lastBox={box:true,k,s,i};seq.push(lastBox);
     }else if(seq.length)seq.push({edge:true,s,i});
   });
+  if(tlMove&&seq.length)seq.push({edge:true,none:true,end:true});
   const boxes=seq.filter(x=>x.box),PER=3;
   if(!boxes.length){box.innerHTML='<div class="note" style="padding:14px">Noch keine Sätze.</div>';return}
-  /* Musik ist der Normalfall: in der normalen Ansicht steht nur bei Podcast ein Mikro, hervorgehoben bei beiden */
+  const firstNext=curI>=0?boxes.find(b=>b.i>curI&&!skipped.has(b.s.uid)):null;
+  const prevBox=x=>{for(let j=seq.indexOf(x)-1;j>=0;j--)if(seq[j].box)return seq[j];return null};
+  /* Musik/Podcast-Symbole nur in der hervorgehobenen Ansicht */
   const audA=s=>can?` data-au="${audioOf(s,AM)}"${AM[audKey(s)]?" data-own":""}`:"";
   const aud=s=>{if(!can)return "";const v=audioOf(s,AM);return `<em class="au au-${v}" aria-label="${v==="music"?"Musik":"Podcast"}">${AUD_SVG[v]}</em>`};
-  const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,st=curI<0?"":last<curI?" done":b.i<=curI?" now":"",it=Wk.items.find(x=>x.uid===s.uid),e=EXB[s.ex],uni=isUni(EXB[s.ex],s.o);
+  const isSrc=s=>tlMove&&tlMove.uid===s.uid&&tlMove.set===s.set;
+  const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,sk=skipped.has(s.uid),st=sk?" skip":curI<0?"":last<curI?" done":b.i<=curI?" now":b===firstNext?" next":"",it=Wk.items.find(x=>x.uid===s.uid),e=EXB[s.ex],uni=isUni(EXB[s.ex],s.o);
     const side=s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
-    return `<button class="tlb${st}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}"${audA(s)}${st===" done"?" disabled":""}>${aud(s)}<b>${esc(e.name)}</b><small>S${s.set}${side?" · "+side:""}</small></button>`};
+    return `<button class="tlb${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}"${audA(s)}${st===" done"?" disabled":""}>${aud(s)}<b>${esc(e.name)}</b><small>${sk?"übersprungen":"S"+s.set+(side?" · "+side:"")}</small></button>`};
+  const nextBox=x=>{for(let j=seq.indexOf(x)+1;j<seq.length;j++)if(seq[j].box)return seq[j];return null};
+  const sameSet=x=>{const pb=prevBox(x),nb=nextBox(x);return !!(pb&&nb&&pb.s.uid===nb.s.uid&&pb.s.set===nb.s.set)};
+  const dropOk=x=>{const pb=prevBox(x);if(!pb||sameSet(x))return false;if(skipped.has(pb.s.uid))return false;if(curI>=0&&(pb.i2!=null?pb.i2:pb.i)<=curI)return false;return true};
   const edgeHTML=(x,turn)=>{
+    if(tlMove&&sameSet(x))return `<span class="tle${turn?" turn":""} none"><i></i></span>`;
+    if(tlMove){const ok=dropOk(x);return `<button class="tle${turn?" turn":""} drop${ok?"":" no"}" ${ok?"":"disabled"} data-d="${seq.indexOf(x)}" aria-label="Hierhin"><i></i><span><b>＋</b></span></button>`}
     if(x.none)return `<span class="tle${turn?" turn":""} none"><i></i></span>`;
-    const s=x.s,open=s.dur==null,dn=curI>=0&&x.i<curI;
+    const s=x.s,open=s.dur==null,dn=curI>=0&&x.i<curI,sk=skipped.has(s.uid);
     const lab=open?"▶":pauseText(s.dur);
     const src=tlCopy&&tlCopy.pk===s.pk?" src":"";
-    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${src}" ${open&&(dn||!can)?"disabled":""} data-e="${seq.indexOf(x)}"${audA(s)} aria-label="Pause ${lab}"><i></i><span>${aud(s)}<b>${lab}</b></span></button>`};
+    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${sk?" skip":""}${src}" ${(open&&(dn||!can))||sk?"disabled":""} data-e="${seq.indexOf(x)}" data-k="e|${s.pk||s.key}"${audA(s)} aria-label="Pause ${lab}"><i></i><span>${aud(s)}<b>${lab}</b></span></button>`};
   let html="",row=[],ri=0;
   const flush=()=>{html+=`<div class="tlrow${ri%2?" rev":""}">${row.join("")}</div>`;row=[];ri++};
   let bi=0;
   for(let i=0;i<seq.length;i++){
     const x=seq[i];
     if(x.box){row.push(boxHTML(x));bi++;continue}
+    if(x.end){if(bi%PER===0){flush();html+=`<div class="tlturnrow ${(ri-1)%2?"l":"r"}">${edgeHTML(x,true)}</div>`}else row.push(edgeHTML(x,false));continue}
     if(bi%PER===0&&bi<boxes.length){flush();html+=`<div class="tlturnrow ${(ri-1)%2?"l":"r"}">${edgeHTML(x,true)}</div>`}
     else row.push(edgeHTML(x,false));
   }
@@ -569,34 +590,84 @@ function renderTimeline(box,Wk,h){
   const own=Object.keys(AM).length;
   const sw=can?`<div class="tlsw" id="tlSw" role="switch" tabindex="0" aria-checked="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span>${own?`<button class="tlrs" id="tlAudReset" aria-label="Alles auf Smart">↺</button>`:""}<i class="tlswk"></i></div>`:"";
   const copy=tlCopy&&!mus()?`<div class="tlcopy"><span>Pause <b>${pauseText(tlCopy.v)}</b> kopiert – andere Pausen antippen${tlCopy.n?` · ${tlCopy.n}× eingefügt`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
-  box.innerHTML=sw+copy+`<div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}">${html}</div>`;
+  const mv=tlMove?`<div class="tlcopy tlmove"><div class="seg tlmv"><button class="sbtn" data-mv="0" aria-pressed="${!tlMove.dup}">Verschieben</button><button class="sbtn" data-mv="1" aria-pressed="${!!tlMove.dup}">Kopie</button></div><span>＋ antippen = hierhin</span><button class="btn" id="tlMoveX">Fertig</button></div>`:"";
+  box.innerHTML=`<div class="tlhead">${sw}${copy}${mv}</div><div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}${tlMove?" moving":""}">${html}</div>`;
   const tl=box.querySelector(".tl");
-  const flip=()=>{tlMode=mus()?"pause":"music";tlCopy=null;const c=box.querySelector(".tlcopy");if(c)c.remove();tl.classList.remove("copying");tl.classList.toggle("mus",mus());$("tlSw").setAttribute("aria-checked",mus())};
+  const flip=()=>{tlMode=mus()?"pause":"music";tlCopy=null;tlMove=null;h.redraw()};
   if($("tlSw")){$("tlSw").onclick=flip;$("tlSw").onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();flip()}}}
   if($("tlAudReset"))$("tlAudReset").onclick=e=>{e.stopPropagation();Object.keys(AM).forEach(k=>h.onAudio(k,null));toast("Alles auf Smart")};
   if($("tlCopyOk"))$("tlCopyOk").onclick=()=>{tlCopy=null;h.redraw()};
+  if($("tlMoveX"))$("tlMoveX").onclick=()=>{tlMove=null;h.redraw()};
+  box.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>{tlMove.dup=b.dataset.mv==="1";box.querySelectorAll("[data-mv]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+  box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{
+    const pb=prevBox(seq[+b.dataset.d]);if(!pb)return;
+    const m=tlMove;tlFocus="b|"+pb.s.uid+"|"+pb.s.set;
+    if(!m.dup)tlMove=null;
+    h.onMove(m.uid,m.set,pb.s.uid,pb.s.set,!!m.dup);
+  });
   box.querySelectorAll("[data-e]").forEach(b=>{
     const s=seq[+b.dataset.e].s;
-    onLongPress(b,()=>{if(s.dur==null||mus())return;tlCopy={v:s.dur,pk:s.pk,n:0};buzz(30);h.redraw()});
+    onLongPress(b,()=>{if(s.dur==null||mus())return;tlCopy={v:s.dur,pk:s.pk,n:0};tlMove=null;buzz(30);h.redraw()});
     b.onclick=()=>{
       if(b.dataset.lp){delete b.dataset.lp;return}
       if(mus()){toggleAud(s);return}
       if(s.dur==null)return;
-      if(tlCopy){if(s.pk===tlCopy.pk)return;tlCopy.n++;h.onPause(s.pk,tlCopy.v);return}
-      openPauseSheet(s,h.onPause,h.redraw);
+      if(tlCopy){if(s.pk===tlCopy.pk)return;tlCopy.n++;tlFocus=b.dataset.k;h.onPause(s.pk,tlCopy.v);return}
+      tlFocus=b.dataset.k;openPauseSheet(s,h.onPause,h.redraw);
     };
   });
-  box.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{
+  box.querySelectorAll("[data-b]").forEach(b=>{
     const s=boxes[+b.dataset.b].s,it=Wk.items.find(x=>x.uid===s.uid);
-    if(mus()){toggleAud(s);return}
-    if(tlCopy){tlCopy=null;h.redraw();return}
-    h.onEdit(it,it.pair?0:s.set);
+    if(h.onMove&&!it.pair&&!b.disabled&&!skipped.has(s.uid)&&!b.classList.contains("now"))
+      onLongPress(b,()=>{if(mus())return;tlMove={uid:s.uid,set:s.set,dup:false};tlCopy=null;tlFocus=b.dataset.k;buzz(30);h.redraw()});
+    b.onclick=()=>{
+      if(b.dataset.lp){delete b.dataset.lp;return}
+      if(skipped.has(s.uid)){if(h.onUnskip){tlFocus=b.dataset.k;h.onUnskip(s.uid)}return}
+      if(mus()){toggleAud(s);return}
+      if(tlMove){tlMove=null;h.redraw();return}
+      if(tlCopy){tlCopy=null;h.redraw();return}
+      tlFocus=b.dataset.k;h.onEdit(it,it.pair?0:s.set);
+    };
+  });
+  /* Scrollen: zuerst zur zuletzt bearbeiteten Stelle, sonst im Workout zur aktuellen/nächsten Übung (oben) */
+  requestAnimationFrame(()=>{
+    if(!box.isConnected||!tl.isConnected)return; // inzwischen neu gezeichnet – der neue Durchlauf scrollt
+    let el=null,blk="center";
+    if(h.curKey&&h.curKey!==tlAutoKey){tlAutoKey=h.curKey;tlFocus=null;el=box.querySelector(".tlb.now,.tlb.next");blk="start"} // neue Stelle im Workout: aktuelle Übung nach oben
+    else if(tlFocus){el=box.querySelector(`[data-k="${CSS.escape(tlFocus)}"]`);tlFocus=null}
+    if(el)try{el.scrollIntoView({block:blk})}catch(_){}
   });
   /* antippen = umschalten; entspricht es danach wieder Smart, wird der eigene Wert gelöscht */
   function toggleAud(s){
     const k=audKey(s),v=audioOf(s,AM)==="music"?"podcast":"music",std=audioOf(s,{});
+    tlFocus=s.type==="work"?"b|"+s.uid+"|"+s.set:"e|"+(s.pk||s.key);
     h.onAudio(k,v===std?null:v);
   }
+}
+/* Satz verschieben/duplizieren: Satz r von A landet hinter Satz q von B (B wird dort ggf. geteilt). ids = neue uids {c,b2}. */
+function moveSetIn(arr,src,r,tgt,q,dup,ids,mk){
+  const A=arr.find(x=>x.uid===src);let ti=arr.findIndex(x=>x.uid===tgt);if(!A||ti<0)return false;
+  const so=o=>o||{};
+  if(src===tgt){ // gleiche Übung: Kopie = ein Satz mehr, Verschieben bleibt gleich
+    if(!dup)return false;const n=A.o.sets||1;A.o.sets=n+1;if(so(A.so)[r]){A.so=Object.assign({},A.so);A.so[n+1]=clone(A.so[r])}return true;
+  }
+  const [ba,bz]=blockRange(arr,ti);if(bz>ba){ti=bz;q=arr[ti].o.sets||1} // Supersatz: hinter den ganzen Block
+  const B=arr[ti],n=B.o.sets||1;
+  const C=mk({uid:ids.c,ex:A.ex,o:Object.assign({},A.o,so(A.so)[r]||{},{sets:1}),so:{},link:false},A);
+  if(q<n){ // B teilen: B (1..q) · C · B2 (q+1..n)
+    const B2=mk({uid:ids.b2,ex:B.ex,o:Object.assign({},B.o,{sets:n-q}),so:{},link:!!B.link},B);
+    Object.keys(so(B.so)).forEach(k=>{if(+k>q)B2.so[+k-q]=B.so[k]});
+    const s1={};Object.keys(so(B.so)).forEach(k=>{if(+k<=q)s1[k]=B.so[k]});B.so=s1;B.o.sets=q;B.link=false;
+    arr.splice(ti+1,0,C,B2);
+  }else arr.splice(ti+1,0,C);
+  if(!dup){const ai=arr.indexOf(A);if((A.o.sets||1)<=1){if(ai>0&&arr[ai-1].link&&!A.link)arr[ai-1].link=false;arr.splice(ai,1)}else delSet(A,r)}
+  return true;
+}
+/* eigene Pausen/Musik-Schlüssel beim Teilen mitnehmen (B Satz r>q → B2 Satz r-q) */
+function remapSplit(map,b,q,b2){
+  if(!map)return;Object.keys(map).forEach(k=>{const p=k.split("|");
+    if(p[0]===b&&(p[1]==="set"||p[1]==="side")&&+p[2]>q){map[b2+"|"+p[1]+"|"+(+p[2]-q)]=map[k];delete map[k]}
+    else if(p[0]==="w"&&p[1]===b&&+p[2]>q){p[1]=b2;p[2]=String(+p[2]-q);map[p.join("|")]=map[k];delete map[k]}});
 }
 /* langes Drücken (0,5 s, ohne Wischen); danach wird der Klick verschluckt */
 function onLongPress(el,fn){
@@ -1107,7 +1178,7 @@ function renderPlan(box,{hub,rerender}){
   h+=`<button class="btn ghost" data-pladd>＋ Übung hinzufügen</button></div>`;
   box.innerHTML=h;
   const sc2=box.querySelector(".plscroll");sc2.scrollTop=top;
-  box.querySelectorAll(".plview [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;tlCopy=null;rerender()});
+  box.querySelectorAll(".plview [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;tlCopy=null;tlMove=null;tlAutoKey=null;rerender()});
   const after=()=>{rebuildKeep();saveW();rerender()};
   if(planView==="tl"){
     const tl=box.querySelector(".pltl");
@@ -1115,9 +1186,15 @@ function renderPlan(box,{hub,rerender}){
       onPause:(pk,v)=>{W.pauses=W.pauses||{};if(v==null)delete W.pauses[pk];else W.pauses[pk]=v;setPause(W.rid,pk,v);after()},
       onAudio:W.rid==="morgen"?null:(ak,v)=>{W.audio=W.audio||{};if(v==null)delete W.audio[ak];else W.audio[ak]=v;setAudio(W.rid,ak,v);saveW();syncNative();rerender()},
       redraw:rerender,
+      onUnskip:uid=>{skipW(W.items.find(x=>x.uid===uid),false);after()},
+      onMove:W.rid==="morgen"?null:(su,sr,tu,tr,dup)=>{
+        const ids={c:uidGen(),b2:uidGen()},B=W.items.find(x=>x.uid===tu),q=tr,n=B?(B.o.sets||1):0;
+        const mkW=(x,from)=>Object.assign({base:from.base?clone(from.base):null,pair:null,status:dup?"added":(from.status==="added"?"added":"plan"),planned:!dup},x,{o:clone(x.o)});
+        if(!moveSetIn(W.items,su,sr,tu,tr,dup,ids,mkW)){toast("Gleiche Übung – nichts zu verschieben");return}
+        const arr=rawItems(W.rid,W.day);if(arr)moveSetIn(arr,su,sr,tu,tr,dup,ids,x=>x);
+        if(B&&q<n&&W.items.some(x=>x.uid===ids.b2)){const raw=rawRoutine(W.rid);[W.pauses,W.audio,raw&&raw.pauses,raw&&raw.audio].forEach(m=>remapSplit(m,tu,q,ids.b2))}
+        save();toast(dup?"Satz kopiert":"Satz verschoben");after()},
       onEdit:(it,set)=>editW(it,set,rerender)});
-    tl.insertAdjacentHTML("beforeend",skipLineHTML(W.items));
-    tl.querySelectorAll("[data-unskip]").forEach(b=>b.onclick=()=>{skipW(W.items.find(x=>x.uid===b.dataset.unskip),false);after()});
   }else{
     const list=box.querySelector(".pllist");
     list.querySelectorAll("[data-skip]").forEach(b=>b.onclick=e=>{e.stopPropagation();const it=W.items[+b.dataset.skip];if(skipW(it,true)){toast(startedW(it)?itemName(it)+" beendet":itemName(it)+" heute übersprungen");if(W)after()}});
@@ -1138,6 +1215,7 @@ function renderPlan(box,{hub,rerender}){
 function openPlan(){
   if(!W)return;
   if(atHub()){closeSheet();return} // auf der Zwischenseite ist die Übersicht schon da
+  tlAutoKey=null;
   const body=openSheet(W.rname,"Übersicht",`<div id="plBox" class="plbox"></div><button class="btn primary big" id="plOk">Zurück zum Workout</button>`,{onClose:()=>rebuildKeep()});
   const rr=()=>{if(!W||atHub())return;if($("plBox"))renderPlan($("plBox"),{hub:false,rerender:rr});else openPlan()}; // nach Pause/Editor zurück in die Übersicht
   rr();$("plOk").onclick=closeSheet;
