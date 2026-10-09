@@ -223,8 +223,7 @@ function bindSlots(){
         if(r.dataset.gt){open[r.dataset.gt]=!open[r.dataset.gt];renderEssen();return}
         editId=editId===r.dataset.e?null:r.dataset.e;renderEssen();
       },
-      long:()=>{buzz();if(r.dataset.gt&&!sel.size){editId=null;grpView(r.dataset.gt);return}
-        editId=null;ids().forEach(i=>sel.add(i));renderEssen()},
+      long:()=>{buzz();editId=null;ids().forEach(i=>sel.add(i));renderEssen()},
       swipe:r.dataset.e?()=>delWithUndo(d.e.filter(x=>x.id===r.dataset.e)):null
     });
   });
