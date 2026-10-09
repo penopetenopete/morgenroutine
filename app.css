@@ -567,3 +567,7 @@ body.esel #essen{padding-bottom:170px}
 .tle.drop.no span{background:var(--line);color:var(--muted)}
 .tlmove{flex-wrap:wrap}.tlmove .seg{flex:1 1 100%;margin:0}.tlmove span{font-size:.9rem;color:var(--muted)}
 .plscroll>*{flex:none}
+.tlb.ghost{box-shadow:0 12px 30px rgba(0,0,0,.55),0 0 0 2px var(--c);transform:scale(1.06);opacity:.95;transition:none}
+.tlb.ph{border-style:dashed;opacity:.55;background:transparent;cursor:default}
+.tl.moving .tlb{transition:transform .15s}
+.tlb{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}

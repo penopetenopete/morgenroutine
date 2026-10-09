@@ -533,12 +533,20 @@ function audioOf(s,map){
 const AUD_SVG={music:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3" fill="currentColor"/><circle cx="17" cy="16" r="3" fill="currentColor"/></svg>',
   podcast:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>'};
 let tlMode="pause",tlCopy=null; // tlCopy = {v, n} solange „Pause kopieren“ läuft
-let tlFocus=null,tlAutoKey=null,tlMove=null; // tlFocus: Element nach dem Neuzeichnen zeigen · tlMove: {uid,set,dup} Satz verschieben/duplizieren
+let tlFocus=null,tlAutoKey=null,tlMove=null,tlDrag=null; // tlFocus: Element nach dem Neuzeichnen zeigen · tlDrag: Satz wird gerade gezogen
 function renderTimeline(box,Wk,h){
   /* übersprungene Übungen bleiben sichtbar (grau, antippen = wieder rein) */
   const skipped=new Set(Wk.items.filter(it=>it.status==="removed"&&!it.deleted).map(it=>it.uid));
   const W2=Object.assign({},Wk,{items:Wk.items.map(it=>skipped.has(it.uid)?Object.assign({},it,{status:"plan"}):it)});
-  const steps=buildSteps(W2),colOf={};let ci=0;
+  /* Ziehen: Vorschau mit dem Satz an der neuen Stelle (Platzhalter) */
+  const drag=tlDrag&&tlDrag.box===box?tlDrag:null;
+  let W3=W2;
+  if(drag&&drag.t!==drag.t0){
+    const its=W2.items.map(it=>Object.assign({},it,{o:Object.assign({},it.o),so:Object.assign({},it.so||{})}));
+    const tg=drag.t===0?null:drag.slots[drag.t-1];
+    if(moveSetIn(its,drag.src.uid,drag.src.set,tg&&tg.uid,tg&&tg.set,false,{c:"__ph",b2:"__b2"},(x,from)=>Object.assign({status:"plan",pair:null,base:from.base},x)))W3=Object.assign({},W2,{items:its});
+  }
+  const steps=buildSteps(W3),colOf={};let ci=0;
   const can=!!h.onAudio,AM=Wk.audio||{};
   const mus=()=>can&&tlMode==="music";
   if(mus()||!h.onMove)tlMove=null;
@@ -553,7 +561,6 @@ function renderTimeline(box,Wk,h){
       lastBox={box:true,k,s,i};seq.push(lastBox);
     }else if(seq.length)seq.push({edge:true,s,i});
   });
-  if(tlMove&&seq.length)seq.push({edge:true,none:true,end:true});
   const boxes=seq.filter(x=>x.box),PER=3;
   if(!boxes.length){box.innerHTML='<div class="note" style="padding:14px">Noch keine Sätze.</div>';return}
   const firstNext=curI>=0?boxes.find(b=>b.i>curI&&!skipped.has(b.s.uid)):null;
@@ -562,15 +569,19 @@ function renderTimeline(box,Wk,h){
   const audA=s=>can?` data-au="${audioOf(s,AM)}"${AM[audKey(s)]?" data-own":""}`:"";
   const aud=s=>{if(!can)return "";const v=audioOf(s,AM);return `<em class="au au-${v}" aria-label="${v==="music"?"Musik":"Podcast"}">${AUD_SVG[v]}</em>`};
   const isSrc=s=>tlMove&&tlMove.uid===s.uid&&tlMove.set===s.set;
-  const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,sk=skipped.has(s.uid),st=sk?" skip":curI<0?"":last<curI?" done":b.i<=curI?" now":b===firstNext?" next":"",it=Wk.items.find(x=>x.uid===s.uid),e=EXB[s.ex],uni=isUni(EXB[s.ex],s.o);
+  const srcIt=drag&&Wk.items.find(x=>x.uid===drag.src.uid);
+  if(drag){colOf.__ph=colOf[drag.src.uid];if(drag.splitUid)colOf.__b2=colOf[drag.splitUid]}
+  /* Slot-Nummern (Reihenfolge der Sätze ohne den gezogenen) für die Zielsuche */
+  let slotN=-1,lastSK="";const slotOf=new Map();
+  boxes.forEach(b=>{const ph=b.s.uid==="__ph"||(drag&&drag.t===drag.t0&&b.s.uid===drag.src.uid&&b.s.set===drag.src.set);const k=b.s.uid+"|"+b.s.set;if(ph){slotOf.set(b,"ph");return}if(k!==lastSK){slotN++;lastSK=k}slotOf.set(b,slotN)});
+  const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,sk=skipped.has(s.uid),st=sk?" skip":curI<0?"":last<curI?" done":b.i<=curI?" now":b===firstNext?" next":"",it=Wk.items.find(x=>x.uid===s.uid)||(s.uid==="__ph"?srcIt:Wk.items.find(x=>x.uid===(drag&&drag.splitUid)))||{},e=EXB[s.ex],uni=isUni(EXB[s.ex],s.o);
+    const sl=slotOf.get(b);if(sl==="ph")return `<span class="tlb ph" style="--c:${colOf[drag.src.uid]}"><b>${esc(e.name)}</b><small>hierhin</small></span>`;
     const side=s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
-    return `<button class="tlb${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}"${audA(s)}${st===" done"?" disabled":""}>${aud(s)}<b>${esc(e.name)}</b><small>${sk?"übersprungen":"S"+s.set+(side?" · "+side:"")}</small></button>`};
+    return `<button class="tlb${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}" data-slot="${sl}"${audA(s)}${st===" done"?" disabled":""}>${aud(s)}<b>${esc(e.name)}</b><small>${sk?"übersprungen":"S"+s.set+(side?" · "+side:"")}</small></button>`};
   const nextBox=x=>{for(let j=seq.indexOf(x)+1;j<seq.length;j++)if(seq[j].box)return seq[j];return null};
   const sameSet=x=>{const pb=prevBox(x),nb=nextBox(x);return !!(pb&&nb&&pb.s.uid===nb.s.uid&&pb.s.set===nb.s.set)};
   const dropOk=x=>{const pb=prevBox(x);if(!pb||sameSet(x))return false;if(skipped.has(pb.s.uid))return false;if(curI>=0&&(pb.i2!=null?pb.i2:pb.i)<=curI)return false;return true};
   const edgeHTML=(x,turn)=>{
-    if(tlMove&&sameSet(x))return `<span class="tle${turn?" turn":""} none"><i></i></span>`;
-    if(tlMove){const ok=dropOk(x);return `<button class="tle${turn?" turn":""} drop${ok?"":" no"}" ${ok?"":"disabled"} data-d="${seq.indexOf(x)}" aria-label="Hierhin"><i></i><span><b>＋</b></span></button>`}
     if(x.none)return `<span class="tle${turn?" turn":""} none"><i></i></span>`;
     const s=x.s,open=s.dur==null,dn=curI>=0&&x.i<curI,sk=skipped.has(s.uid);
     const lab=open?"▶":pauseText(s.dur);
@@ -582,7 +593,6 @@ function renderTimeline(box,Wk,h){
   for(let i=0;i<seq.length;i++){
     const x=seq[i];
     if(x.box){row.push(boxHTML(x));bi++;continue}
-    if(x.end){if(bi%PER===0){flush();html+=`<div class="tlturnrow ${(ri-1)%2?"l":"r"}">${edgeHTML(x,true)}</div>`}else row.push(edgeHTML(x,false));continue}
     if(bi%PER===0&&bi<boxes.length){flush();html+=`<div class="tlturnrow ${(ri-1)%2?"l":"r"}">${edgeHTML(x,true)}</div>`}
     else row.push(edgeHTML(x,false));
   }
@@ -590,24 +600,15 @@ function renderTimeline(box,Wk,h){
   const own=Object.keys(AM).length;
   const sw=can?`<div class="tlsw" id="tlSw" role="switch" tabindex="0" aria-checked="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span>${own?`<button class="tlrs" id="tlAudReset" aria-label="Alles auf Smart">↺</button>`:""}<i class="tlswk"></i></div>`:"";
   const copy=tlCopy&&!mus()?`<div class="tlcopy"><span>Pause <b>${pauseText(tlCopy.v)}</b> kopiert – andere Pausen antippen${tlCopy.n?` · ${tlCopy.n}× eingefügt`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
-  const mv=tlMove?`<div class="tlcopy tlmove"><div class="seg tlmv"><button class="sbtn" data-mv="0" aria-pressed="${!tlMove.dup}">Verschieben</button><button class="sbtn" data-mv="1" aria-pressed="${!!tlMove.dup}">Kopie</button></div><span>＋ antippen = hierhin</span><button class="btn" id="tlMoveX">Fertig</button></div>`:"";
-  box.innerHTML=`<div class="tlhead">${sw}${copy}${mv}</div><div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}${tlMove?" moving":""}">${html}</div>`;
+  box.innerHTML=`<div class="tlhead">${sw}${copy}</div><div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}${drag?" moving":""}">${html}</div>`;
   const tl=box.querySelector(".tl");
   const flip=()=>{tlMode=mus()?"pause":"music";tlCopy=null;tlMove=null;h.redraw()};
   if($("tlSw")){$("tlSw").onclick=flip;$("tlSw").onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();flip()}}}
   if($("tlAudReset"))$("tlAudReset").onclick=e=>{e.stopPropagation();Object.keys(AM).forEach(k=>h.onAudio(k,null));toast("Alles auf Smart")};
   if($("tlCopyOk"))$("tlCopyOk").onclick=()=>{tlCopy=null;h.redraw()};
-  if($("tlMoveX"))$("tlMoveX").onclick=()=>{tlMove=null;h.redraw()};
-  box.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>{tlMove.dup=b.dataset.mv==="1";box.querySelectorAll("[data-mv]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
-  box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{
-    const pb=prevBox(seq[+b.dataset.d]);if(!pb)return;
-    const m=tlMove;tlFocus="b|"+pb.s.uid+"|"+pb.s.set;
-    if(!m.dup)tlMove=null;
-    h.onMove(m.uid,m.set,pb.s.uid,pb.s.set,!!m.dup);
-  });
   box.querySelectorAll("[data-e]").forEach(b=>{
     const s=seq[+b.dataset.e].s;
-    onLongPress(b,()=>{if(s.dur==null||mus())return;tlCopy={v:s.dur,pk:s.pk,n:0};tlMove=null;buzz(30);h.redraw()});
+    onLongPress(b,()=>{if(s.dur==null||mus())return;tlCopy={v:s.dur,pk:s.pk,n:0};buzz(30);h.redraw()});
     b.onclick=()=>{
       if(b.dataset.lp){delete b.dataset.lp;return}
       if(mus()){toggleAud(s);return}
@@ -618,18 +619,19 @@ function renderTimeline(box,Wk,h){
   });
   box.querySelectorAll("[data-b]").forEach(b=>{
     const s=boxes[+b.dataset.b].s,it=Wk.items.find(x=>x.uid===s.uid);
-    if(h.onMove&&!it.pair&&!b.disabled&&!skipped.has(s.uid)&&!b.classList.contains("now"))
-      onLongPress(b,()=>{if(mus())return;tlMove={uid:s.uid,set:s.set,dup:false};tlCopy=null;tlFocus=b.dataset.k;buzz(30);h.redraw()});
+    if(drag||!it)return; // Vorschau beim Ziehen: nichts antippbar
+    if(h.onMove&&!it.pair&&!b.disabled&&!skipped.has(s.uid)&&!b.classList.contains("now")&&!drag)
+      onLongPress(b,ev=>{if(mus()||tlCopy)return;startDrag(b,s,ev)});
     b.onclick=()=>{
       if(b.dataset.lp){delete b.dataset.lp;return}
       if(skipped.has(s.uid)){if(h.onUnskip){tlFocus=b.dataset.k;h.onUnskip(s.uid)}return}
       if(mus()){toggleAud(s);return}
-      if(tlMove){tlMove=null;h.redraw();return}
       if(tlCopy){tlCopy=null;h.redraw();return}
       tlFocus=b.dataset.k;h.onEdit(it,it.pair?0:s.set);
     };
   });
   /* Scrollen: zuerst zur zuletzt bearbeiteten Stelle, sonst im Workout zur aktuellen/nächsten Übung (oben) */
+  if(drag)return;
   requestAnimationFrame(()=>{
     if(!box.isConnected||!tl.isConnected)return; // inzwischen neu gezeichnet – der neue Durchlauf scrollt
     let el=null,blk="center";
@@ -637,6 +639,46 @@ function renderTimeline(box,Wk,h){
     else if(tlFocus){el=box.querySelector(`[data-k="${CSS.escape(tlFocus)}"]`);tlFocus=null}
     if(el)try{el.scrollIntoView({block:blk})}catch(_){}
   });
+  /* ---- Satz ziehen: lange drücken, Satz hängt am Finger, die anderen rücken nach, loslassen = ablegen ---- */
+  function startDrag(el,s,ev){
+    // Reihenfolge aller anderen Sätze (Slots); Ziel t = „hinter Slot t-1“ (0 = ganz vorne)
+    const slots=[],seen=new Set();let t0=0;
+    boxes.forEach(b=>{const k=b.s.uid+"|"+b.s.set;if(seen.has(k))return;seen.add(k);
+      if(b.s.uid===s.uid&&b.s.set===s.set){t0=slots.length;return}
+      const last=b.i2!=null?b.i2:b.i;
+      slots.push({uid:b.s.uid,set:b.s.set,lock:skipped.has(b.s.uid)&&false||(curI>=0&&last<=curI)})});
+    // im Workout: nicht vor/zwischen erledigte oder die laufende Übung
+    let minT=0;if(curI>=0){slots.forEach((x,j)=>{if(x.lock)minT=j+1});const cur=steps[curI];if(cur&&cur.type==="work"){slots.forEach((x,j)=>{if(x.uid===cur.uid)minT=Math.max(minT,j+1)})}}
+    const r=el.getBoundingClientRect(),gh=el.cloneNode(true);
+    gh.className+=" ghost";gh.removeAttribute("data-slot");Object.assign(gh.style,{position:"fixed",left:r.left+"px",top:r.top+"px",width:r.width+"px",height:r.height+"px",margin:0,zIndex:1000,pointerEvents:"none"});
+    document.body.appendChild(gh);
+    const pt=ev&&ev.clientX!=null?{x:ev.clientX,y:ev.clientY}:{x:r.left+r.width/2,y:r.top+r.height/2};
+    const off={x:pt.x-r.left,y:pt.y-r.top};
+    tlDrag={box,src:{uid:s.uid,set:s.set},slots,t0,t:t0,minT,ghost:gh,pt,splitUid:null};
+    buzz(30);renderTimeline(box,Wk,h);
+    const scroller=(()=>{let e=box.parentElement;while(e&&e!==document.body){const cs=getComputedStyle(e);if(/(auto|scroll)/.test(cs.overflowY)&&e.scrollHeight>e.clientHeight+2)return e;e=e.parentElement}return null})();
+    const move=(x,y)=>{tlDrag.pt={x,y};gh.style.left=(x-off.x)+"px";gh.style.top=(y-off.y)+"px";aim()};
+    function aim(){
+      const {x,y}=tlDrag.pt,hit=document.elementFromPoint(x,y),bx=hit&&hit.closest&&hit.closest(".tlb[data-slot]");
+      if(!bx||!box.contains(bx))return;
+      const j=+bx.dataset.slot,rs=[...box.querySelectorAll(`.tlb[data-slot="${j}"]`)].map(e=>e.getBoundingClientRect());
+      const L=Math.min(...rs.map(q=>q.left)),R=Math.max(...rs.map(q=>q.right)),rev=!!bx.closest(".tlrow.rev");
+      const after=rev?x<(L+R)/2:x>(L+R)/2;
+      let t=after?j+1:j;if(t<tlDrag.minT)return;
+      const tg=t>0?slots[t-1]:null;if(tg&&tg.uid===s.uid)t=tlDrag.t0;
+      if(t!==tlDrag.t){tlDrag.t=t;const tg2=t>0?slots[t-1]:null,B=tg2&&Wk.items.find(z=>z.uid===tg2.uid);tlDrag.splitUid=B&&tg2.set<(B.o.sets||1)?B.uid:null;buzz(10);renderTimeline(box,Wk,h)}
+    }
+    let raf=0;const loop=()=>{if(!tlDrag)return;const {y}=tlDrag.pt,top=scroller?scroller.getBoundingClientRect().top:0,bot=scroller?scroller.getBoundingClientRect().bottom:innerHeight;
+      const d=y<top+70?-12:y>bot-70?12:0;if(d){if(scroller)scroller.scrollTop+=d;else window.scrollBy(0,d);aim()}raf=requestAnimationFrame(loop)};raf=requestAnimationFrame(loop);
+    const pm=e=>move(e.clientX,e.clientY);
+    const tm=e=>{if(e.touches&&e.touches[0]){e.preventDefault();move(e.touches[0].clientX,e.touches[0].clientY)}};
+    const end=()=>{window.removeEventListener("pointermove",pm);window.removeEventListener("touchmove",tm);window.removeEventListener("pointerup",end);window.removeEventListener("touchend",end);
+      cancelAnimationFrame(raf);gh.remove();const d=tlDrag;tlDrag=null;
+      if(d.t!==d.t0){const tg=d.t>0?d.slots[d.t-1]:null;tlFocus="b|"+d.src.uid+"|"+d.src.set;h.onMove(d.src.uid,d.src.set,tg&&tg.uid,tg&&tg.set,false)}
+      else renderTimeline(box,Wk,h)};
+    window.addEventListener("pointermove",pm);window.addEventListener("touchmove",tm,{passive:false});
+    window.addEventListener("pointerup",end);window.addEventListener("touchend",end);
+  }
   /* antippen = umschalten; entspricht es danach wieder Smart, wird der eigene Wert gelöscht */
   function toggleAud(s){
     const k=audKey(s),v=audioOf(s,AM)==="music"?"podcast":"music",std=audioOf(s,{});
@@ -646,7 +688,11 @@ function renderTimeline(box,Wk,h){
 }
 /* Satz verschieben/duplizieren: Satz r von A landet hinter Satz q von B (B wird dort ggf. geteilt). ids = neue uids {c,b2}. */
 function moveSetIn(arr,src,r,tgt,q,dup,ids,mk){
-  const A=arr.find(x=>x.uid===src);let ti=arr.findIndex(x=>x.uid===tgt);if(!A||ti<0)return false;
+  const A=arr.find(x=>x.uid===src);if(!A)return false;
+  if(tgt==null){ // ganz nach vorne
+    const C=mk({uid:ids.c,ex:A.ex,o:Object.assign({},A.o,(A.so||{})[r]||{},{sets:1}),so:{},link:false},A);arr.splice(0,0,C);
+    if(!dup){const ai=arr.indexOf(A);if((A.o.sets||1)<=1){if(ai>0&&arr[ai-1].link&&!A.link)arr[ai-1].link=false;arr.splice(ai,1)}else delSet(A,r)}return true}
+  let ti=arr.findIndex(x=>x.uid===tgt);if(ti<0)return false;
   const so=o=>o||{};
   if(src===tgt){ // gleiche Übung: Kopie = ein Satz mehr, Verschieben bleibt gleich
     if(!dup)return false;const n=A.o.sets||1;A.o.sets=n+1;if(so(A.so)[r]){A.so=Object.assign({},A.so);A.so[n+1]=clone(A.so[r])}return true;
@@ -673,7 +719,7 @@ function remapSplit(map,b,q,b2){
 function onLongPress(el,fn){
   let t=null,x0=0,y0=0;
   const stop=()=>{clearTimeout(t);t=null};
-  el.addEventListener("pointerdown",e=>{x0=e.clientX;y0=e.clientY;stop();t=setTimeout(()=>{t=null;el.dataset.lp=1;fn()},500)});
+  el.addEventListener("pointerdown",e=>{x0=e.clientX;y0=e.clientY;stop();t=setTimeout(()=>{t=null;el.dataset.lp=1;fn({clientX:x0,clientY:y0})},450)});
   el.addEventListener("pointermove",e=>{if(t&&Math.hypot(e.clientX-x0,e.clientY-y0)>10)stop()});
   ["pointerup","pointercancel","pointerleave"].forEach(ev=>el.addEventListener(ev,stop));
   el.addEventListener("contextmenu",e=>e.preventDefault());
@@ -753,6 +799,7 @@ function openEditor(it,ctx){
     const own=S1&&it.so&&it.so[S1]&&Object.keys(it.so[S1]).length;
     h+=`<button class="btn primary big" id="edOk">Fertig</button>${own?`<button class="btn" id="edAll">Für alle Sätze übernehmen</button>`:""}`;
     if(ctx.onSkip)h+=`<button class="btn" id="edSkip">${ctx.skipped?"Doch machen":ctx.skipLabel||"Heute überspringen"}</button>`;
+    if(S1&&!it.pair)h+=`<button class="btn" id="edDup">Satz ${S1} kopieren</button>`;
     if(S1&&(it.o.sets||1)>1)h+=`<button class="btn danger" id="edDel">Satz ${S1} löschen</button>`;
     else if(ctx.onDelete&&!S1)h+=`<button class="btn danger" id="edDelEx">Übung löschen</button>`;
     const n=it.o.sets||1;
@@ -770,6 +817,7 @@ function openEditor(it,ctx){
     $("edOk").onclick=closeSheet;
     if($("edAll"))$("edAll").onclick=()=>{it.o=Object.assign({},it.o,it.so[S1]);it.so={};persist();toast("Gilt jetzt für alle Sätze");render()};
     if($("edDel"))$("edDel").onclick=()=>{delSet(it,S1);persist();closeSheet();toast(`Satz ${S1} gelöscht`)};
+    if($("edDup"))$("edDup").onclick=()=>{const n=it.o.sets||1,so={};Object.keys(it.so||{}).forEach(k=>{const i=+k;so[i<=S1?i:i+1]=it.so[k]});if(it.so&&it.so[S1])so[S1+1]=clone(it.so[S1]);it.so=so;it.o.sets=n+1;persist();closeSheet();toast(`Satz ${S1} kopiert – jetzt ${n+1} Sätze`)};
   };
   render();
 }
