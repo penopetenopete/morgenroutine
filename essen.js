@@ -34,7 +34,7 @@ function seed(){
    {id:"roggen",name:"Roggenbrötchen",brand:"Rewe Beste Wahl",base:"stk",src:"own",kcal:172,p:5.3,c:32.9,f:1.4,fib:4,def:1}
   ].forEach(f=>foods[f.id]=f);
   const meals={
-    fruehstueck:{id:"fruehstueck",name:"Mein Frühstück",slot:"fr",items:[{food:"quark",amt:250},{food:"hafer",amt:80},{food:"whey",amt:29},{food:"sonne",amt:40},{food:"floh",amt:30},{food:"gluten",amt:50}]},
+    fruehstueck:{id:"fruehstueck",name:"Mein Frühstück",slot:"fr",items:[{food:"quark",amt:250},{food:"hafer",amt:80},{food:"whey",amt:29},{food:"sonne",amt:40},{food:"floh",amt:30}]},
     eierbr:{id:"eierbr",name:"Eier + Brötchen",slot:"mi",items:[{food:"ei",amt:3,u:"stk"},{food:"roggen",amt:1}]}
   };
   return {v:1,goals:{kcal:2250,p:141,f:62,c:281},kg:87,burnIn:false,foods,meals,days:{}};
@@ -42,6 +42,8 @@ function seed(){
 let E=null;
 try{E=JSON.parse(localStorage.getItem(EK)||"null")}catch(_){}
 if(!E||!E.foods)E=seed();
+/* 09.10.2026: kein Weizengluten mehr im Frühstück */
+if(!(E.mig>=1)){const m=E.meals&&E.meals.fruehstueck;if(m)m.items=m.items.filter(i=>i.food!=="gluten");E.mig=1;try{localStorage.setItem(EK,JSON.stringify(E))}catch(_){}}
 function esave(){try{localStorage.setItem(EK,JSON.stringify(E))}catch(_){toast("Speichern ging nicht")}}
 const day=k=>E.days[k]||(E.days[k]={e:[]});
 const dayGet=k=>E.days[k]||{e:[]};
@@ -209,8 +211,9 @@ function rowH(en,sub){
 function bindSlots(){
   const S2=$("eSlots"),d=dayGet(curDay);
   S2.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{if(!sel.size)openSearch({kind:"day",slot:b.dataset.add})});
-  S2.querySelectorAll("[data-sg]").forEach(b=>b.onclick=()=>{const [sl,i]=b.dataset.sg.split("|"),x=suggestions(sl,curDay)[+i];useSuggestion(x,sl)});
-  S2.querySelectorAll("[data-gm]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(!sel.size)groupSheet(b.dataset.gm)});
+  S2.querySelectorAll("[data-sg]").forEach(b=>{const [sl,i]=b.dataset.sg.split("|"),x=()=>suggestions(sl,curDay)[+i];
+    gesture(b,{tap:()=>useSuggestion(x(),sl),long:()=>{const y=x();if(y&&y.t==="tpl"){buzz();tplSheet(y.id)}}})});
+  S2.querySelectorAll("[data-gm]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(!sel.size)grpView(b.dataset.gm)});
   S2.querySelectorAll("[data-gadd]").forEach(b=>b.onclick=()=>{const en=d.e.find(x=>x.g&&x.g.id===b.dataset.gadd);openSearch({kind:"grp",gid:b.dataset.gadd,slot:en?en.slot:"sn"})});
   S2.querySelectorAll("[data-e],[data-gt]").forEach(r=>{
     const ids=()=>r.dataset.e?[r.dataset.e]:d.e.filter(x=>x.g&&x.g.id===r.dataset.gt).map(x=>x.id);
@@ -220,7 +223,8 @@ function bindSlots(){
         if(r.dataset.gt){open[r.dataset.gt]=!open[r.dataset.gt];renderEssen();return}
         editId=editId===r.dataset.e?null:r.dataset.e;renderEssen();
       },
-      long:()=>{editId=null;ids().forEach(i=>sel.add(i));try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}renderEssen()},
+      long:()=>{buzz();if(r.dataset.gt&&!sel.size){editId=null;grpView(r.dataset.gt);return}
+        editId=null;ids().forEach(i=>sel.add(i));renderEssen()},
       swipe:r.dataset.e?()=>delWithUndo(d.e.filter(x=>x.id===r.dataset.e)):null
     });
   });
@@ -231,6 +235,7 @@ function bindSlots(){
   }
   renderSelBar();
 }
+const buzz=()=>{try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}};
 /* Gesten: tippen · nach links wischen = löschen · lange drücken = auswählen */
 function gesture(el,{tap,long,swipe}){
   el.addEventListener("pointerdown",ev=>{
@@ -420,24 +425,53 @@ function copySheet(list,what,onDone){
   draw();
 }
 
-/* ---------- Mahlzeit (Gruppe) im Tag ---------- */
-function groupSheet(gid){
-  const d=day(curDay),gl=d.e.filter(x=>x.g&&x.g.id===gid);if(!gl.length)return;
-  const g=gl[0].g,s=sumE(gl),tpl=g.tpl&&E.meals[g.tpl];
-  openSheet(SLOTN[gl[0].slot],g.name,
-    `
-     <button class="btn" id="gAdd">＋ Zutat hinzufügen</button>
-          ${tpl?`<button class="btn" id="gUpd">Vorlage „${esc(tpl.name)}“ mit diesem Stand überschreiben</button>`:""}
-     <button class="btn" id="gNew">Als neue Vorlage speichern</button>
-     <button class="btn" id="gRen">Umbenennen</button>
-     <button class="btn ghost" id="gSplit">Auflösen</button>
-     <button class="btn danger" id="gDel">Ganze Mahlzeit löschen</button>`);
-  $("gAdd").onclick=()=>openSearch({kind:"grp",gid,slot:gl[0].slot});
-  if($("gUpd"))$("gUpd").onclick=()=>{tpl.items=gl.map(x=>{const it={food:x.food,amt:x.amt};if(x.u)it.u=x.u;return it});esave();closeSheet();toast("Vorlage aktualisiert")};
-  $("gNew").onclick=()=>askName("Neue Vorlage",g.name+(tpl?" (neu)":""),n=>{const id=nid();E.meals[id]={id,name:n,slot:gl[0].slot,items:gl.map(x=>{const it={food:x.food,amt:x.amt};if(x.u)it.u=x.u;return it})};gl.forEach(x=>x.g.tpl=id);esave();renderEssen();toast("Vorlage „"+n+"“ gespeichert")});
-  $("gRen").onclick=()=>askName("Umbenennen",g.name,n=>{gl.forEach(x=>x.g.name=n);esave();renderEssen()});
-  $("gSplit").onclick=()=>{gl.forEach(x=>delete x.g);esave();closeSheet();renderEssen()};
-  $("gDel").onclick=()=>{d.e=d.e.filter(x=>!gl.includes(x));tidyDay(curDay);esave();closeSheet();renderEssen();toast("„"+g.name+"“ gelöscht")};
+/* ---------- Mahlzeit-Ansicht (lange drücken): Nährwerte oben, Zutaten mit Rad, ＋ Zutat ----------
+   Gleiche Ansicht für eine Mahlzeit im Tag (grpView) und eine Vorlage (tplSheet). */
+function nutHead(s){const G=E.goals;
+  const cell=k=>`<div class="emc" style="--rc:${MET[k].c}"><b class="num">${k==="kcal"?nf(s.kcal):nf(s[k],1)}</b><small>${MET[k].s||"kcal"}</small><i><i style="width:${Math.min(100,s[k]/(G[k]||1)*100).toFixed(0)}%"></i></i></div>`;
+  return cell("kcal")+cell("c")+cell("p")+cell("f")}
+let mEd=-1;
+function mealSheet(c){
+  mEd=-1;
+  const draw=keep=>{
+    const items=c.items();if(mEd>=items.length)mEd=-1;
+    const y=keep?$("shBody").scrollTop:0;
+    const body=openSheet(c.eyebrow,c.title(),`<div class="emnut" id="mNut">${nutHead(sumE(items))}</div>${c.top?c.top():""}
+      <div class="elist emlist">${items.map((it,i)=>{const f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",ed=i===mEd;
+        return `<div class="erow${ed?" editing":""}" data-mi="${i}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}">${nf(it.amt,1)} ${pcs?"Stk":"g"}</span><span class="ev">${nf(nut(f,it.amt,it.u).kcal)}</span>${ed?`<button class="ermv" data-mx="${i}" aria-label="Zutat entfernen">×</button>`:""}</div>${ed?rulerH(pcs):""}`}).join("")}
+        <button class="eaddin emadd" id="mAdd">＋ Zutat</button></div>${c.actions()}`,{onClose:c.onClose});
+    body.scrollTop=y;
+    body.querySelectorAll("[data-mi]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-mx]"))return;const i=+r.dataset.mi;mEd=mEd===i?-1:i;draw(true)});
+    body.querySelectorAll("[data-mx]").forEach(b=>b.onclick=()=>{const it=items[+b.dataset.mx];mEd=-1;c.remove(it);esave();if(c.items().length||c.keepEmpty)draw(true);else{closeSheet()}});
+    const ru=body.querySelector(".eruler");
+    if(ru){const it=items[mEd],f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",row=body.querySelector(`[data-mi="${mEd}"]`);
+      bindRuler(ru,it,pcs,()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))})}
+    $("mAdd").onclick=c.add;
+    if(c.bind)c.bind(body,draw);
+  };
+  draw(false);
+}
+/* Mahlzeit im Tag (Kopie) */
+function grpView(gid){
+  const gl=()=>dayGet(curDay).e.filter(x=>x.g&&x.g.id===gid);
+  const first=gl()[0];if(!first)return;
+  const g=()=>(gl()[0]||first).g,tpl=()=>g().tpl&&E.meals[g().tpl];
+  const toTpl=list=>list.map(x=>{const it={food:x.food,amt:x.amt};if(x.u)it.u=x.u;return it});
+  mealSheet({eyebrow:SLOTN[first.slot],title:()=>g().name,items:gl,
+    remove:it=>{const d=day(curDay);d.e=d.e.filter(x=>x!==it);tidyDay(curDay)},
+    add:()=>openSearch({kind:"grp",gid,slot:first.slot,back:()=>grpView(gid)}),
+    onClose:()=>renderEssen(),
+    actions:()=>`<div class="emact">${tpl()?`<button class="btn" id="gUpd">Vorlage speichern</button>`:""}<button class="btn" id="gNew">Neue Vorlage</button>
+      <button class="btn" id="gRen">Umbenennen</button><button class="btn" id="gCopy">Kopieren …</button>
+      <button class="btn ghost" id="gSplit">Auflösen</button><button class="btn danger" id="gDel">Löschen</button></div>`,
+    bind:(body,draw)=>{
+      if($("gUpd"))$("gUpd").onclick=()=>{tpl().items=toTpl(gl());esave();toast("„"+tpl().name+"“ aktualisiert")};
+      $("gNew").onclick=()=>askName("Neue Vorlage",g().name+(tpl()?" (neu)":""),n=>{const id=nid();E.meals[id]={id,name:n,slot:first.slot,items:toTpl(gl())};gl().forEach(x=>x.g.tpl=id);esave();toast("Vorlage „"+n+"“ gespeichert");grpView(gid)});
+      $("gRen").onclick=()=>askName("Umbenennen",g().name,n=>{gl().forEach(x=>x.g.name=n);esave();grpView(gid)});
+      $("gCopy").onclick=()=>copySheet(gl(),g().name);
+      $("gSplit").onclick=()=>{gl().forEach(x=>delete x.g);esave();closeSheet()};
+      $("gDel").onclick=()=>{const list=gl();closeSheet();delWithUndo(list)};
+    }});
 }
 function slotSheet(sl){
   const d=day(curDay),list=d.e.filter(x=>x.slot===sl);if(!list.length)return;
@@ -460,13 +494,14 @@ function score(n,toks){let s=0;const w=" "+n;toks.forEach(t=>{if(w.includes(" "+
 let BLS=null,blsP=null;
 function loadBLS(){if(BLS)return Promise.resolve(BLS);if(!blsP)blsP=fetch("bls.json").then(r=>r.json()).then(a=>{BLS=a.map(x=>({code:x[0],name:x[1],kcal:x[2],p:x[3],c:x[4],f:x[5],fib:x[6],n:norm(x[1])}));return BLS}).catch(e=>{blsP=null;throw e});return blsP}
 const blsFood=b=>({id:"bls:"+b.code,name:b.name,brand:"",base:"g",src:"bls",kcal:b.kcal,p:b.p,c:b.c,f:b.f,fib:b.fib});
-let searchCtx=null,offRes=[],added={},addedN=0,edKey=null;
-function openSearch(ctx){
-  searchCtx=ctx;offRes=[];added={};addedN=0;
+let searchCtx=null,offRes=[],added={},addedN=0,edKey=null,sTab="f";
+/* keep = gemerkter Stand (nach „Mahlzeit ansehen“ zurück in die Suche) */
+function openSearch(ctx,keep){
+  searchCtx=ctx;if(!keep){offRes=[];added={};addedN=0;edKey=null;sTab="f"}
   const where=ctx.kind==="tpl"?E.meals[ctx.tid].name:ctx.kind==="grp"?"Zur Mahlzeit":SLOTN[ctx.slot]+(curDay===today()?"":" · "+dayLab(curDay));
-  openSheet("",where,`<div class="esbar"><input class="pksearch" id="eQ" type="search" placeholder="Suchen …" autocomplete="off" enterkeyhint="search"><button class="ic" id="eScan" aria-label="Barcode scannen">${CAM}</button></div><div id="eRes"></div><div class="edone"><button class="btn primary big" id="eDone">Fertig</button></div>`,
-    {onClose:()=>{const c=searchCtx;searchCtx=null;if(c&&c.kind==="tpl")setTimeout(()=>tplSheet(c.tid),60);else renderEssen()}});
-  const q=$("eQ");let t=null;
+  openSheet("",where,`<div class="esbar"><input class="pksearch" id="eQ" type="search" placeholder="Suchen …" autocomplete="off" enterkeyhint="search"><button class="ic" id="eScan" aria-label="Barcode scannen">${CAM}</button><div class="seg etabs" id="eTabs"></div></div><div id="eRes"></div><div class="edone"><button class="btn primary big" id="eDone">Fertig</button></div>`,
+    {onClose:()=>{const c=searchCtx;searchCtx=null;renderEssen();if(c&&c.back)setTimeout(c.back,60);else if(c&&c.kind==="tpl")setTimeout(()=>tplSheet(c.tid),60)}});
+  const q=$("eQ");let t=null;if(keep&&keep.q)q.value=keep.q;
   q.addEventListener("input",()=>{clearTimeout(t);offRes=[];t=setTimeout(drawRes,120)});
   q.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();q.blur();if(q.value.trim().length>=2)searchOFF(q.value.trim())}});
   $("eScan").onclick=()=>scanSheet();
@@ -474,6 +509,8 @@ function openSearch(ctx){
   drawRes();loadBLS().then(()=>{if(searchCtx===ctx&&$("eQ"))drawRes()}).catch(()=>{});
 }
 /* fügt hinzu und gibt das Objekt zurück, dessen amt/u man danach ändern kann */
+function snapSearch(){return {ctx:searchCtx,added,addedN,offRes,tab:sTab,q:$("eQ")?$("eQ").value:""}}
+function restoreSearch(st){added=st.added;addedN=st.addedN;offRes=st.offRes||[];sTab=st.tab;edKey=null;openSearch(st.ctx,st)}
 function addFood(f,ctx){
   if(!E.foods[f.id])E.foods[f.id]=f;
   const x={food:f.id,amt:f.def||(f.base==="stk"||f.du==="stk"?1:100)};if(f.du==="stk"&&f.base==="g"&&f.stkG)x.u="stk";
@@ -493,12 +530,19 @@ function drawRes(){
   const foodRow=(f,key)=>{pick[key]=f;const a=added[key];
     if(a){const pcs=f.base==="stk"||a.u==="stk",ed=edKey===key;return `<div class="erow eadded${ed?" editing":""}" data-key="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}</span><span class="epill on" data-ek="${esc(key)}">${nf(a.amt,1)} ${pcs?"Stk":"g"}</span><button class="ermv" data-undo="${esc(key)}" aria-label="Wieder entfernen">×</button></div>${ed?rulerH(pcs):""}`}
     return `<button class="erow" data-pick="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}${f.brand?` <small>${esc(f.brand)}</small>`:""}</span><span class="ev">${nf(f.kcal)}</span><span class="eplus">${PLUS}</span></button>`};
-  const tplRow2=m=>{const k="t:"+m.id,s=sumE(m.items);
-    return `<button class="erow${added[k]?" eadded":""}" data-tpl="${m.id}"><span class="eic">🍽️</span><span class="enm">${esc(m.name)}</span><span class="ev">${nf(s.kcal)}</span>${added[k]?`<span class="epill on">drin</span>`:`<span class="eplus">${PLUS}</span>`}</button>`};
+  const tplRow2=m=>{const k="t:"+m.id,s=sumE(m.items),strip=m.items.slice(0,7).map(x=>iconOf(E.foods[x.food]).replace('class="eic"','class="emini"')).join("")+(m.items.length>7?`<span class="emore">+${m.items.length-7}</span>`:"");
+    return `<div class="erow emrow2${added[k]?" eadded":""}" data-tpl="${m.id}"><span class="emeal"><span class="enm">${esc(m.name)}</span><span class="estrip">${strip}</span></span><span class="ev">${nf(s.kcal)}</span>${added[k]?`<span class="epill on">✓</span>`:`<span class="eplus">${PLUS}</span>`}</div>`};
+  const isDay=ctx.kind==="day",tabs=$("eTabs");
+  if(tabs){tabs.hidden=!isDay;if(isDay){const nm=Object.keys(E.meals).length;
+    tabs.innerHTML=`<button class="sbtn" data-tab="f" aria-pressed="${sTab==="f"}">Lebensmittel</button><button class="sbtn" data-tab="m" aria-pressed="${sTab==="m"}">Mahlzeiten <small>${nm}</small></button>`;
+    tabs.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{sTab=b.dataset.tab;edKey=null;drawRes();$("shBody").scrollTop=0})}}
   let h="";
-  if(!toks.length){
-    const ms=Object.values(E.meals).sort((a,b)=>(u.me[b.id]||0)-(u.me[a.id]||0)||(b.slot===ctx.slot)-(a.slot===ctx.slot));
-    if(ctx.kind==="day"&&ms.length)h+=`<div class="list elist">${ms.map(tplRow2).join("")}</div>`;
+  if(isDay&&sTab==="m"){
+    const ms=Object.values(E.meals).filter(m=>!toks.length||qMatch(norm(m.name+" "+m.items.map(x=>foodName(E.foods[x.food])).join(" ")),toks))
+      .sort((a,b)=>(u.me[b.id]||0)-(u.me[a.id]||0)||(b.slot===ctx.slot)-(a.slot===ctx.slot)||a.name.localeCompare(b.name));
+    h+=ms.length?`<div class="list elist">${ms.map(tplRow2).join("")}</div>`:`<div class="note">Keine Mahlzeit gefunden.</div>`;
+    h+=`<button class="btn ghost" id="eNewM">＋ Neue Mahlzeit</button>`;
+  }else if(!toks.length){
     const fs=Object.values(E.foods).sort((a,b)=>((u.fo[b.id]||0)*3+(uAll.fo[b.id]||0))-((u.fo[a.id]||0)*3+(uAll.fo[a.id]||0))||a.name.localeCompare(b.name));
     h+=`<div class="list elist">${fs.slice(0,40).map(f=>foodRow(f,f.id)).join("")}</div>`;
   }else{
@@ -513,16 +557,19 @@ function drawRes(){
     h+=rows.length?`<div class="list elist">${rows.join("")}</div>`:BLS?`<div class="note">Nichts gefunden.</div>`:"";
     h+=`<button class="btn ghost" id="eOff">🌐 Marken online suchen</button>`;
   }
-  h+=`<button class="btn ghost" id="eNew">＋ Neues Lebensmittel</button>`;
+  if(!(isDay&&sTab==="m"))h+=`<button class="btn ghost" id="eNew">＋ Neues Lebensmittel</button>`;
   box.innerHTML=h;
   $("eDone").textContent=addedN?`Fertig · ${addedN} hinzugefügt`:"Fertig";
   box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;edKey=null;drawRes()});
   box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;drawRes()});
   box.querySelectorAll("[data-undo]").forEach(b=>b.onclick=()=>{const k=b.dataset.undo;removeAdded(added[k],ctx);delete added[k];addedN--;drawRes()});
   box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";bindRuler(r.nextElementSibling,a,pcs,()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")})});
-  box.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{const k="t:"+b.dataset.tpl;if(added[k])return;insertTpl(b.dataset.tpl,curDay,ctx.slot,true);added[k]=1;addedN++;drawRes()});
+  box.querySelectorAll("[data-tpl]").forEach(b=>gesture(b,{
+    tap:()=>{const k="t:"+b.dataset.tpl;if(added[k])return;if(!E.meals[b.dataset.tpl].items.length){tplSheet(b.dataset.tpl,snapSearch());return}insertTpl(b.dataset.tpl,curDay,ctx.slot,true);added[k]=1;addedN++;drawRes()},
+    long:()=>{buzz();tplSheet(b.dataset.tpl,snapSearch())}}));
+  if($("eNewM"))$("eNewM").onclick=()=>{const st=snapSearch();askName("Neue Mahlzeit",$("eQ").value.trim(),n=>{const id=nid();E.meals[id]={id,name:n,slot:ctx.slot,items:[]};esave();tplSheet(id,st)})};
   if($("eOff"))$("eOff").onclick=()=>searchOFF(raw.trim());
-  $("eNew").onclick=()=>{const c=searchCtx;searchCtx=null;foodForm({name:raw.trim()},f=>{openSearch(c);added[f.id]=addFood(f,c);addedN=1;drawRes()})};
+  if($("eNew"))$("eNew").onclick=()=>{const c=searchCtx;searchCtx=null;foodForm({name:raw.trim()},f=>{openSearch(c);added[f.id]=addFood(f,c);addedN=1;drawRes()})};
 }
 const PLUS_S='<span class="eplus">'+PLUS+'</span>';
 
@@ -608,20 +655,24 @@ function tplList(){
   $("shBody").querySelectorAll("[data-tl]").forEach(b=>b.onclick=()=>tplSheet(b.dataset.tl));
   $("tlNew").onclick=()=>askName("Neue Vorlage","",n=>{const id=nid();E.meals[id]={id,name:n,items:[]};esave();tplSheet(id)});
 }
-function tplSheet(tid){
-  const m=E.meals[tid];if(!m)return;const s=sumE(m.items);
-  openSheet("Vorlage",m.name,`<div class="note">${nf(s.kcal)} kcal · ${nf(s.p)} g Eiweiß · ${nf(s.f)} g F · ${nf(s.c)} g KH</div>
-    <div class="seg eslotseg">${SLOTS.map(([sl,n])=>`<button class="sbtn" data-ts="${sl}" aria-pressed="${m.slot===sl}">${n}</button>`).join("")}</div>
-    <div class="list elist">${m.items.map((it,i)=>{const f=E.foods[it.food],n=nut(f,it.amt,it.u);return `<button class="erow" data-ti="${i}"><span class="emid"><span class="nm">${esc(foodName(f))}</span><span class="val">${amtText(f,it.amt,it.u)}</span></span><span class="ekc"><b>${nf(n.kcal)}</b> kcal<small>${nf(n.p,1)} g E</small></span></button>`}).join("")}</div>
-    <button class="btn" id="tAdd">＋ Zutat</button>
-    <div class="row2"><button class="btn" id="tRen">Umbenennen</button><button class="btn danger" id="tDel">Löschen</button></div>
-    <button class="btn ghost" id="tBack">Alle Vorlagen</button>`);
-  $("shBody").querySelectorAll("[data-ts]").forEach(b=>b.onclick=()=>{m.slot=m.slot===b.dataset.ts?undefined:b.dataset.ts;esave();tplSheet(tid)});
-  $("shBody").querySelectorAll("[data-ti]").forEach(b=>b.onclick=()=>openAmount({mode:"tplitem",tid,i:+b.dataset.ti}));
-  $("tAdd").onclick=()=>openSearch({kind:"tpl",tid,slot:m.slot||"sn"});
-  $("tRen").onclick=()=>askName("Umbenennen",m.name,n=>{m.name=n;esave();tplSheet(tid)});
-  $("tDel").onclick=()=>{delete E.meals[tid];esave();tplList();toast("Vorlage gelöscht")};
-  $("tBack").onclick=tplList;
+/* Vorlage ansehen/bearbeiten. from = gemerkter Stand der Suche (dann „Hinzufügen“ + zurück zur Suche) */
+function tplSheet(tid,from){
+  const m=E.meals[tid];if(!m)return;
+  const back=()=>from?restoreSearch(from):tplList();
+  mealSheet({eyebrow:"Mahlzeit",title:()=>m.name,items:()=>m.items,keepEmpty:true,
+    remove:it=>{const i=m.items.indexOf(it);if(i>=0)m.items.splice(i,1)},
+    add:()=>openSearch({kind:"tpl",tid,slot:m.slot||"sn",back:()=>tplSheet(tid,from)}),
+    onClose:()=>renderEssen(),
+    top:()=>`<div class="seg eslotseg emslot">${SLOTS.map(([sl,n])=>`<button class="sbtn" data-ts="${sl}" aria-pressed="${m.slot===sl}">${n}</button>`).join("")}</div>`,
+    actions:()=>(from?`<button class="btn primary big" id="tUse">${from.added["t:"+tid]?"Nochmal hinzufügen":"Hinzufügen"}</button>`:"")+
+      `<div class="emact"><button class="btn" id="tRen">Umbenennen</button><button class="btn danger" id="tDel">Löschen</button></div><button class="btn ghost" id="tBack">‹ ${from?"Zurück":"Alle Mahlzeiten"}</button>`,
+    bind:(body,draw)=>{
+      body.querySelectorAll("[data-ts]").forEach(b=>b.onclick=()=>{m.slot=m.slot===b.dataset.ts?undefined:b.dataset.ts;esave();draw(true)});
+      if($("tUse"))$("tUse").onclick=()=>{if(!m.items.length){toast("Mahlzeit ist leer");return}insertTpl(tid,curDay,from.ctx.slot,true);from.added["t:"+tid]=1;from.addedN++;restoreSearch(from)};
+      $("tRen").onclick=()=>askName("Umbenennen",m.name,n=>{m.name=n;esave();tplSheet(tid,from)});
+      let arm=false;$("tDel").onclick=e=>{if(!arm){arm=true;e.target.textContent="Wirklich löschen?";return}delete E.meals[tid];esave();toast("„"+m.name+"“ gelöscht");back()};
+      $("tBack").onclick=back;
+    }});
 }
 function foodList(){
   const fs=Object.values(E.foods).sort((a,b)=>a.name.localeCompare(b.name));

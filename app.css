@@ -571,3 +571,21 @@ body.esel #essen{padding-bottom:170px}
 .tlb.ph{border-style:dashed;opacity:.55;background:transparent;cursor:default}
 .tl.moving .tlb{transition:transform .15s}
 .tlb{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+/* Mahlzeit-Ansicht (lange drücken, 09.10.2026) */
+.emnut{display:grid;grid-template-columns:1.25fr 1fr 1fr 1fr;gap:6px}
+.emc{display:flex;flex-direction:column;gap:1px;padding:8px 9px 7px;border-radius:12px;background:var(--bg);min-width:0}
+.emc b{font-family:var(--f-display);font-size:1.1rem;font-weight:600;color:var(--fg);white-space:nowrap}
+.emc small{font-family:var(--f-display);font-size:.66rem;color:var(--rc)}
+.emc>i{display:block;height:3px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:4px}
+.emc>i>i{display:block;height:100%;margin:0;background:var(--rc)}
+.emlist>.erow+.erow,.emlist>.eruler+.erow{border-top:1px solid var(--line)}
+.emlist .emadd{border-top:1px solid var(--line);min-height:44px;background:color-mix(in srgb,var(--bg) 30%,var(--card))}
+.emslot .sbtn{min-height:34px;font-size:.72rem;flex:1 1 20%}
+.emact{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.emact .btn{min-height:42px;font-size:.8rem;margin:0}
+.esbar{flex-wrap:wrap}
+.etabs{flex:1 1 100%}
+.etabs .sbtn{min-height:36px;font-size:.8rem}
+.etabs .sbtn small{color:var(--muted);font-size:.7rem;margin-left:3px}
+#eRes .emrow2{min-height:56px}
+.emact .btn{white-space:nowrap;letter-spacing:0;padding:0 8px}
