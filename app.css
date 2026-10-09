@@ -589,3 +589,4 @@ body.esel #essen{padding-bottom:170px}
 .etabs .sbtn small{color:var(--muted);font-size:.7rem;margin-left:3px}
 #eRes .emrow2{min-height:56px}
 .emact .btn{white-space:nowrap;letter-spacing:0;padding:0 8px}
+.echeck{flex:none;width:30px;height:30px;display:grid;place-items:center;color:var(--accent);font-size:.95rem}
