@@ -511,6 +511,22 @@ function rememberValues(it){S.exLast=S.exLast||{};S.exLast[it.ex]=Object.assign(
 
 /* =================== TIMELINE: jeder Satz ein Kästchen, Pausen als Linien =================== */
 let rView="list";
+/* Wischen über den Bildschirm (links/rechts) – Liste ↔ Timeline, Tage in der Ernährung. fn(+1) = nach links gewischt (weiter), fn(-1) = zurück */
+function hSwipe(el,fn,inSheet){
+  let x0=0,y0=0,t0=0,ok=false;
+  el.addEventListener("touchstart",e=>{
+    ok=false;if(e.touches.length!==1)return;const t=e.touches[0];x0=t.clientX;y0=t.clientY;t0=Date.now();
+    if(x0<24||x0>innerWidth-24)return; // Zurück-Geste vom Rand nicht abfangen
+    if(e.target.closest(".days,.erscroll,.eruler,.wheel,.wheelwrap,.eswipe,.edock,.ecal,input,textarea,select,.tlghost,.hdl"))return;
+    ok=true},{passive:true});
+  el.addEventListener("touchend",e=>{
+    if(!ok||tlDrag)return;ok=false;
+    if(!inSheet&&!$("scrim").hidden)return;
+    const t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0;
+    if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.8&&Date.now()-t0<800)fn(dx<0?1:-1)},{passive:true});
+}
+function slideIn(el,d){if(el&&el.animate)el.animate([{transform:`translateX(${d*48}px)`,opacity:.35},{transform:"none",opacity:1}],{duration:220,easing:"cubic-bezier(.2,.8,.3,1)"})}
+hSwipe($("routine"),d=>{const nv=d>0?"tl":"list";if(nv===rView)return;rView=nv;tlCopy=null;tlMove=null;renderRoutine();slideIn($(nv==="tl"?"rTl":"rList"),d)});
 document.querySelectorAll("#rView [data-v]").forEach(b=>b.onclick=()=>{rView=b.dataset.v;tlCopy=null;tlMove=null;renderRoutine()});
 const TL_COL=["#00E5FF","#FFB547","#5BE38C","#B18CFF","#FF7AB6","#F2E863","#6FA8FF","#FF8F6B","#4FD1C5","#E879F9","#A3E635","#F87171"];
 /* feste Farbe pro Übung (nach Katalog-Reihenfolge) – bleibt beim Verschieben gleich, gleiche Übung = gleiche Farbe */
@@ -1353,6 +1369,7 @@ function renderPlan(box,{hub,rerender}){
   box.innerHTML=h;
   const sc2=box.querySelector(".plscroll");sc2.scrollTop=top;
   box.querySelectorAll(".plview [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;tlCopy=null;tlMove=null;tlAutoKey=null;rerender()});
+  box._rr=rerender;if(!box._sw){box._sw=1;hSwipe(box,d=>{const nv=d>0?"tl":"list";if(nv===planView||!box._rr)return;planView=nv;tlCopy=null;tlMove=null;tlAutoKey=null;box._rr();slideIn(box.querySelector(nv==="tl"?".pltl":".pllist"),d)},true)}
   const after=()=>{rebuildKeep();saveW();rerender()};
   if(planView==="tl"){
     const tl=box.querySelector(".pltl");
@@ -1763,7 +1780,7 @@ const a=loadActive();if(a)startPlayer(a);
 requestAnimationFrame(frame);
 checkImport();checkData();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
-window.AppKit={$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S};
+window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S};
 /* Test-Hilfe (Playwright) */
 window.__app={get W(){return W},get idx(){return idx},steps:()=>steps,S:()=>S,shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
 })();

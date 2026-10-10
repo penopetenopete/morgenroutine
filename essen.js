@@ -812,6 +812,9 @@ window.TrainingEssen={get:()=>E,set:x=>{if(x&&x.foods){E=x;esave()}},reload:()=>
 if(!SCREENS.includes("essen"))SCREENS.push("essen");
 $("openEssen").onclick=()=>{curDay=today();show("essen")};
 $("eMore").onclick=moreSheet;
+/* Wischen = Tag vor/zurück (nicht auf den Zeilen – dort ist Wischen = löschen) */
+if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk=addDays(curDay,d);if(nk<addDays(t,-14)||nk>addDays(t,1))return;
+  curDay=nk;editId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 loadBLS().catch(()=>{}); // vorladen (offline-Cache)
 window.__essen={E:()=>E,prepImport,applyImport,readE,setDay:k=>{curDay=k;renderEssen()}};
