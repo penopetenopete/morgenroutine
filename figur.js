@@ -993,7 +993,7 @@ window.Figur={EX,EXB,STEPS,PLATE,plateSet,kgText,mount,show,draw,segAt,seqDur,re
   setShade:m=>{fillMat.uniforms.uMode.value=m},
   /* Look der Figur: null = dunkel (Original); {base:"#hex",out:"#hex",gear:"#hex",load:"#hex",grid:"#hex",gridA,shadow} */
   setLook:L=>{const U=fillMat.uniforms;Object.keys(tlThumbs).forEach(k=>delete tlThumbs[k]);
-LOOK=L;
+LOOK=L;Object.keys(thumbs).forEach(k=>delete thumbs[k]);
     if(!L){U.uLight.value=0;OUT_FIG.uniforms.uC.value.setRGB(0,.9,1);OUT_GEAR.uniforms.uC.value.setRGB(.17,.36,.45);OUT_LOAD.uniforms.uC.value.setRGB(.91,.93,.95);
       grid.material.vertexColors=true;grid.material.needsUpdate=true;grid.material.color.set(0xffffff);grid.material.opacity=1;grid.material.transparent=false;shadow.material.opacity=.35;U.uRim.value.setRGB(0,.55,.65);render&&render();return}
     U.uLight.value=1;U.uBase.value.set(L.base);if(L.rim)U.uRim.value.set(L.rim);OUT_FIG.uniforms.uC.value.set(L.out);OUT_GEAR.uniforms.uC.value.set(L.gear);OUT_LOAD.uniforms.uC.value.set(L.load);
