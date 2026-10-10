@@ -657,3 +657,16 @@ body.esel #essen{padding-bottom:170px}
 .tl.mus .tlpic i{display:none}
 .tl.mus .tlb>.tle[data-in] span b{opacity:.7}
 .tl.mus .tlb.lr>.au{top:auto;bottom:25px}
+/* 10.10.2026 (2): L/R unten über der Wert-Linie, ＋ am Ende, Bilder nicht anfassbar, gemischt = türkis */
+.tlpic i{top:auto;bottom:3px}
+.tlpic img{pointer-events:none;-webkit-user-drag:none;user-select:none}
+.tlb.tladd{cursor:pointer}
+.tlb.tladd .tlf{border:1.5px dashed #3A4C60;background:transparent;box-shadow:none;align-items:center;justify-content:center}
+.tlb.tladd b{font-family:var(--f-display);font-size:1.8rem;font-weight:400;color:var(--accent)}
+.tlcab .tlcadd .cb1{stroke:#3A4C60}
+.tlcab .tlcadd{opacity:.8}
+.tlcab .tlcadd .cb1,.tlcab .tlcadd .cb2{stroke-dasharray:4 7}
+.tl.txt .tladd .tlcoin,.tladd .tlcoin{transform:none}
+:root{--mix:#2EE6B0}
+.row.lkm{box-shadow:inset 3px 0 0 var(--mix)}
+.row .lnk.mix{border-color:var(--mix);color:var(--mix);background:#062a22}

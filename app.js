@@ -78,77 +78,58 @@ function setG(k,v){S.g[k]=v;save()}
 const exDef=id=>EXB[id].def;
 const baseMorgen=d=>Object.assign({},exDef(d.ex),d.o);
 const base2Morgen=d=>Object.assign({},exDef(d.pair.ex2),d.pair.o2);
-function getRoutine(id){
-  if(id==="morgen"){
-    const ov=S.morgen;
-    const items=MORGEN.items.map(d=>{
-      const x=ov.items[d.uid]||{},base=baseMorgen(d);
-      const it={uid:d.uid,ex:d.ex,base,o:Object.assign({},base,x.o||{}),so:x.so?clone(x.so):{},off:!!x.off};
-      if(d.pair){const b2=base2Morgen(d);it.pair={ex2:d.pair.ex2,umbau:d.pair.umbau,name:d.pair.name,base2:b2,o2:Object.assign({},b2,x.o2||{})}}
-      else it.link=!!x.link;
-      return it;
-    });
-    (ov.extra||[]).forEach(x=>{if(EXB[x.ex])items.push({uid:x.uid,ex:x.ex,extra:true,link:!!x.link,so:x.so?clone(x.so):{},base:Object.assign({},exDef(x.ex)),o:Object.assign({},exDef(x.ex),x.o)})});
-    if(ov.order){const pos=u=>{const i=ov.order.indexOf(u);return i<0?1e3:i};items.sort((a,b)=>pos(a.uid)-pos(b.uid))}
-    return {id,name:MORGEN.name,preset:true,days:[{items}],pauses:ov.pauses||{},audio:{},settings:Object.assign({},DEF_SET,MORGEN.settings,ov.settings,{confirm:false})};
-  }
-  const r=S.routines.find(r=>r.id===id);if(!r)return null;
-  return {id,name:r.name,preset:false,pauses:r.pauses||{},audio:r.audio||{},settings:Object.assign({},DEF_SET,r.settings,{confirm:gv("confirm")}),
-    days:r.days.map(d=>({items:d.items.filter(it=>EXB[it.ex]).map(it=>({uid:it.uid,ex:it.ex,link:!!it.link,so:it.so?clone(it.so):{},base:Object.assign({},exDef(it.ex),it.base||{}),o:Object.assign({},exDef(it.ex),it.o)}))}))};
+/* Morgenroutine = normale Routine (10.10.2026), gespeichert in S.morgenR. Die zwei Paare sind jetzt zwei verknüpfte
+   Übungen „Seite für Seite“ (it.sf am ersten, it.um = Umbau-Text am zweiten). Alte Abweichungen (S.morgen) werden übernommen. */
+function morgenBuild(ov){
+  ov=ov||{items:{},pauses:{}};const items=[],I=ov.items||{};
+  MORGEN.items.forEach(d=>{const x=I[d.uid]||{};if(x.off)return;
+    const o=Object.assign({},d.o,x.o||{});
+    if(d.pair){items.push({uid:d.uid,ex:d.ex,o,link:true,sf:true});items.push({uid:d.uid+"b",ex:d.pair.ex2,o:Object.assign({},d.pair.o2,x.o2||{}),um:d.pair.umbau})}
+    else{const it={uid:d.uid,ex:d.ex,o};if(x.so)it.so=clone(x.so);if(x.link)it.link=true;items.push(it)}});
+  (ov.extra||[]).forEach(x=>{if(EXB[x.ex]){const it={uid:x.uid,ex:x.ex,o:clone(x.o||{})};if(x.so)it.so=clone(x.so);if(x.link)it.link=true;items.push(it)}});
+  if(ov.order){const pos=u=>{const b=/b$/.test(u)&&ov.order.indexOf(u.slice(0,-1))>=0;const i=ov.order.indexOf(b?u.slice(0,-1):u);return (i<0?1e3:i)+(b?.5:0)};items.sort((a,b)=>pos(a.uid)-pos(b.uid))}
+  const pauses={};Object.entries(ov.pauses||{}).forEach(([k,v])=>{const p=k.split("|"),pr=MORGEN.items.find(d=>d.uid===p[0]&&d.pair);
+    if(pr&&p[1]==="side"&&p[2]==="p")pauses[p[0]+"|side|1"]=v;else if(pr&&p[1]==="umbau")pauses[p[0]+"b|umbau|1|"+p[2]]=v;else pauses[k]=v});
+  return {id:"morgen",name:MORGEN.name,settings:{},pauses,audio:{},days:[{items}]};
 }
-const rawRoutine=id=>S.routines.find(r=>r.id===id);
+function getRoutine(id){
+  const r=rawRoutine(id);if(!r)return null;const pre=id==="morgen";
+  return {id,name:r.name,preset:pre,pauses:r.pauses||{},audio:r.audio||{},settings:Object.assign({},DEF_SET,pre?MORGEN.settings:{},r.settings,{confirm:pre?false:gv("confirm")}),
+    days:r.days.map(d=>({items:d.items.filter(it=>EXB[it.ex]).map(it=>{const x={uid:it.uid,ex:it.ex,link:!!it.link,so:it.so?clone(it.so):{},base:Object.assign({},exDef(it.ex),it.base||{}),o:Object.assign({},exDef(it.ex),it.o)};if(it.sf)x.sf=true;if(it.um)x.um=it.um;if(it.mix)x.mix=true;return x})}))};
+}
+const rawRoutine=id=>{if(id==="morgen"){if(!S.morgenR){S.morgenR=morgenBuild(S.morgen);save()}return S.morgenR}return S.routines.find(r=>r.id===id)};
 function diff(o,base){const d={};for(const k in o)if(o[k]!==base[k])d[k]=o[k];return d}
 /* Werte einer Übung dauerhaft in der Routine speichern */
 function persistItem(rid,it){
   if(!rid)return;
-  if(rid==="morgen"){
-    const xe=(S.morgen.extra||[]).find(x=>x.uid===it.uid);
-    if(xe){xe.o=Object.assign({},it.o);if(it.so&&Object.keys(it.so).length)xe.so=clone(it.so);else delete xe.so;save();return}
-    const d=MORGEN.items.find(x=>x.uid===it.uid);if(!d)return;
-    const x=S.morgen.items[it.uid]||(S.morgen.items[it.uid]={});
-    x.o=diff(it.o,baseMorgen(d));if(!Object.keys(x.o).length)delete x.o;
-    if(d.pair){x.o2=diff(it.pair.o2,base2Morgen(d));if(!Object.keys(x.o2).length)delete x.o2}
-    if(it.so&&Object.keys(it.so).length)x.so=clone(it.so);else delete x.so;
-    if(!Object.keys(x).length)delete S.morgen.items[it.uid];
-    save();return;
-  }
   const r=rawRoutine(rid);if(!r)return;
   for(const d of r.days)for(const x of d.items)if(x.uid===it.uid){x.o=Object.assign({},it.o);if(it.so&&Object.keys(it.so).length)x.so=clone(it.so);else delete x.so}
   save();
 }
 /* ---- Routine dauerhaft ändern: hinzufügen, löschen, Reihenfolge, Verknüpfung ---- */
 function rawItems(rid,day){
-  if(rid==="morgen"){const ov=S.morgen;ov.extra=ov.extra||[];return null}
   const r=rawRoutine(rid);return r&&r.days[day]?r.days[day].items:null;
 }
 function addItems(rid,day,exs){
   return exs.map(ex=>{const uid=uidGen(),o=catOpt(ex);
-    if(rid==="morgen"){S.morgen.extra=S.morgen.extra||[];S.morgen.extra.push({uid,ex,o:Object.assign({},o)});if(S.morgen.order)S.morgen.order.push(uid)}
-    else{const a=rawItems(rid,day);if(a)a.push({uid,ex,o:Object.assign({},o)})}
+    const a=rawItems(rid,day);if(a)a.push({uid,ex,o:Object.assign({},o)});
     return {uid,ex,o,so:{},base:Object.assign({},o),link:false};
   });
 }
 function deleteItem(rid,day,uid){
-  if(rid==="morgen"){
-    const ov=S.morgen,ei=(ov.extra||[]).findIndex(x=>x.uid===uid);
-    if(ei>=0){ov.extra.splice(ei,1);if(ov.order)ov.order=ov.order.filter(u=>u!==uid);save()}else setMorgenOff(uid,true);
-    return;
-  }
-  const a=rawItems(rid,day);if(!a)return;const i=a.findIndex(x=>x.uid===uid);if(i>=0)a.splice(i,1);save();
+  const a=rawItems(rid,day);if(!a)return;const i=a.findIndex(x=>x.uid===uid);if(i>=0){if(i>0&&a[i-1].link&&!a[i].link)a[i-1].link=false;a.splice(i,1)}save();
 }
 /* uids = neue Reihenfolge der sichtbaren Übungen */
 function orderItems(rid,day,uids){
-  if(rid==="morgen"){const all=getRoutine("morgen").days[0].items.map(x=>x.uid);S.morgen.order=uids.concat(all.filter(u=>!uids.includes(u)));save();return}
   const a=rawItems(rid,day);if(!a)return;const pos=u=>{const i=uids.indexOf(u);return i<0?1e3:i};
   const sorted=a.slice().sort((x,y)=>pos(x.uid)-pos(y.uid));a.length=0;a.push(...sorted);save();
 }
 function linkItem(rid,day,uid,v){
-  if(rid==="morgen"){const ex=(S.morgen.extra||[]).find(x=>x.uid===uid);if(ex)ex.link=v;else{const x=S.morgen.items[uid]||(S.morgen.items[uid]={});if(v)x.link=true;else delete x.link;if(!Object.keys(x).length)delete S.morgen.items[uid]}save();return}
   const a=rawItems(rid,day),x=a&&a.find(z=>z.uid===uid);if(x){x.link=v;save()}
 }
 /* eigene Pause für eine bestimmte Stelle (v=null: wieder Standard) – dauerhaft in der Routine */
 function setPause(rid,pk,v){
-  const tgt=rid==="morgen"?S.morgen:rawRoutine(rid);if(!tgt)return;
+  const tgt=rawRoutine(rid);if(!tgt)return;
   tgt.pauses=tgt.pauses||{};if(v==null)delete tgt.pauses[pk];else tgt.pauses[pk]=v;save();
 }
 /* Musik oder Podcast an einer Stelle (Satz oder Pause), v=null: wieder Smart – dauerhaft in der Routine */
@@ -156,8 +137,7 @@ function setAudio(rid,ak,v){
   const tgt=rawRoutine(rid);if(!tgt)return;
   tgt.audio=tgt.audio||{};if(v==null)delete tgt.audio[ak];else tgt.audio[ak]=v;if(!Object.keys(tgt.audio).length)delete tgt.audio;save();
 }
-function setMorgenOff(uid,off){const x=S.morgen.items[uid]||(S.morgen.items[uid]={});if(off)x.off=true;else delete x.off;if(!Object.keys(x).length)delete S.morgen.items[uid];save()}
-function setRoutineSetting(rid,k,v){if(rid==="morgen")S.morgen.settings[k]=v;else{const r=rawRoutine(rid);if(!r)return;r.settings=r.settings||{};r.settings[k]=v}save()}
+function setRoutineSetting(rid,k,v){const r=rawRoutine(rid);if(!r)return;r.settings=r.settings||{};r.settings[k]=v;save()}
 
 /* =================== TEXTE =================== */
 const isUni=(e,o)=>!!(e.uni&&e.uni(o));
@@ -280,13 +260,23 @@ const moveArr=(a,from,to)=>{const [x]=a.splice(from,1);a.splice(to,0,x);return a
 /* eine Zeile: Griff · Bild · Name/Werte · Aktion */
 const ICON_LINK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
 /* CSS-Klassen für verknüpfte Zeilen (Supersatz) */
+/* gemischt: eine Übung kommt (nach Ziehen) mehrfach vor → alles dazwischen gehört zusammen */
+function mixRanges(items){
+  const act=items.map((it,i)=>[it,i]).filter(([it])=>it.status!=="removed"),by={},rs=[];
+  act.forEach(([it,i])=>{(by[it.ex]=by[it.ex]||[]).push([it,i])});
+  Object.values(by).forEach(l=>{if(l.length>1&&l.some(([it])=>it.mix))rs.push([l[0][1],l[l.length-1][1]])});
+  rs.sort((a,b)=>a[0]-b[0]);const out=[];rs.forEach(r=>{const l=out[out.length-1];if(l&&r[0]<=l[1])l[1]=Math.max(l[1],r[1]);else out.push(r.slice())});
+  return out;
+}
+const inMix=(rs,i)=>rs.some(([a,b])=>i>=a&&i<=b);
 function linkCls(items,i){const on=k=>items[k]&&items[k].link&&items[k].status!=="removed";return (on(i)||on(i-1))?" lk":""}
-function bindLinks(list,fn){list.querySelectorAll("[data-link]").forEach(b=>b.onclick=e=>{e.stopPropagation();fn(+b.dataset.link)})}
-function rowHTML(it,i,{lock,tags="",cls="",extra="",action="",link=null}){
+function bindLinks(list,fn){list.querySelectorAll("[data-link]").forEach(b=>b.onclick=e=>{e.stopPropagation();fn(+b.dataset.link)});
+  list.querySelectorAll("[data-mixlink]").forEach(b=>b.onclick=e=>{e.stopPropagation();toast("Gemischt – Reihenfolge in der Timeline ändern")})}
+function rowHTML(it,i,{lock,tags="",cls="",extra="",action="",link=null,mix=false}){
   const ch=itemChanged(it);
   return `<div class="row ${cls}" data-i="${i}"><button class="hdl${lock?" lock":""}" aria-label="Verschieben"${lock?' tabindex="-1"':""}>${ICON.grip}</button>
   <img alt="" src="${thumbOf(it)}" width="44" height="44">
-  <div class="mid" role="button" tabindex="0" data-tap="${i}"><span class="nm">${esc(itemName(it))}${tags}</span><span class="val${ch?" changed":""}">${esc(itemText(it))}</span>${ch?`<span class="def">Standard: ${esc(itemStdText(it))}</span>`:""}${extra}</div>${action}${link!=null?`<button class="lnk${link?" on":""}" data-link="${i}" aria-pressed="${!!link}" aria-label="${link?"Verknüpfung lösen":"Mit nächster Übung verknüpfen (Supersatz)"}">${ICON_LINK}</button>`:""}</div>`;
+  <div class="mid" role="button" tabindex="0" data-tap="${i}"><span class="nm">${esc(itemName(it))}${tags}</span><span class="val${ch?" changed":""}">${esc(itemText(it))}</span>${ch?`<span class="def">Standard: ${esc(itemStdText(it))}</span>`:""}${extra}</div>${action}${mix?`<button class="lnk mix" data-mixlink="${i}" aria-label="Gemischt (in der Timeline verschoben)">${ICON_LINK}</button>`:link!=null?`<button class="lnk${link?" on":""}" data-link="${i}" aria-pressed="${!!link}" aria-label="${link?"Verknüpfung lösen":"Mit nächster Übung verknüpfen (Supersatz)"}">${ICON_LINK}</button>`:""}</div>`;
 }
 function bindTaps(list,fn){list.querySelectorAll("[data-tap]").forEach(m=>{m.onclick=()=>fn(+m.dataset.tap);m.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fn(+m.dataset.tap)}}})}
 
@@ -434,10 +424,11 @@ function renderRoutine(){
   if(rView==="tl"){
     renderTimeline($("rTl"),{items,settings:R.settings,pauses:R.pauses,audio:R.audio},{
       onPause:(pk,v)=>{setPause(R.id,pk,v);renderRoutine()},
-      onAudio:R.preset?null:(ak,v)=>{setAudio(R.id,ak,v);renderRoutine()},
+      onAudio:(ak,v)=>{setAudio(R.id,ak,v);renderRoutine()},
       redraw:renderRoutine,
       onUnskip:uid=>{setSkip(uid,false);renderRoutine()},
-      onMove:R.preset?null:(su,sr,tu,tr,dup)=>{
+      onAdd:()=>$("rAdd").click(),
+      onMove:(su,sr,tu,tr,dup)=>{
         const raw=rawRoutine(R.id),arr=rawItems(R.id,rDay),ids={c:uidGen(),b2:uidGen()};
         const B=arr.find(x=>x.uid===tu),q=tr,n=B?(B.o.sets||1):0;
         if(!moveSetIn(arr,su,sr,tu,tr,dup,ids,x=>x)){toast("Gleiche Übung – nichts zu verschieben");return}
@@ -445,14 +436,15 @@ function renderRoutine(){
         const mg=findMerges(arr);applyMerges(arr,mg,[raw.pauses,raw.audio]);
         if(mg.length)tlFocus=null;
         save();renderRoutine();toast(mg.length?"Satz verschoben – zusammengeführt":dup?"Satz kopiert":"Satz verschoben")},
-      onReorder:R.preset?null:(uid,from,to)=>{const it=rawItems(R.id,rDay).find(x=>x.uid===uid);if(it){reorderSets(it,from,to);save();renderRoutine();toast("Satz "+from+" ist jetzt Satz "+to)}},
+      onReorder:(uid,from,to)=>{const it=rawItems(R.id,rDay).find(x=>x.uid===uid);if(it){reorderSets(it,from,to);save();renderRoutine();toast("Satz "+from+" ist jetzt Satz "+to)}},
       onEdit:(it,set)=>editR(it,set)});
   }
   const list=$("rList");
+  const MX=mixRanges(items);
   list.innerHTML=items.length?items.map((it,i)=>{
     const rm=it.status==="removed",lt=lastText(R.id,it.uid);
-    const nx=items[i+1],canLink=!rm&&!it.pair&&nx&&nx.status!=="removed"&&!nx.pair;
-    return rowHTML(it,i,{lock:rm,cls:(rm?"off":"")+linkCls(items,i),tags:rm?'<span class="tag skip">heute übersprungen</span>':"",extra:lt?`<span class="lastv">${esc(lt)}</span>`:"",link:canLink?!!it.link:null,
+    const nx=items[i+1],canLink=!rm&&!it.pair&&nx&&nx.status!=="removed"&&!nx.pair,mx=MX.some(([a,b])=>i>=a&&i<b);
+    return rowHTML(it,i,{lock:rm,cls:(rm?"off":"")+(inMix(MX,i)?" lkm":linkCls(items,i)),mix:mx,tags:rm?'<span class="tag skip">heute übersprungen</span>':"",extra:lt?`<span class="lastv">${esc(lt)}</span>`:"",link:canLink?!!it.link:null,
       action:rm?`<button class="act restore" data-unskip="${it.uid}">Rückgängig</button>`:`<button class="act" data-skip="${it.uid}" aria-label="Heute überspringen">${ICON.skip}</button>`});
   }).join(""):'<div class="note" style="padding:14px">Noch keine Übungen.</div>';
   document.querySelectorAll("#routine [data-skip]").forEach(b=>b.onclick=e=>{e.stopPropagation();const it=items.find(x=>x.uid===b.dataset.skip);setSkip(it.uid,true);renderRoutine();toast(itemName(it)+" heute übersprungen")});
@@ -464,7 +456,7 @@ function renderRoutine(){
 function editR(it,set){
   openEditor(it,{rid:R.id,st:R.settings,set,onChange:renderRoutine,skipped:isSkipped(it.uid),
     onSkip:on=>{setSkip(it.uid,on);renderRoutine();toast(on?itemName(it)+" heute übersprungen":itemName(it)+" ist wieder dabei")},
-    onDelete:()=>{deleteItem(R.id,rDay,it.uid);setSkip(it.uid,false);renderRoutine();toast(itemName(it)+" gelöscht")}});
+    onDelete:()=>{const all=it.mix?dayItems().filter(x=>x.ex===it.ex&&x.mix):[it];all.forEach(x=>{deleteItem(R.id,rDay,x.uid);setSkip(x.uid,false)});renderRoutine();toast(itemName(it)+" gelöscht")}});
 }
 $("rStart").onclick=()=>{if(loadActive()){openSheet("Workout läuft","Es läuft schon ein Workout",`<div class="note">Erst das laufende Workout beenden oder fortsetzen.</div><button class="btn primary big" id="goRun">Zum laufenden Workout</button>`);$("goRun").onclick=()=>{closeSheet();startPlayer(loadActive())};return}startWorkout()};
 $("rAdd").onclick=()=>openPicker(ids=>{addItems(R.id,rDay,ids);save();renderRoutine()});
@@ -472,20 +464,18 @@ $("rMore").onclick=()=>openRoutineSheet();
 /* Name, Tage, Löschen (eigene Routinen) bzw. Kopieren/Zurücksetzen (Morgenroutine) */
 function openRoutineSheet(focusName){
   if(R.preset){
-    const offs=MORGEN.items.filter(d=>MORGEN_OFF(d.uid));
-    const changed=Object.keys(S.morgen.items).length||(S.morgen.extra||[]).length||S.morgen.order||Object.keys(S.morgen.pauses||{}).length;
-    openSheet("Vorkonfiguriert",R.name,(offs.length?`<h3>Gelöschte Übungen</h3><div class="list">${offs.map(d=>`<div class="row"><div class="mid"><span class="nm">${esc(d.pair?d.pair.name:EXB[d.ex].name)}</span></div><button class="act restore" data-back-in="${d.uid}">Wieder rein</button></div>`).join("")}</div>`:"")+
-      `<button class="btn primary big" id="rsOk">Fertig</button><button class="btn" id="rsCopy">Als eigene Routine kopieren</button>${changed?`<button class="btn danger" id="rsReset">Auf Original zurücksetzen</button>`:""}`);
-    $("shBody").querySelectorAll("[data-back-in]").forEach(b=>b.onclick=()=>{setMorgenOff(b.dataset.backIn,false);renderRoutine();openRoutineSheet()});
+    const strip=x=>JSON.stringify(x.days),changed=strip(rawRoutine("morgen"))!==strip(morgenBuild(null))||Object.keys(rawRoutine("morgen").pauses||{}).length;
+    openSheet("Vorkonfiguriert",R.name,`<button class="btn primary big" id="rsOk">Fertig</button><button class="btn" id="rsCopy">Als eigene Routine kopieren</button>${changed?`<button class="btn danger" id="rsReset">Auf Original zurücksetzen</button>`:""}`);
     $("rsCopy").onclick=()=>{
       if(S.routines.length>=MAX_SLOTS){toast("Alle 5 Slots belegt – erst eine Routine löschen");return}
-      const r={id:"r"+now().toString(36),name:R.name+" (Kopie)",settings:{},pauses:clone(R.pauses||{}),days:[{items:R.days[0].items.filter(it=>!it.pair&&!it.off).map(it=>({uid:uidGen(),ex:it.ex,o:clone(it.o),so:clone(it.so||{}),link:!!it.link}))}]};
+      const src=rawRoutine("morgen"),map={};src.days[0].items.forEach(it=>map[it.uid]=uidGen());
+      const pz={};Object.entries(src.pauses||{}).forEach(([k,v])=>{const p=k.split("|");if(map[p[0]]){p[0]=map[p[0]];pz[p.join("|")]=v}});
+      const r={id:"r"+now().toString(36),name:R.name+" (Kopie)",settings:{},pauses:pz,days:[{items:src.days[0].items.map(it=>Object.assign(clone(it),{uid:map[it.uid]}))}]};
       S.routines.push(r);save();closeSheet();
-      if(R.days[0].items.some(it=>it.pair))toast("Paare (z. B. Kick-out + Dehnung) gibt es nur in der Morgenroutine");
       R=getRoutine(r.id);rDay=0;show("routine",false);history.replaceState({s:"routine"},"");
     };
     if($("rsReset"))$("rsReset").onclick=()=>{const b=$("rsReset");if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Wirklich? Alle Änderungen gehen verloren";return}
-      S.morgen={items:{},settings:{},pauses:{}};save();closeSheet();renderRoutine();toast("Morgenroutine wie im Original")};
+      S.morgenR=morgenBuild(null);save();closeSheet();renderRoutine();toast("Morgenroutine wie im Original")};
     $("rsOk").onclick=closeSheet;
     return;
   }
@@ -565,8 +555,8 @@ function tlVal(e,o){
 let tlCabN=0;
 function tlCable(tl,boxes,colOf,musCol,curI){
   const svg=tl.querySelector(".tlcab");if(!svg)return;
-  const T=tl.getBoundingClientRect(),els=[...tl.querySelectorAll(".tlb[data-b],.tlb.ph")];
-  const pos=els.map(el=>{const r=el.getBoundingClientRect();return {l:r.left-T.left,r:r.right-T.left,t:r.top-T.top,b:r.bottom-T.top,cy:(r.top+r.bottom)/2-T.top,c:getComputedStyle(el).getPropertyValue("--c").trim(),done:el.classList.contains("done")}});
+  const T=tl.getBoundingClientRect(),els=[...tl.querySelectorAll(".tlb[data-b],.tlb.ph,.tlb.tladd")];
+  const pos=els.map(el=>{const r=el.getBoundingClientRect();return {l:r.left-T.left,r:r.right-T.left,t:r.top-T.top,b:r.bottom-T.top,cy:(r.top+r.bottom)/2-T.top,c:getComputedStyle(el).getPropertyValue("--c").trim()||"#3A4C60",done:el.classList.contains("done")}});
   let defs="",paths="",g=0;const pre="tlg"+(++tlCabN)+"_";
   for(let i=0;i+1<pos.length;i++){const a=pos[i],b=pos[i+1];let d;
     if(Math.abs(a.cy-b.cy)<4)d=`M${a.r} ${a.cy}L${b.l} ${b.cy}`;
@@ -574,7 +564,7 @@ function tlCable(tl,boxes,colOf,musCol,curI){
     let col=a.c;
     if(musCol){const bx=boxes.find(x=>x===boxes[i]);col=bx&&bx.next?musCol(bx.next):a.c}
     else if(a.c!==b.c){const id=pre+(g++);defs+=`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${(a.l+a.r)/2}" y1="${a.cy}" x2="${(b.l+b.r)/2}" y2="${b.cy}"><stop offset="0" stop-color="${a.c}"/><stop offset="1" stop-color="${b.c}"/></linearGradient>`;col=`url(#${id})`}
-    const op=a.done&&b.done?' opacity=".3"':"";
+    const op=a.done&&b.done?' opacity=".3"':els[i+1].classList.contains("tladd")?' class="tlcadd"':"";
     paths+=`<g${op}><path d="${d}" class="cb0"/><path d="${d}" class="cb1" stroke="${col}"/><path d="${d}" class="cb2"/></g>`}
   svg.setAttribute("width",T.width);svg.setAttribute("height",T.height);
   svg.innerHTML=`<defs>${defs}</defs>${paths}`;
@@ -627,15 +617,16 @@ function renderTimeline(box,Wk,h){
   /* Slot-Nummern (Reihenfolge der Sätze ohne den gezogenen) für die Zielsuche */
   let slotN=-1,lastSK="";const slotOf=new Map();
   boxes.forEach(b=>{const pl=drag&&drag.plan;const ph=b.s.uid==="__ph"||(drag&&(!pl||pl.kind==="none")&&b.s.uid===drag.src.uid&&b.s.set===drag.src.set)||(pl&&pl.kind==="reorder"&&b.s.uid===pl.uid&&b.s.set===pl.to);const k=b.s.uid+"|"+b.s.set;if(ph){slotOf.set(b,"ph");return}if(k!==lastSK){slotN++;lastSK=k}slotOf.set(b,slotN)});
-  const img=(s,m,half)=>{const a=half?.55:1.1,u=tlImg(s,colOf[s.uid],a);return `<img alt=""${m?' class="m"':""}${u?` src="${u}"`:` data-th="${esc(JSON.stringify([s.ex,tlImgO(s.o),colOf[s.uid],a]))}"`}>`};
+  const img=(s,m,half)=>{const a=half?.55:1.1,u=tlImg(s,colOf[s.uid],a);return `<img alt="" draggable="false"${m?' class="m"':""}${u?` src="${u}"`:` data-th="${esc(JSON.stringify([s.ex,tlImgO(s.o),colOf[s.uid],a]))}"`}>`};
   const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,sk=skipped.has(s.uid),st=sk?" skip":curI<0?"":last<curI?" done":b.i<=curI?" now":b===firstNext?" next":"",it=Wk.items.find(x=>x.uid===s.uid)||(s.uid==="__ph"?srcIt:Wk.items.find(x=>x.uid===(drag&&drag.splitUid)))||{},e=EXB[s.ex]||{name:""},uni=isUni(EXB[s.ex],s.o);
     const sl=slotOf.get(b),fk=drag?` data-fk="${sl}|${b.lr?"lr":s.side||0}|${s.part||0}"`:"";
     if(sl==="ph")return `<span class="tlb ph${b.lr?" lr":""}" style="--c:${colOf[drag.src.uid]}"${fk}></span>`;
-    const side=b.lr?"":s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
+    const side=b.lr||s.both?"":uni||it.pair?(s.side?"R":"L"):"";
     const val=sk?"übersprungen":tlVal(e,s.o);
-    const front=b.lr?`<div class="tlpic"><span>${img(s,0,1)}<i>L</i></span><span>${img(b.sR,1,1)}<i>R</i></span></div>`:`<div class="tlpic"><span>${img(s,s.side)}${side?`<i>${side}</i>`:""}</span></div>`;
+    const two=b.lr||s.both;
+    const front=two?`<div class="tlpic"><span>${img(s,0,1)}<i>L</i></span><span>${img(b.sR||s,1,1)}<i>R</i></span></div>`:`<div class="tlpic"><span>${img(s,s.side)}${side?`<i>${side}</i>`:""}</span></div>`;
     const mid=b.lr?edgeHTML(b.mid,false,true):"";
-    return `<div role="button" tabindex="0" class="tlb${b.lr?" lr":""}${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}" data-slot="${sl}"${fk}${audA(s)} aria-label="${esc(e.name)} ${val}"><div class="tlcoin"><div class="tlf tlfi">${front}<small>${val}</small></div><div class="tlf tlft"><b>${esc(e.name)}</b>${side?`<em>${side}</em>`:""}<small>${val}</small></div></div>${aud(s)}${mid}</div>`};
+    return `<div role="button" tabindex="0" class="tlb${b.lr||s.both?" lr":""}${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}" data-slot="${sl}"${fk}${audA(s)} aria-label="${esc(e.name)} ${val}"><div class="tlcoin"><div class="tlf tlfi">${front}<small>${val}</small></div><div class="tlf tlft"><b>${esc(e.name)}</b>${side?`<em>${side}</em>`:""}<small>${val}</small></div></div>${aud(s)}${mid}</div>`};
   const nextBox=x=>{for(let j=seq.indexOf(x)+1;j<seq.length;j++)if(seq[j].box)return seq[j];return null};
   const sameSet=x=>{const pb=prevBox(x),nb=nextBox(x);return !!(pb&&nb&&pb.s.uid===nb.s.uid&&pb.s.set===nb.s.set)};
   const dropOk=x=>{const pb=prevBox(x);if(!pb||sameSet(x))return false;if(skipped.has(pb.s.uid))return false;if(curI>=0&&(pb.i2!=null?pb.i2:pb.i)<=curI)return false;return true};
@@ -654,6 +645,8 @@ function renderTimeline(box,Wk,h){
     if(bi%PER===0&&bi<boxes.length){flush();html+=`<div class="tlret">${edgeHTML(x,true)}</div>`}
     else row.push(edgeHTML(x,false));
   }
+  if(h.onAdd&&!drag){const add=`<div role="button" tabindex="0" class="tlb tladd" aria-label="Übung hinzufügen"><div class="tlf"><b>＋</b></div></div>`;
+    if(bi%PER===0&&row.length===0){html+=`<div class="tlret"></div>`;row.push(add)}else if(bi%PER===0){flush();html+=`<div class="tlret"></div>`;row.push(add)}else{row.push(`<span class="tle none"><i></i></span>`,add)}}
   if(row.length)flush();
   const own=Object.keys(AM).length;
   const sw=can?`<div class="tlsw" id="tlSw" role="switch" tabindex="0" aria-checked="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span>${own?`<button class="tlrs" id="tlAudReset" aria-label="Alles auf Smart">↺</button>`:""}<i class="tlswk"></i></div>`:"";
@@ -665,8 +658,10 @@ function renderTimeline(box,Wk,h){
     if(Math.abs(dx)<1&&Math.abs(dy)<1)return;e.style.transition="none";e.style.transform=`translate(${dx}px,${dy}px)`;
     requestAnimationFrame(()=>requestAnimationFrame(()=>{e.style.transition="transform .2s ease";e.style.transform=""}))});
   const cab=()=>tlCable(tl,boxes,colOf,mus()?(s=>audioOf(s,AM)==="music"?"#5BE38C":"#B18CFF"):null,curI);cab();box._cab=cab;
-  if(oldR&&oldR.size)setTimeout(()=>{if(tl.isConnected)cab()},230);
+  if(oldR&&oldR.size){const t0=performance.now(),fl=()=>{if(!tl.isConnected)return;cab();if(performance.now()-t0<260)requestAnimationFrame(fl)};requestAnimationFrame(fl)}
+  tl.addEventListener("dragstart",e=>e.preventDefault());
   tlFillImgs(tl,cab);
+  const ad=tl.querySelector(".tladd");if(ad){ad.onclick=()=>h.onAdd();ad.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();h.onAdd()}}}
   if(!box._tmBlock){box._tmBlock=1;box.addEventListener("touchmove",e=>{if(tlDrag)e.preventDefault()},{passive:false})}
   const flip=()=>{tlMode=mus()?"pause":"music";tlCopy=null;tlMove=null;h.redraw()};
   if($("tlSw")){$("tlSw").onclick=flip;$("tlSw").onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();flip()}}}
@@ -787,7 +782,7 @@ function renderTimeline(box,Wk,h){
 function moveSetIn(arr,src,r,tgt,q,dup,ids,mk){
   const A=arr.find(x=>x.uid===src);if(!A)return false;
   if(tgt==null){ // ganz nach vorne
-    const C=mk({uid:ids.c,ex:A.ex,o:Object.assign({},A.o,(A.so||{})[r]||{},{sets:1}),so:{},link:false},A);arr.splice(0,0,C);
+    const C=mk({uid:ids.c,ex:A.ex,o:Object.assign({},A.o,(A.so||{})[r]||{},{sets:1}),so:{},link:false,mix:true},A);A.mix=true;arr.splice(0,0,C);
     if(!dup){const ai=arr.indexOf(A);if((A.o.sets||1)<=1){if(ai>0&&arr[ai-1].link&&!A.link)arr[ai-1].link=false;arr.splice(ai,1)}else delSet(A,r)}return true}
   let ti=arr.findIndex(x=>x.uid===tgt);if(ti<0)return false;
   const so=o=>o||{};
@@ -796,9 +791,9 @@ function moveSetIn(arr,src,r,tgt,q,dup,ids,mk){
   }
   const [ba,bz]=blockRange(arr,ti);if(bz>ba){ti=bz;q=arr[ti].o.sets||1} // Supersatz: hinter den ganzen Block
   const B=arr[ti],n=B.o.sets||1;
-  const C=mk({uid:ids.c,ex:A.ex,o:Object.assign({},A.o,so(A.so)[r]||{},{sets:1}),so:{},link:false},A);
+  const C=mk({uid:ids.c,ex:A.ex,o:Object.assign({},A.o,so(A.so)[r]||{},{sets:1}),so:{},link:false,mix:true},A);A.mix=true;
   if(q<n){ // B teilen: B (1..q) · C · B2 (q+1..n)
-    const B2=mk({uid:ids.b2,ex:B.ex,o:Object.assign({},B.o,{sets:n-q}),so:{},link:!!B.link},B);
+    const B2=mk({uid:ids.b2,ex:B.ex,o:Object.assign({},B.o,{sets:n-q}),so:{},link:!!B.link,mix:true},B);B.mix=true;
     Object.keys(so(B.so)).forEach(k=>{if(+k>q)B2.so[+k-q]=B.so[k]});
     const s1={};Object.keys(so(B.so)).forEach(k=>{if(+k<=q)s1[k]=B.so[k]});B.so=s1;B.o.sets=q;B.link=false;
     arr.splice(ti+1,0,C,B2);
@@ -920,9 +915,8 @@ function openEditor(it,ctx){
     const own=S1&&it.so&&it.so[S1]&&Object.keys(it.so[S1]).length;
     h+=`<button class="btn primary big" id="edOk">Fertig</button>${own?`<button class="btn" id="edAll">Für alle Sätze übernehmen</button>`:""}`;
     if(ctx.onSkip)h+=`<button class="btn" id="edSkip">${ctx.skipped?"Doch machen":ctx.skipLabel||"Heute überspringen"}</button>`;
-    if(S1&&!it.pair)h+=`<button class="btn" id="edDup">Satz ${S1} kopieren</button>`;
-    if(S1&&(it.o.sets||1)>1)h+=`<button class="btn danger" id="edDel">Satz ${S1} löschen</button>`;
-    else if(ctx.onDelete&&!S1)h+=`<button class="btn danger" id="edDelEx">Übung löschen</button>`;
+    if(S1&&!it.pair)h+=`<div class="row2"><button class="btn" id="edDup">Satz duplizieren</button>${(it.o.sets||1)>1?`<button class="btn danger" id="edDel">Satz löschen</button>`:""}</div>`;
+    if(ctx.onDelete)h+=`<button class="btn danger" id="edDelEx">Ganze Übung löschen</button>`;
     const n=it.o.sets||1;
     const body=openSheet(S1?`Satz ${S1} von ${n}`:(e.group&&!it.pair?e.group:"Übung"),itemName(it),`<div class="edprev"><canvas id="edCv" width="240" height="240" aria-label="Vorschau ${esc(e.name)}"></canvas><div class="small">${esc(e.de||"")}</div></div>`+h,{onClose:ctx.onClose});
     F.previewStart(e,O(),$("edCv"));
@@ -938,11 +932,10 @@ function openEditor(it,ctx){
     $("edOk").onclick=closeSheet;
     if($("edAll"))$("edAll").onclick=()=>{it.o=Object.assign({},it.o,it.so[S1]);it.so={};persist();toast("Gilt jetzt für alle Sätze");render()};
     if($("edDel"))$("edDel").onclick=()=>{delSet(it,S1);persist();closeSheet();toast(`Satz ${S1} gelöscht`)};
-    if($("edDup"))$("edDup").onclick=()=>{const n=it.o.sets||1,so={};Object.keys(it.so||{}).forEach(k=>{const i=+k;so[i<=S1?i:i+1]=it.so[k]});if(it.so&&it.so[S1])so[S1+1]=clone(it.so[S1]);it.so=so;it.o.sets=n+1;persist();closeSheet();toast(`Satz ${S1} kopiert – jetzt ${n+1} Sätze`)};
+    if($("edDup"))$("edDup").onclick=()=>{const n=it.o.sets||1,so={};Object.keys(it.so||{}).forEach(k=>{const i=+k;so[i<=S1?i:i+1]=it.so[k]});if(it.so&&it.so[S1])so[S1+1]=clone(it.so[S1]);it.so=so;it.o.sets=n+1;persist();closeSheet();toast(`Satz ${S1} dupliziert – jetzt ${n+1} Sätze`)};
   };
   render();
 }
-const MORGEN_OFF=uid=>!!(S.morgen.items[uid]&&S.morgen.items[uid].off);
 
 /* =================== WORKOUT: ABLAUF =================== */
 /* Schritte aus den aktiven Übungen. Schlüssel bleiben stabil, damit Änderungen mitten im Workout die Position halten. */
@@ -981,6 +974,17 @@ function buildSteps(Wk){
     for(let r=1;r<=max;r++){
       const mem=bl.filter(it=>effSets(it)>=r);
       if(r>1){const prev=bl.filter(it=>effSets(it)>=r-1);T(mem[0].uid,"Satzpause",restOf(prev[prev.length-1],st),"set",{pk:mem[0].uid+"|set|"+r})}
+      if(bl[0].sf&&mem.length>1&&mem.every(it=>isUni(EXB[it.ex],setOpt(it,r)))){
+        [0,1].forEach(sd=>{
+          if(sd)T(mem[0].uid,"Seitenwechsel",swOf(),"side",{pk:mem[0].uid+"|side|"+r});
+          mem.forEach((it,j)=>{const e=EXB[it.ex],o=setOpt(it,r);
+            if(j>0)T(it.uid,"Umbau · "+(it.um||e.name),swOf(),"umbau",{pk:it.uid+"|umbau|"+r+"|"+sd});
+            const Wo=x=>out.push(Object.assign({type:"work",uid:it.uid,ex:it.ex,o,part:0,stage:null,set:r,side:sd},x));
+            if(o.mode==="reps")Wo({mode:"reps"});else if(e.drop)[0,1,2].forEach(k=>Wo({stage:k,mode:"hold",dur:o.secs}));else Wo({mode:"hold",dur:o.secs});
+          });
+        });
+        continue;
+      }
       mem.forEach((it,j)=>{
         const e=EXB[it.ex],o=setOpt(it,r),uni=isUni(e,o);
         const Wo=x=>out.push(Object.assign({type:"work",uid:it.uid,ex:it.ex,o,part:0,stage:null},x));
@@ -1006,7 +1010,7 @@ let W=null,steps=[],idx=0;
 function loadActive(){try{const a=JSON.parse(localStorage.getItem(ACT)||"null");return a&&!a.ended?a:null}catch(_){return null}}
 function saveW(){if(!W)return;try{localStorage.setItem(ACT,JSON.stringify(W))}catch(_){}}
 function startWorkout(){
-  const items=dayItems().map(it=>({uid:it.uid,ex:it.ex,o:clone(it.o),base:it.base?clone(it.base):null,pair:it.pair?clone(it.pair):null,link:!!it.link,so:clone(it.so||{}),status:it.status,planned:true}));
+  const items=dayItems().map(it=>({uid:it.uid,ex:it.ex,o:clone(it.o),base:it.base?clone(it.base):null,pair:it.pair?clone(it.pair):null,link:!!it.link,so:clone(it.so||{}),status:it.status,planned:true,sf:!!it.sf,um:it.um,mix:!!it.mix}));
   W={v:1,id:"w"+now().toString(36),rid:R.id,rname:R.name,day:rDay,days:R.days.length,settings:clone(R.settings),pauses:clone(R.pauses||{}),audio:clone(R.audio||{}),
      startedAt:now(),items,cur:null,stepStart:now(),pauseAt:null,pausedMs:0,extra:0,res:{},pending:null,ended:false,visited:[]};
   delete skipT[skipKey()];
@@ -1316,7 +1320,7 @@ function editW(it,set,after){
   const sk=it.status==="removed"||(it.cut!=null&&startedW(it));
   openEditor(it,{rid:W.rid,st:W.settings,set,skipped:sk&&!startedW(it),skipLabel:startedW(it)?"Übung beenden":null,
     onSkip:sk&&startedW(it)?null:(on=>{skipW(it,on);after&&after()}),
-    onDelete:()=>{delW(it);after&&after()},
+    onDelete:()=>{(it.mix?W.items.filter(x=>x.ex===it.ex&&x.mix&&!startedW(x)):[it]).forEach(x=>delW(x));after&&after()},
     onClose:()=>{rebuildKeep();saveW();after&&after()}});
 }
 let planView="list";
@@ -1330,7 +1334,8 @@ function renderPlan(box,{hub,rerender}){
   const sc=box.querySelector(".plscroll"),top=sc?sc.scrollTop:0;
   let h=`<div class="seg plview" role="group" aria-label="Ansicht"><button class="sbtn" data-v="list" aria-pressed="${planView==="list"}">Liste</button><button class="sbtn" data-v="tl" aria-pressed="${planView==="tl"}">Timeline</button></div><div class="plscroll">`;
   if(planView==="tl")h+=`<div class="pltl"></div>`;
-  else h+=`<div class="list pllist">`+W.items.map((it,i)=>{
+  const MXW=mixRanges(W.items);
+  if(planView!=="tl")h+=`<div class="list pllist">`+W.items.map((it,i)=>{
     const r=W.res[it.uid],isCur=i===curPos,isNext=it.uid===nextUid,past=i<firstFree&&!isCur,rm=it.status==="removed",ended=it.cut!=null&&vis.includes(it.uid);
     let tags="",extra="";
     if(isCur)tags+='<span class="tag now">jetzt</span>';
@@ -1342,7 +1347,7 @@ function renderPlan(box,{hub,rerender}){
     const pick=hub&&!past&&!isNext&&!rm&&!vis.includes(it.uid)&&!linkedIn(i);
     let action=past||it.deleted||(isCur&&ended)?"":rm?`<button class="act restore" data-unskip="${i}">Rückgängig</button>`:`<button class="act" data-skip="${i}" aria-label="${isCur?"Übung beenden":"Heute überspringen"}">${ICON.skip}</button>`;
     if(pick)action=`<button class="act nxbtn" data-nx="${i}" aria-label="Als Nächstes">▶</button>`+action;
-    return rowHTML(it,i,{lock:i<firstFree||rm,cls:(rm?"off ":"")+(past?"done-row ":"")+(isNext?"nx-row ":"")+linkCls(W.items,i),tags,extra,action,link:free(i)&&free(i+1)?it.link:null});
+    return rowHTML(it,i,{lock:i<firstFree||rm,cls:(rm?"off ":"")+(past?"done-row ":"")+(isNext?"nx-row ":"")+(inMix(MXW,i)?" lkm":linkCls(W.items,i)),tags,extra,action,mix:MXW.some(([a,b])=>i>=a&&i<b),link:free(i)&&free(i+1)?it.link:null});
   }).join("")+`</div>`;
   h+=`<button class="btn ghost" data-pladd>＋ Übung hinzufügen</button></div>`;
   box.innerHTML=h;
@@ -1351,12 +1356,12 @@ function renderPlan(box,{hub,rerender}){
   const after=()=>{rebuildKeep();saveW();rerender()};
   if(planView==="tl"){
     const tl=box.querySelector(".pltl");
-    renderTimeline(tl,W,{curKey:W.cur,
+    renderTimeline(tl,W,{curKey:W.cur,onAdd:()=>{const b=box.querySelector("[data-pladd]");if(b)b.click()},
       onPause:(pk,v)=>{W.pauses=W.pauses||{};if(v==null)delete W.pauses[pk];else W.pauses[pk]=v;setPause(W.rid,pk,v);after()},
-      onAudio:W.rid==="morgen"?null:(ak,v)=>{W.audio=W.audio||{};if(v==null)delete W.audio[ak];else W.audio[ak]=v;setAudio(W.rid,ak,v);saveW();syncNative();rerender()},
+      onAudio:(ak,v)=>{W.audio=W.audio||{};if(v==null)delete W.audio[ak];else W.audio[ak]=v;setAudio(W.rid,ak,v);saveW();syncNative();rerender()},
       redraw:rerender,
       onUnskip:uid=>{skipW(W.items.find(x=>x.uid===uid),false);after()},
-      onMove:W.rid==="morgen"?null:(su,sr,tu,tr,dup)=>{
+      onMove:(su,sr,tu,tr,dup)=>{
         const ids={c:uidGen(),b2:uidGen()},B=W.items.find(x=>x.uid===tu),q=tr,n=B?(B.o.sets||1):0;
         const mkW=(x,from)=>Object.assign({base:from.base?clone(from.base):null,pair:null,status:dup?"added":(from.status==="added"?"added":"plan"),planned:!dup},x,{o:clone(x.o)});
         if(!moveSetIn(W.items,su,sr,tu,tr,dup,ids,mkW)){toast("Gleiche Übung – nichts zu verschieben");return}
@@ -1366,7 +1371,7 @@ function renderPlan(box,{hub,rerender}){
         const vis=W.visited||[],mg=findMerges(W.items).filter(([a,b])=>!vis.includes(b));
         applyMerges(W.items,mg,[W.pauses,W.audio]);if(arr)applyMerges(arr,mg,[raw&&raw.pauses,raw&&raw.audio]);
         save();toast(mg.length?"Satz verschoben – zusammengeführt":dup?"Satz kopiert":"Satz verschoben");after()},
-      onReorder:W.rid==="morgen"?null:(uid,from,to)=>{const it=W.items.find(x=>x.uid===uid),arr=rawItems(W.rid,W.day),r=arr&&arr.find(x=>x.uid===uid);if(it)reorderSets(it,from,to);if(r)reorderSets(r,from,to);save();toast("Satz "+from+" ist jetzt Satz "+to);after()},
+      onReorder:(uid,from,to)=>{const it=W.items.find(x=>x.uid===uid),arr=rawItems(W.rid,W.day),r=arr&&arr.find(x=>x.uid===uid);if(it)reorderSets(it,from,to);if(r)reorderSets(r,from,to);save();toast("Satz "+from+" ist jetzt Satz "+to);after()},
       onEdit:(it,set)=>editW(it,set,rerender)});
   }else{
     const list=box.querySelector(".pllist");
