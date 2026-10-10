@@ -771,3 +771,6 @@ html[data-theme="hell"] .edprev canvas{background:radial-gradient(circle at 50% 
 .row .acts .act{width:38px;height:38px;border-radius:10px}
 .row .acts .act.nxbtn{width:30px}
 .row .acts .act.restore{width:auto}
+html[data-theme="hell"] .tlswk{background:#DDD3C3}
+html[data-theme="hell"] .tlswk::after{background:#fff;box-shadow:0 1px 3px rgba(60,40,20,.25)}
+html[data-theme="hell"] .tlsw[aria-checked="true"] .tlswk::after{background:#fff}

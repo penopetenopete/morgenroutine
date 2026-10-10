@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1";
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true};
+const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
 const MORGEN={id:"morgen",name:"Morgenroutine",settings:{umbau:10,satz:30,wechsel:15,confirm:false},items:[
@@ -352,8 +352,8 @@ function renderHome(){
   if($("planNew"))$("planNew").onclick=newPlan;
   /* Einstellungen (Fenster) */
   document.querySelectorAll("[data-shade]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.shade===gv("shade")));
-  document.querySelectorAll("[data-theme]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.theme===(gv("theme")||"hell")));
-  $("snd").checked=gv("sound");$("vib").checked=gv("vib");$("gConfirm").checked=gv("confirm");$("gLead").checked=gv("lead");
+  document.querySelectorAll("button[data-theme]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.theme===(gv("theme")||"hell")));
+  $("snd").checked=gv("sound");$("vib").checked=gv("vib");$("gConfirm").checked=gv("confirm");$("gLead").checked=gv("lead");$("gTips").checked=gv("tips");
   $("gPauses").innerHTML=wheelRow("gRest","Pause nach jedem Satz",EXB.balance,"rest")+wheelRow("gSide","Pause zwischen den Seiten",EXB.balance,"sw");
   $("gPauses").querySelectorAll(".wheelrow").forEach(row=>{const k=row.dataset.k==="rest"?"rest":"side";initWheel(row,EXB.balance,{get:()=>gv(k),set:v=>setG(k,v)})});
   const a=loadActive();
@@ -361,7 +361,7 @@ function renderHome(){
   if(a)$("resume").innerHTML=`<span class="dot"></span><span><b>Workout läuft · ${esc(a.rname)}</b><span class="small">seit ${fmt((now()-a.startedAt)/1000)} · antippen zum Weitermachen</span></span>`;
 }
 $("openSet").onclick=()=>{const p=$("setPanel");renderHome();openSheet("","Einstellungen","",{onClose:()=>{$("setHold").appendChild(p)}});$("shBody").appendChild(p)};
-document.querySelectorAll("[data-theme]").forEach(b=>b.onclick=()=>{setG("theme",b.dataset.theme);applyTheme();renderHome();document.querySelectorAll("[data-theme]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.theme===b.dataset.theme))});
+document.querySelectorAll("button[data-theme]").forEach(b=>b.onclick=()=>{setG("theme",b.dataset.theme);applyTheme();renderHome();document.querySelectorAll("button[data-theme]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.theme===b.dataset.theme))});
 $("woAdd").onclick=()=>{
   openSheet("","Neu",`<h3>Neues Workout in …</h3><div class="chips2">${cats().map(c=>`<button class="chip2" data-nw="${c.id}" style="--c:${c.c}"><i></i>${esc(c.name)}</button>`).join("")}</div><button class="btn" id="ncNew">＋ Neuer Bereich</button>`);
   $("shBody").querySelectorAll("[data-nw]").forEach(b=>b.onclick=()=>{closeSheet();newRoutine(b.dataset.nw)});
@@ -409,6 +409,7 @@ $("snd").onchange=e=>{setG("sound",e.target.checked);muteIcon()};
 $("vib").onchange=e=>setG("vib",e.target.checked);
 $("gConfirm").onchange=e=>setG("confirm",e.target.checked);
 $("gLead").onchange=e=>setG("lead",e.target.checked);
+$("gTips").onchange=e=>{setG("tips",e.target.checked);if(W&&$("tips"))$("tips").hidden=!e.target.checked||!$("hub").hidden};
 $("resume").onclick=()=>{const a=loadActive();if(a)startPlayer(a)};
 function newRoutine(cat){
   if(S.routines.length>=MAX_SLOTS)return;
@@ -1349,7 +1350,7 @@ function stepUI(){
   $("plus10").hidden=!(s.type==="trans"&&s.dur!=null);
   $("pzEdit").hidden=!(s.type==="trans"&&s.dur!=null&&s.pk);
   const hub=!!(s.type==="trans"&&s.hub);
-  $("plan").hidden=hub;$("hub").hidden=!hub;$("stagebox").hidden=hub;$("readout").hidden=hub;$("tips").hidden=hub;
+  $("plan").hidden=hub;$("hub").hidden=!hub;$("stagebox").hidden=hub;$("readout").hidden=hub;$("tips").hidden=hub||!gv("tips");
   if(hub)renderHub(s);
   updateMain();
 }
