@@ -14,7 +14,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 
 /* =================== SPEICHER =================== */
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1";
-const MAX_SLOTS=5;
+const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true};
 
@@ -72,6 +72,9 @@ function migrateOld(s){
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(_){}}
 const gv=k=>S.g[k]!=null?S.g[k]:G_DEF[k];
+/* Look: „hell“ (Sand, Standard) oder „dunkel“ */
+function applyTheme(){const t=gv("theme")||"hell";document.documentElement.dataset.theme=t;const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==="hell"?"#F2EEE6":"#0B0F14"}
+applyTheme();
 function setG(k,v){S.g[k]=v;save()}
 
 /* =================== ROUTINEN =================== */
@@ -304,27 +307,99 @@ function routineMeta(R){
   return m;
 }
 function nextDay(R){const l=S.last[R.id];return l?(l.day+1)%R.days.length:0}
+/* =================== HAUPTMENÜ (10.10.2026): Ernährung · Pläne · Workouts nach Bereichen =================== */
+const CAT_COL=["#E8645A","#2EC4A6","#5B8DEF","#A07CF0","#D9B93A","#F08A3C","#E2558A","#4FB0C6"];
+function cats(){
+  if(!S.cats){S.cats=[{id:"mob",name:"Mobility",c:CAT_COL[0]},{id:"knie",name:"Knie",c:CAT_COL[1]},{id:"ruecken",name:"Rücken",c:CAT_COL[2]},{id:"ober",name:"Oberkörper",c:CAT_COL[3]}];
+    const m=rawRoutine("morgen");if(m&&!m.cat)m.cat="mob";
+    S.routines.forEach(r=>{if(!r.cat&&/knie/i.test(r.name))r.cat="knie"});save()}
+  return S.cats;
+}
+const allWorkouts=()=>[rawRoutine("morgen"),...S.routines].filter(Boolean);
+const catOf=r=>cats().find(c=>c.id===r.cat)||null;
+const woColor=r=>{const c=catOf(r);return c?c.c:"#8D9BAB"};
+function woThumb(r){const it=(r.days[0]&&r.days[0].items||[]).find(x=>EXB[x.ex]);if(!it)return "";try{return F.tlThumb(EXB[it.ex],Object.assign({},exDef(it.ex),it.o),woColor(r),160,1)}catch(_){return ""}}
+const WD=["Mo","Di","Mi","Do","Fr","Sa","So"];
+const wdIdx=d=>(new Date(d).getDay()+6)%7;
+function weekDone(rid,wd){const t=new Date();t.setHours(0,0,0,0);const mon=new Date(t);mon.setDate(t.getDate()-wdIdx(t));const day=new Date(mon);day.setDate(mon.getDate()+wd);
+  return (S.log||[]).some(l=>l.rid===rid&&new Date(l.d).toDateString()===day.toDateString())}
 function renderHome(){
   try{musMeta()}catch(_){}
   try{window.essenMeta&&essenMeta()}catch(_){}
   $("today").textContent=new Date().toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"});
-  const card=(R)=>`<button class="rcard" data-r="${R.id}"><span class="nm">${esc(R.name)}</span><span class="meta">${esc(routineMeta(R))}</span>${ICON.go}</button>`;
-  $("presetList").innerHTML=card(getRoutine("morgen"));
-  let h="";
-  for(let i=0;i<MAX_SLOTS;i++){const r=S.routines[i];
-    h+=r?card(getRoutine(r.id)):`<button class="rcard empty" data-new="1"><span class="slot">Slot ${i+1}</span><span class="nm">＋ Neue Routine</span></button>`}
-  $("customList").innerHTML=h;
-  document.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>openRoutine(b.dataset.r));
-  document.querySelectorAll("[data-new]").forEach(b=>b.onclick=newRoutine);
+  cats();
+  /* Pläne */
+  const tw=wdIdx(Date.now());
+  const plans=S.plans||[];
+  $("planList").innerHTML=plans.length?plans.map(pl=>{
+    const today=pl.days[tw]&&rawRoutine(pl.days[tw]);
+    return `<div class="plan" data-plan="${pl.id}"><div class="plh"><b>${esc(pl.name)}</b>${today?`<button class="pltoday" data-open="${today.id}" style="--c:${woColor(today)}">heute: ${esc(today.name)} ›</button>`:`<small>heute: Pause</small>`}</div>
+      <div class="pldays">${WD.map((d,i)=>{const r=pl.days[i]&&rawRoutine(pl.days[i]);const c=r?woColor(r):"";return `<div class="${!r?"rest":""}${i===tw?" now":""}${r&&weekDone(r.id,i)?" done":""}" style="--c:${c||"var(--line)"}"><i></i>${d}</div>`}).join("")}</div></div>`}).join("")
+    :`<button class="plan empty" id="planNew"><span>＋ Plan anlegen</span><small>z. B. Mo Morgenroutine, Di Knie …</small></button>`;
+  /* Workouts nach Bereich */
+  const ws=allWorkouts(),grp=(c,list)=>`<button class="bh" ${c?`data-cat="${c.id}"`:""} style="--c:${c?c.c:"var(--muted)"}"><i></i><span>${esc(c?c.name:"Weitere")}</span></button><div class="grp">${list.length?list.map(r=>{const R=getRoutine(r.id);return `<button class="wrow" data-r="${r.id}" style="--c:${woColor(r)}"><img alt="" src="${woThumb(r)}"><span class="wt"><b>${esc(r.name)}</b><small>${esc(routineMeta(R))}</small></span><span class="chev">›</span></button>`}).join(""):`<button class="wrow empty" data-newin="${c?c.id:""}"><span class="wt"><small>＋ Workout anlegen</small></span></button>`}</div>`;
+  let h="";cats().forEach(c=>h+=grp(c,ws.filter(r=>r.cat===c.id)));
+  const rest=ws.filter(r=>!catOf(r));if(rest.length)h+=grp(null,rest);
+  $("woList").innerHTML=h;
+  $("home").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>openRoutine(b.dataset.r));
+  $("home").querySelectorAll("[data-open]").forEach(b=>b.onclick=e=>{e.stopPropagation();openRoutine(b.dataset.open)});
+  $("home").querySelectorAll("[data-plan]").forEach(b=>b.onclick=()=>planSheet(b.dataset.plan));
+  $("home").querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>catSheet(b.dataset.cat));
+  $("home").querySelectorAll("[data-newin]").forEach(b=>b.onclick=()=>newRoutine(b.dataset.newin||undefined));
+  if($("planNew"))$("planNew").onclick=newPlan;
+  /* Einstellungen (Fenster) */
   document.querySelectorAll("[data-shade]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.shade===gv("shade")));
+  document.querySelectorAll("[data-theme]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.theme===(gv("theme")||"hell")));
   $("snd").checked=gv("sound");$("vib").checked=gv("vib");$("gConfirm").checked=gv("confirm");$("gLead").checked=gv("lead");
   $("gPauses").innerHTML=wheelRow("gRest","Pause nach jedem Satz",EXB.balance,"rest")+wheelRow("gSide","Pause zwischen den Seiten",EXB.balance,"sw");
   $("gPauses").querySelectorAll(".wheelrow").forEach(row=>{const k=row.dataset.k==="rest"?"rest":"side";initWheel(row,EXB.balance,{get:()=>gv(k),set:v=>setG(k,v)})});
   const a=loadActive();
   $("resume").hidden=!a;
   if(a)$("resume").innerHTML=`<span class="dot"></span><span><b>Workout läuft · ${esc(a.rname)}</b><span class="small">seit ${fmt((now()-a.startedAt)/1000)} · antippen zum Weitermachen</span></span>`;
-  const lg=S.log[S.log.length-1];
-  $("lastAll").textContent=lg?`${S.log.length} ${S.log.length===1?"Workout":"Workouts"} · zuletzt ${lg.rname}, ${dateText(lg.d)} · ${fmt(lg.t)}`:"Noch keine Workouts";
+}
+$("openSet").onclick=()=>{const p=$("setPanel");renderHome();openSheet("","Einstellungen","",{onClose:()=>{$("setHold").appendChild(p)}});$("shBody").appendChild(p)};
+document.querySelectorAll("[data-theme]").forEach(b=>b.onclick=()=>{setG("theme",b.dataset.theme);applyTheme();Object.keys(TLIMG).length;document.querySelectorAll("[data-theme]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.theme===b.dataset.theme))});
+$("woAdd").onclick=()=>{
+  openSheet("","Neu",`<h3>Neues Workout in …</h3><div class="chips2">${cats().map(c=>`<button class="chip2" data-nw="${c.id}" style="--c:${c.c}"><i></i>${esc(c.name)}</button>`).join("")}</div><button class="btn" id="ncNew">＋ Neuer Bereich</button>`);
+  $("shBody").querySelectorAll("[data-nw]").forEach(b=>b.onclick=()=>{closeSheet();newRoutine(b.dataset.nw)});
+  $("ncNew").onclick=()=>{const id="c"+now().toString(36),used=cats().map(c=>c.c);S.cats.push({id,name:"Neuer Bereich",c:CAT_COL.find(c=>!used.includes(c))||CAT_COL[S.cats.length%CAT_COL.length]});save();closeSheet();renderHome();setTimeout(()=>catSheet(id,true),80)};
+};
+/* Bereich: umbenennen, Farbe, neues Workout darin, löschen */
+function catSheet(id,focus){
+  const c=cats().find(x=>x.id===id);if(!c)return;
+  const n=allWorkouts().filter(r=>r.cat===id).length;
+  openSheet("Bereich",c.name,`<label class="field"><span>Name</span><input id="caN" maxlength="30" value="${esc(c.name)}"></label>
+    <div class="colrow">${CAT_COL.map(col=>`<button class="colb" data-col="${col}" style="--c:${col}" aria-pressed="${col===c.c}"></button>`).join("")}</div>
+    <button class="btn primary big" id="caOk">Fertig</button><button class="btn" id="caWo">＋ Neues Workout in „${esc(c.name)}“</button><button class="btn danger" id="caDel">Bereich löschen${n?` (${n} Workout${n>1?"s":""} → Weitere)`:""}</button>`,{onClose:renderHome});
+  const i=$("caN");if(focus)setTimeout(()=>{i.focus();i.select()},60);
+  i.oninput=()=>{c.name=i.value.trim()||"Bereich";$("shTitle").textContent=c.name;save()};i.onkeydown=e=>{if(e.key==="Enter")closeSheet()};
+  $("shBody").querySelectorAll("[data-col]").forEach(b=>b.onclick=()=>{c.c=b.dataset.col;save();$("shBody").querySelectorAll("[data-col]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+  $("caOk").onclick=closeSheet;
+  $("caWo").onclick=()=>{sheetClose=null;closeSheet();newRoutine(id)};
+  $("caDel").onclick=()=>{const b=$("caDel");if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Wirklich löschen?";return}
+    allWorkouts().forEach(r=>{if(r.cat===id)delete r.cat});S.cats=S.cats.filter(x=>x!==c);save();closeSheet()};
+}
+const catPick=r=>`<div class="opt"><span>Bereich</span><div class="chips2">${cats().map(c=>`<button class="chip2" data-cp="${c.id}" style="--c:${c.c}" aria-pressed="${r.cat===c.id}"><i></i>${esc(c.name)}</button>`).join("")}</div></div>`;
+function bindCatPick(r){$("shBody").querySelectorAll("[data-cp]").forEach(b=>b.onclick=()=>{r.cat=r.cat===b.dataset.cp?undefined:b.dataset.cp;if(!r.cat)delete r.cat;save();
+  $("shBody").querySelectorAll("[data-cp]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.cp===r.cat));const c=catOf(r);$("rEyebrow").textContent=c?c.name:"Workout"})}
+/* Pläne: Wochentage mit Workouts */
+function newPlan(){S.plans=S.plans||[];const pl={id:"p"+now().toString(36),name:"Wochenplan",days:[null,null,null,null,null,null,null]};S.plans.push(pl);save();renderHome();planSheet(pl.id,true)}
+$("planAdd").onclick=newPlan;
+function planSheet(id,focus){
+  const pl=(S.plans||[]).find(x=>x.id===id);if(!pl)return;
+  const draw=()=>{
+    openSheet("Plan",pl.name,`<label class="field"><span>Name</span><input id="plN" maxlength="30" value="${esc(pl.name)}"></label>
+      <div class="list">${WD.map((d,i)=>{const r=pl.days[i]&&rawRoutine(pl.days[i]);return `<button class="row pday" data-pd="${i}" style="--c:${r?woColor(r):"var(--line)"}"><span class="pdd">${d}</span><span class="mid"><span class="nm">${r?esc(r.name):"Pause"}</span></span><span class="chev">›</span></button>`}).join("")}</div>
+      <button class="btn primary big" id="plOk">Fertig</button><button class="btn danger" id="plDel">Plan löschen</button>`,{onClose:renderHome});
+    const i=$("plN");if(focus){focus=false;setTimeout(()=>{i.focus();i.select()},60)}
+    i.oninput=()=>{pl.name=i.value.trim()||"Plan";$("shTitle").textContent=pl.name;save()};i.onkeydown=e=>{if(e.key==="Enter")i.blur()};
+    $("shBody").querySelectorAll("[data-pd]").forEach(b=>b.onclick=()=>{const di=+b.dataset.pd;
+      openSheet(pl.name,WD[di]+" – welches Workout?",`<div class="list"><button class="row" data-pick=""><span class="mid"><span class="nm">Pause</span></span></button>${allWorkouts().map(r=>`<button class="row" data-pick="${r.id}" style="--c:${woColor(r)}"><span class="pdot"></span><span class="mid"><span class="nm">${esc(r.name)}</span><span class="val">${esc(catOf(r)?catOf(r).name:"Weitere")}</span></span></button>`).join("")}</div>`,{onClose:renderHome});
+      $("shBody").querySelectorAll("[data-pick]").forEach(x=>x.onclick=()=>{pl.days[di]=x.dataset.pick||null;save();draw()});});
+    $("plOk").onclick=closeSheet;
+    $("plDel").onclick=()=>{const b=$("plDel");if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Wirklich löschen?";return}S.plans=S.plans.filter(x=>x!==pl);save();closeSheet()};
+  };
+  draw();
 }
 document.querySelectorAll("[data-shade]").forEach(b=>b.onclick=()=>{setG("shade",+b.dataset.shade);F.setShade(gv("shade"));renderHome()});
 $("snd").onchange=e=>{setG("sound",e.target.checked);muteIcon()};
@@ -332,9 +407,9 @@ $("vib").onchange=e=>setG("vib",e.target.checked);
 $("gConfirm").onchange=e=>setG("confirm",e.target.checked);
 $("gLead").onchange=e=>setG("lead",e.target.checked);
 $("resume").onclick=()=>{const a=loadActive();if(a)startPlayer(a)};
-function newRoutine(){
+function newRoutine(cat){
   if(S.routines.length>=MAX_SLOTS)return;
-  const r={id:"r"+now().toString(36),name:"Routine "+(S.routines.length+1),settings:{},days:[{items:[]}]};
+  const r={id:"r"+now().toString(36),name:"Workout "+(S.routines.length+1),settings:{},days:[{items:[]}]};if(cat)r.cat=cat;
   S.routines.push(r);save();openRoutine(r.id);openRoutineSheet(true);
 }
 
@@ -411,7 +486,7 @@ function renderRoutine(){
   R=getRoutine(R.id);if(!R){show("home");return}
   if(rDay>=R.days.length)rDay=0;
   const items=dayItems(),act=items.filter(i=>i.status!=="removed");
-  $("rEyebrow").textContent=R.preset?"Vorkonfiguriert":"Eigene Routine";
+  {const c=catOf(rawRoutine(R.id)||{});$("rEyebrow").textContent=c?c.name:"Workout"}
   $("rName").textContent=R.name;
   const nd=nextDay(R);
   $("rDays").hidden=R.days.length<2;
@@ -465,9 +540,9 @@ $("rMore").onclick=()=>openRoutineSheet();
 function openRoutineSheet(focusName){
   if(R.preset){
     const strip=x=>JSON.stringify(x.days),changed=strip(rawRoutine("morgen"))!==strip(morgenBuild(null))||Object.keys(rawRoutine("morgen").pauses||{}).length;
-    openSheet("Vorkonfiguriert",R.name,`<button class="btn primary big" id="rsOk">Fertig</button><button class="btn" id="rsCopy">Als eigene Routine kopieren</button>${changed?`<button class="btn danger" id="rsReset">Auf Original zurücksetzen</button>`:""}`);
+    openSheet("Workout",R.name,`${catPick(rawRoutine(R.id))}<button class="btn primary big" id="rsOk">Fertig</button><button class="btn" id="rsCopy">Als eigene Routine kopieren</button>${changed?`<button class="btn danger" id="rsReset">Auf Original zurücksetzen</button>`:""}`);
     $("rsCopy").onclick=()=>{
-      if(S.routines.length>=MAX_SLOTS){toast("Alle 5 Slots belegt – erst eine Routine löschen");return}
+      if(S.routines.length>=MAX_SLOTS){toast("Zu viele Workouts");return}
       const src=rawRoutine("morgen"),map={};src.days[0].items.forEach(it=>map[it.uid]=uidGen());
       const pz={};Object.entries(src.pauses||{}).forEach(([k,v])=>{const p=k.split("|");if(map[p[0]]){p[0]=map[p[0]];pz[p.join("|")]=v}});
       const r={id:"r"+now().toString(36),name:R.name+" (Kopie)",settings:{},pauses:pz,days:[{items:src.days[0].items.map(it=>Object.assign(clone(it),{uid:map[it.uid]}))}]};
@@ -476,12 +551,12 @@ function openRoutineSheet(focusName){
     };
     if($("rsReset"))$("rsReset").onclick=()=>{const b=$("rsReset");if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Wirklich? Alle Änderungen gehen verloren";return}
       S.morgenR=morgenBuild(null);save();closeSheet();renderRoutine();toast("Morgenroutine wie im Original")};
-    $("rsOk").onclick=closeSheet;
+    $("rsOk").onclick=closeSheet;bindCatPick(rawRoutine(R.id));
     return;
   }
   const r=rawRoutine(R.id);if(!r)return;
   openSheet("Routine bearbeiten",r.name,`<label class="field"><span>Name</span><input id="rsName" maxlength="40" autocomplete="off" value="${esc(r.name)}"></label>
-    <div class="sg"><span>Anzahl Tage</span><div class="stepper"><button id="rsMinus" aria-label="weniger">−</button><span class="num" id="rsDays">${r.days.length}</span><button id="rsPlus" aria-label="mehr">+</button></div></div>
+    ${catPick(r)}<div class="sg"><span>Anzahl Tage</span><div class="stepper"><button id="rsMinus" aria-label="weniger">−</button><span class="num" id="rsDays">${r.days.length}</span><button id="rsPlus" aria-label="mehr">+</button></div></div>
     <div id="rsDayNote"></div>
     <button class="btn primary big" id="rsOk">Fertig</button>${r.days.some(d=>d.items.length)?`<button class="btn" id="rsShare">Teilen · an Claude schicken</button>`:`<button class="btn" id="rsPaste">Routine von Claude einfügen</button>`}<button class="btn danger" id="rsDel">Routine löschen</button>`,{onClose:()=>{if(screen==="routine")renderRoutine()}});
   if($("rsShare"))$("rsShare").onclick=()=>shareRoutine(r);
@@ -495,7 +570,7 @@ function openRoutineSheet(focusName){
   $("rsMinus").onclick=()=>{if(r.days.length<=1)return;const last=r.days[r.days.length-1];
     if(last.items.length&&!$("rsDayDel")){$("rsDayNote").innerHTML=`<button class="btn danger" id="rsDayDel">Tag ${r.days.length} mit ${last.items.length} ${last.items.length===1?"Übung":"Übungen"} löschen</button>`;$("rsDayDel").onclick=()=>{r.days.pop();save();upd()};return}
     r.days.pop();save();upd()};
-  $("rsOk").onclick=closeSheet;
+  $("rsOk").onclick=closeSheet;bindCatPick(r);
   $("rsDel").onclick=()=>{const b=$("rsDel");if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Wirklich löschen? Statistik bleibt";return}
     S.routines=S.routines.filter(x=>x.id!==r.id);delete S.last[r.id];save();sheetClose=null;closeSheet();history.back();setTimeout(()=>{if(screen!=="home")show("home")},80);toast("Routine gelöscht")};
 }
@@ -651,7 +726,7 @@ function renderTimeline(box,Wk,h){
     const s=x.s,open=s.dur==null,dn=curI>=0&&x.i<curI,sk=skipped.has(s.uid);
     const lab=open?"▶":pauseText(s.dur);
     const src=tlCopy&&tlCopy.pk===s.pk?" src":"";
-    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${sk?" skip":""}${src}" ${(open&&(dn||!can))||sk?"disabled":""} data-e="${EDG.push(x)-1}" data-k="e|${s.pk||s.key}"${audA(s)} aria-label="Pause ${lab}"${inbox?' data-in="1"':""}><i></i><span>${aud(s)}<b>${lab}</b></span></button>`};
+    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${sk?" skip":""}${src}" ${(open&&(dn||!can))||sk?"disabled":""} data-e="${EDG.push(x)-1}" data-k="e|${s.pk||s.key}"${audA(s)} aria-label="Pause ${lab}"${inbox?' data-in="1"':""}><i></i><span${/:/.test(lab)?' class="two"':""}>${aud(s)}<b>${/:/.test(lab)?lab.replace(/\s*min$/,"<small>min</small>"):lab}</b></span></button>`};
   let html="",row=[],ri=0;
   const flush=()=>{html+=`<div class="tlrow">${row.join("")}</div>`;row=[];ri++};
   let bi=0;
@@ -662,7 +737,7 @@ function renderTimeline(box,Wk,h){
     else row.push(edgeHTML(x,false));
   }
   if(h.onAdd&&!drag){const add=`<div role="button" tabindex="0" class="tlb tladd" aria-label="Übung hinzufügen"><div class="tlf"><b>＋</b></div></div>`;
-    if(bi%PER===0&&row.length===0){html+=`<div class="tlret"></div>`;row.push(add)}else if(bi%PER===0){flush();html+=`<div class="tlret"></div>`;row.push(add)}else{row.push(`<span class="tle none"><i></i></span>`,add)}}
+    if(bi%PER===0&&row.length===0){html+=`<div class="tlret"></div>`;row.push(add)}else if(bi%PER===0){flush();html+=`<div class="tlret"></div>`;row.push(add)}else{row.push(`<span class="tle sep"><i></i></span>`,add)}}
   if(row.length)flush();
   const own=Object.keys(AM).length;
   const sw=can?`<div class="tlsw" id="tlSw" role="switch" tabindex="0" aria-checked="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span>${own?`<button class="tlrs" id="tlAudReset" aria-label="Alles auf Smart">↺</button>`:""}<i class="tlswk"></i></div>`:"";
@@ -709,7 +784,8 @@ function renderTimeline(box,Wk,h){
       if(ev.target.closest("[data-e]"))return;
       if(b.dataset.lp){delete b.dataset.lp;return}
       if(tlTapT){clearTimeout(tlTapT);tlTapT=null;tlFlip(tl);return} // Doppeltippen: alle Kästchen umdrehen
-      tlTapT=setTimeout(()=>{tlTapT=null;if(!b.isConnected||done)return;
+      tlTapT=setTimeout(()=>{tlTapT=null;if(!b.isConnected)return;
+        if(done){if(h.onResult&&!mus())h.onResult(boxes[+b.dataset.b]);return} // erledigt: Ergebnis nachträglich ändern
         if(skipped.has(s.uid)){if(h.onUnskip){tlFocus=b.dataset.k;h.onUnskip(s.uid)}return}
         if(mus()){toggleAud(s);return}
         if(tlCopy){tlCopy=null;h.redraw();return}
@@ -1119,6 +1195,30 @@ window.TrainingApp={plannedEvents,getState:()=>W?clone(W):null,steps:()=>steps.m
 
 /* ---- Ergebnisse ---- */
 function resOf(uid){return W.res[uid]||(W.res[uid]={time:0,sets:[]})}
+/* Ergebnis eines erledigten Satzes nachträglich ändern (Timeline im Workout → graues Kästchen antippen) */
+function editResult(bx,after){
+  const s=bx.s,e=EXB[s.ex],sides=bx.lr||s.both?[0,1]:[s.side||0],r=resOf(s.uid);
+  const find=sd=>r.sets.find(x=>x.set===s.set&&(x.part||0)===(s.part||0)&&(x.side||0)===sd&&x.stage==null)||(s.both?r.sets.find(x=>x.set===s.set&&x.both):null);
+  const reps=s.mode==="reps",tgt=reps?s.o.reps:s.o.secs;
+  const get=sd=>{const x=find(sd);return x?(reps?x.actual:x.done):0};
+  const set=(sd,v)=>{let x=find(sd);if(!x){x=reps?{set:s.set,side:sd,stage:null,part:s.part||0,mode:"reps",target:tgt,actual:v,kg:s.o.kg||0}:{set:s.set,side:sd,stage:null,part:s.part||0,mode:"hold",target:tgt,done:v};putSet(s.uid,x)}
+    if(reps)x.actual=v;else x.done=v;saveW()};
+  const lab=sd=>sides.length>1||s.side!=null&&isUni(e,s.o)?(sd?"Rechts":"Links"):"";
+  let h="";
+  sides.forEach(sd=>{h+=wheelRow("res"+sd,(lab(sd)?lab(sd)+" · ":"")+(reps?"geschafft":"gehalten"),e,reps?"actual":"secs")});
+  const kgx=find(sides[0]);
+  if(reps&&e.weight&&e.weight!=="none")h+=wheelRow("resKg","Gewicht",e,"kg");
+  openSheet(`Satz ${s.set} · erledigt`,e.name,`<div class="note">Ziel: ${reps?tgt+" Wdh.":fmtSecs(tgt)}</div>${h}
+    <div class="row2"><button class="btn primary" id="rsAll">Alles geschafft</button><button class="btn" id="rsNone">Nicht gemacht</button></div><button class="btn ghost" id="rsOk2">Fertig</button>`,{onClose:()=>{saveW();if(after)after()}});
+  const body=$("shBody");
+  body.querySelectorAll(".wheelrow").forEach((row,i)=>{
+    if(row.dataset.k==="kg"){initWheel(row,e,{get:()=>{const x=find(sides[0]);return x&&x.kg||s.o.kg||0},set:v=>{sides.forEach(sd=>{const x=find(sd);if(x)x.kg=v});saveW()}});return}
+    const sd=sides[i];initWheel(row,e,{get:()=>get(sd),set:v=>set(sd,v)});
+  });
+  $("rsAll").onclick=()=>{sides.forEach(sd=>set(sd,tgt));closeSheet();toast("Als geschafft gespeichert")};
+  $("rsNone").onclick=()=>{r.sets=r.sets.filter(x=>!(x.set===s.set&&(x.part||0)===(s.part||0)&&sides.includes(x.side||0)));saveW();closeSheet();toast("Satz als nicht gemacht gespeichert")};
+  $("rsOk2").onclick=closeSheet;
+}
 function putSet(uid,entry){const r=resOf(uid),k=[entry.set,entry.side,entry.stage,entry.part].join("|");r.sets=r.sets.filter(x=>[x.set,x.side,x.stage,x.part].join("|")!==k);r.sets.push(entry);r.sets.sort((a,b)=>a.set-b.set||(a.part||0)-(b.part||0)||a.side-b.side||(a.stage||0)-(b.stage||0))}
 function recordHold(s,el,natural){
   const r=resOf(s.uid);r.time+=Math.min(el,s.dur||el);
@@ -1384,7 +1484,7 @@ function renderPlan(box,{hub,rerender}){
   const after=()=>{rebuildKeep();saveW();rerender()};
   if(planView==="tl"){
     const tl=box.querySelector(".pltl");
-    renderTimeline(tl,W,{curKey:W.cur,onAdd:()=>{const b=box.querySelector("[data-pladd]");if(b)b.click()},
+    renderTimeline(tl,W,{curKey:W.cur,onResult:bx=>editResult(bx,rerender),onAdd:()=>{const b=box.querySelector("[data-pladd]");if(b)b.click()},
       onPause:(pk,v)=>{W.pauses=W.pauses||{};if(v==null)delete W.pauses[pk];else W.pauses[pk]=v;setPause(W.rid,pk,v);after()},
       onAudio:(ak,v)=>{W.audio=W.audio||{};if(v==null)delete W.audio[ak];else W.audio[ak]=v;setAudio(W.rid,ak,v);saveW();syncNative();rerender()},
       redraw:rerender,

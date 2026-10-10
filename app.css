@@ -679,3 +679,89 @@ body.esel #essen{padding-bottom:170px}
 .tlb.lr .tlft small{margin-bottom:2px}
 .tlb.lr .tlft small,.tlft:has(.tlsd) small{padding:0 16px;white-space:nowrap}
 .tlsd.one.r{justify-content:flex-end}
+
+/* ===== Look „Hell“ (Sand, 10.10.2026) – Standard; „Dunkel“ = bisheriger Look ===== */
+html[data-theme="hell"]{--bg:#F2EEE6;--card:#FBF8F2;--line:#E3DACB;--fg:#2A251E;--muted:#877B6B;--accent:#C4573B;--rest:#C98A1B;--ok:#4E8F4A;--bad:#C44536}
+html[data-theme="hell"]{color-scheme:light}
+html[data-theme="hell"] .tlf{background:radial-gradient(120% 90% at 50% 35%,color-mix(in srgb,var(--c) 16%,var(--card)),var(--card));box-shadow:0 1px 2px rgba(0,0,0,.06),0 4px 14px color-mix(in srgb,var(--c) 14%,transparent)}
+html[data-theme="hell"] .tlf small,html[data-theme="hell"] .tlft small{color:var(--fg)}
+html[data-theme="hell"] .tlft small,html[data-theme="hell"] .tlb small{color:color-mix(in srgb,var(--c) 70%,#000)}
+html[data-theme="hell"] .tlfi small{color:var(--fg)}
+html[data-theme="hell"] .tle span{background:var(--card);border-color:var(--line);color:var(--muted)}
+html[data-theme="hell"] .tle.open span{background:var(--card);border-color:var(--line);color:var(--fg)}
+html[data-theme="hell"] .tlcab .cb0{stroke:rgba(0,0,0,.06)}
+html[data-theme="hell"] .tlcab .cb2{stroke:#fff;stroke-opacity:.8}
+html[data-theme="hell"] .tl{background:var(--card)}
+html[data-theme="hell"] .toast,html[data-theme="hell"] .eundo,html[data-theme="hell"] .ecal,html[data-theme="hell"] .edock,html[data-theme="hell"] .tlhead .tlcopy{background:var(--card);color:var(--fg)}
+html[data-theme="hell"] .brand img{background:#0B0F14}
+html[data-theme="hell"] .chip{background:rgba(255,255,255,.85)}
+html[data-theme="hell"] .scrim{background:rgba(20,25,30,.35)}
+html[data-theme="hell"] .erow,html[data-theme="hell"] .elist{background:var(--card)}
+html[data-theme="hell"] img.eic,html[data-theme="hell"] img.emini{background:#fff}
+html[data-theme="hell"] .eswipe{background:#FBE2DA}
+html[data-theme="hell"] .dtab[aria-selected="true"],html[data-theme="hell"] .sbtn[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+html[data-theme="hell"] .ering .rbg,html[data-theme="hell"] .rbg{stroke:var(--line)}
+html[data-theme="hell"] .stage{background:radial-gradient(circle at 50% 40%,#1a2430,#0B0F14)}
+html[data-theme="hell"] .tlhead{background:var(--bg)}
+html[data-theme="hell"] .sheet .tlhead{background:var(--card)}
+html[data-theme="hell"] .row.dragging{background:var(--card)}
+html[data-theme="hell"] .row .lnk.on{background:color-mix(in srgb,var(--accent) 12%,var(--card))}
+html[data-theme="hell"] .row .lnk.mix{background:color-mix(in srgb,var(--mix) 14%,var(--card))}
+html[data-theme="hell"] .resume{background:color-mix(in srgb,var(--rest) 12%,var(--card))}
+html[data-theme="hell"] .edz{background:var(--card)}
+html[data-theme="hell"] .tlhead .tlcopy{background:var(--card);box-shadow:0 10px 30px rgba(60,40,20,.18)}
+html[data-theme="hell"] .btn.primary{color:#fff}
+html[data-theme="hell"] .toast{box-shadow:0 8px 24px rgba(60,40,20,.18)}
+html[data-theme="hell"] .tlcab .tlcadd .cb1{stroke:var(--line)}
+/* ===== Hauptmenü neu (10.10.2026) ===== */
+.htop{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.htop .eyebrow{margin:0}
+.hicons{display:flex;gap:8px}.hicons .ic{width:42px;height:42px;border-radius:13px;background:var(--card)}
+.hicons .ic svg{width:20px;height:20px}
+.hnut{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:18px;border:1px solid var(--line);background:var(--card);text-align:left;cursor:pointer}
+.hrings{display:flex;gap:6px;flex:none}.hrings svg{width:32px;height:32px}
+.hnt{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}.hnt b{font-family:var(--f-display);font-size:1.05rem;font-weight:600}.hnt small{color:var(--muted);font-size:.85rem}
+.hnut .go{width:18px;height:18px;color:var(--muted);flex:none}
+.hsec{display:flex;align-items:center;justify-content:space-between;margin:14px 2px -2px}
+.hsec h3{margin:0;font-family:var(--f-display);font-size:.75rem;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;font-weight:600}
+.hadd{border:0;background:none;color:var(--accent);font-family:var(--f-display);font-size:.9rem;min-height:36px;padding:0 6px;cursor:pointer}
+.plan{display:flex;flex-direction:column;gap:12px;width:100%;padding:14px;border-radius:18px;border:1px solid var(--line);background:var(--card);cursor:pointer;margin-bottom:8px}
+.plan.empty{border-style:dashed;background:transparent;align-items:flex-start;gap:2px;color:var(--accent);font-family:var(--f-display)}
+.plan.empty small{color:var(--muted);font-family:var(--f-body)}
+.plh{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.plh b{font-family:var(--f-display);font-size:1.05rem;font-weight:600}.plh small{color:var(--muted)}
+.pltoday{border:0;background:none;padding:0;color:color-mix(in srgb,var(--c) 75%,var(--fg));font-family:var(--f-body);font-size:.92rem;cursor:pointer}
+.pldays{display:flex;justify-content:space-between}
+.pldays div{display:flex;flex-direction:column;align-items:center;gap:5px;font-family:var(--f-display);font-size:.68rem;color:var(--muted)}
+.pldays i{width:30px;height:30px;border-radius:50%;background:color-mix(in srgb,var(--c) 22%,var(--card));border:1.5px solid var(--c)}
+.pldays .rest i{background:transparent;border:1.5px dashed var(--line)}
+.pldays .done i{background:var(--c)}
+.pldays .now i{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--fg)}
+.pldays .now{color:var(--fg)}
+.bh{display:flex;align-items:center;gap:8px;margin:12px 2px 6px;border:0;background:none;padding:4px 0;cursor:pointer;color:var(--muted)}
+.bh i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.bh span{font-family:var(--f-display);font-size:.75rem;letter-spacing:.14em;text-transform:uppercase}
+.grp{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:18px;background:var(--card);overflow:hidden}
+.wrow{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border:0;border-top:1px solid var(--line);background:none;text-align:left;cursor:pointer;color:var(--fg)}
+.grp>.wrow:first-child{border-top:0}
+.wrow img{width:48px;height:48px;border-radius:13px;flex:none;object-fit:contain;background:color-mix(in srgb,var(--c) 15%,var(--card))}
+.wt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}.wt b{font-family:var(--f-display);font-weight:600;font-size:.98rem}.wt small{color:var(--muted);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wrow .chev{color:var(--muted);font-size:1.3rem;flex:none}
+.wrow.empty .wt small{color:var(--accent);font-family:var(--f-display);font-size:.88rem}
+.chips2{display:flex;flex-wrap:wrap;gap:6px}
+.chip2{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:var(--card);font-family:var(--f-display);font-size:.85rem;color:var(--fg);cursor:pointer}
+.chip2 i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.chip2[aria-pressed="true"]{border-color:var(--c);background:color-mix(in srgb,var(--c) 14%,var(--card))}
+.colrow{display:flex;gap:10px;flex-wrap:wrap}
+.colb{width:34px;height:34px;border-radius:50%;border:0;background:var(--c);cursor:pointer}
+.colb[aria-pressed="true"]{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--fg)}
+.setpanel{display:flex;flex-direction:column;gap:12px}
+.setpanel .opt{display:flex;flex-direction:column;gap:6px}.setpanel .opt>span,.opt>span{font-family:var(--f-display);font-size:.8rem;color:var(--muted)}
+.row.pday{display:flex;align-items:center;gap:12px;width:100%;text-align:left;box-shadow:inset 3px 0 0 var(--c)}
+.pdd{width:28px;font-family:var(--f-display);color:var(--muted)}
+.pdot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none;margin-left:4px}
+#home{gap:10px}
+/* Timeline: ＋ mit gleichem Abstand, lange Pausen zweizeilig */
+.tle.sep{flex:0 0 46px;cursor:default}
+.tle span.two{line-height:1.05;padding:3px 7px;text-align:center;border-radius:12px}
+.tle span.two b{display:flex;flex-direction:column;align-items:center}
+.tle span.two small{font-size:.62rem;opacity:.75}

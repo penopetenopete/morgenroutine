@@ -17,36 +17,34 @@
 
 <!-- HAUPTMENÜ -->
 <main class="wrap screen" id="home">
-  <header>
+  <div class="htop">
     <div class="eyebrow" id="today"></div>
-    <div class="brand"><img src="logo.png" alt="" width="52" height="52"><h1>Training</h1></div>
-  </header>
+    <div class="hicons">
+      <button class="ic" id="openStats" aria-label="Statistik"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg></button>
+      <button class="ic" id="openSet" aria-label="Einstellungen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </div>
+  </div>
   <button class="resume" id="resume" hidden></button>
-  <button class="rcard" id="openEssen"><span class="nm">Ernährung</span><span class="meta" id="essenMeta"></span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></button>
-  <section class="sect">
-    <h3>Vorkonfiguriert</h3>
-    <div class="cards" id="presetList"></div>
-  </section>
-  <section class="sect">
-    <h3>Eigene Routinen</h3>
-    <div class="cards" id="customList"></div>
-  </section>
-  <button class="rcard" id="openMusic"><span class="nm">Musik &amp; Podcast</span><span class="meta" id="musMeta">Spotify</span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></button>
-  <details class="card setcard">
-    <summary class="eyebrow">Einstellungen</summary>
+  <button class="hnut" id="openEssen"><span class="hrings" id="hRings"></span><span class="hnt"><b id="hKcal"></b><small id="essenMeta"></small></span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></button>
+  <div class="hsec"><h3>Pläne</h3><button class="hadd" id="planAdd" aria-label="Neuer Plan">＋</button></div>
+  <div id="planList"></div>
+  <div class="hsec"><h3>Workouts</h3><button class="hadd" id="woAdd">＋ Neu</button></div>
+  <div id="woList"></div>
+  <div id="setHold" hidden><div id="setPanel" class="setpanel">
+    <div class="opt"><span>Look</span><div class="seg" role="group" aria-label="Look"><button class="sbtn" data-theme="hell">Hell</button><button class="sbtn" data-theme="dunkel">Dunkel</button></div></div>
+    <button class="rcard" id="openMusic"><span class="nm">Musik &amp; Podcast</span><span class="meta" id="musMeta">Spotify</span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></button>
     <div id="gPauses" style="display:flex;flex-direction:column;gap:10px"></div>
     <label class="toggle"><span>Wiederholungen bestätigen<small>„Geschafft“ oder „Andere Zahl“ nach jedem Satz</small></span><input type="checkbox" id="gConfirm"></label>
     <label class="toggle"><span>3 s Vorlauf<small>Nach „Nächste Übung“ erst 3-2-1, dann geht es los</small></span><input type="checkbox" id="gLead"></label>
-    <div class="seg" role="group" aria-label="Schattierung">
+    <div class="opt"><span>3D-Figur</span><div class="seg" role="group" aria-label="Schattierung">
       <button class="sbtn" data-shade="2">Gegenlicht</button>
       <button class="sbtn" data-shade="1">Comic</button>
       <button class="sbtn" data-shade="0">Flach</button>
-    </div>
-    <div class="dtrow"><span>Daten übertragen<small>Routinen, Einstellungen, Statistik und Ernährung in eine andere App holen</small></span><div class="dtbtns"><button class="btn" id="dtExport">Kopieren</button><button class="btn" id="dtImport">Einfügen</button></div></div>
+    </div></div>
     <label class="toggle"><span>Töne</span><input type="checkbox" id="snd"></label>
     <label class="toggle"><span>Vibration</span><input type="checkbox" id="vib"></label>
-  </details>
-  <button class="rcard" id="openStats"><span class="nm">Statistik</span><span class="meta" id="lastAll"></span><svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></button>
+    <div class="dtrow"><span>Daten übertragen<small>Routinen, Einstellungen, Statistik und Ernährung in eine andere App holen</small></span><div class="dtbtns"><button class="btn" id="dtExport">Kopieren</button><button class="btn" id="dtImport">Einfügen</button></div></div>
+  </div></div>
 </main>
 
 <!-- STATISTIK -->

@@ -804,8 +804,11 @@ window.addEventListener("popstate",()=>setTimeout(()=>{if($("essen").hidden){edi
 
 /* ---------- Hauptmenü-Karte, Navigation, Datenübertragung ---------- */
 function essenMeta(){
-  const el=$("essenMeta");if(!el)return;const s=sumE(dayGet(today()).e);
-  el.textContent=s.kcal?`Heute ${nf(s.kcal)} / ${nf(E.goals.kcal)} kcal · ${nf(s.p)} g Eiweiß`:"Heute noch nichts eingetragen";
+  const el=$("essenMeta");if(!el)return;const s=sumE(dayGet(today()).e),G=E.goals,b=burned(today()),goal=G.kcal+(E.burnIn?b.kcal:0);
+  if($("hKcal"))$("hKcal").textContent=`${nf(s.kcal)} / ${nf(goal)} kcal`;
+  el.textContent=s.kcal?(goal>=s.kcal?`Ernährung · noch ${nf(goal-s.kcal)}`:`Ernährung · ${nf(s.kcal-goal)} drüber`):"Ernährung · heute noch nichts";
+  const R=(k,c)=>{const p=G[k]?Math.min(1,s[k]/G[k]):0;return `<svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="none" stroke="var(--line)" stroke-width="4"/><circle cx="18" cy="18" r="14" fill="none" stroke="${c}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(88*p).toFixed(1)} 88" transform="rotate(-90 18 18)"/></svg>`};
+  if($("hRings"))$("hRings").innerHTML=R("c",MET.c.c)+R("p",MET.p.c)+R("f",MET.f.c);
 }
 window.renderEssen=renderEssen;window.essenMeta=essenMeta;
 window.TrainingEssen={get:()=>E,set:x=>{if(x&&x.foods){E=x;esave()}},reload:()=>{try{const x=JSON.parse(localStorage.getItem(EK)||"null");if(x&&x.foods)E=x}catch(_){}}};
