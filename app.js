@@ -671,6 +671,7 @@ function renderTimeline(box,Wk,h){
   const oldImg=new Map();box.querySelectorAll(".tlpic img[src]").forEach(im=>{const k=im.getAttribute("src")+"|"+im.className;(oldImg.get(k)||oldImg.set(k,[]).get(k)).push(im)});
   box.innerHTML=`<div class="tlhead">${sw}${copy}</div><div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}${drag?" moving":""}${tlFace()==="txt"?" txt":""}"><svg class="tlcab" aria-hidden="true"></svg>${html}</div>`;
   const tl=box.querySelector(".tl");
+  if(drag){const T0=tl.getBoundingClientRect();drag.grid=[...tl.querySelectorAll(".tlb[data-slot],.tlb.ph")].map(e=>{const r=e.getBoundingClientRect();return {ph:e.classList.contains("ph"),slot:+e.dataset.slot,l:r.left-T0.left,r:r.right-T0.left,t:r.top-T0.top,b:r.bottom-T0.top}})}
   if(oldImg.size)tl.querySelectorAll(".tlpic img[src]").forEach(im=>{const l=oldImg.get(im.getAttribute("src")+"|"+im.className);if(l&&l.length)im.replaceWith(l.pop())});
   if(oldR&&oldR.size)box.querySelectorAll("[data-fk]").forEach(e=>{const o=oldR.get(e.dataset.fk);if(!o)return;const n=e.getBoundingClientRect(),dx=o.left-n.left,dy=o.top-n.top;
     if(Math.abs(dx)<1&&Math.abs(dy)<1)return;e.style.transition="none";e.style.transform=`translate(${dx}px,${dy}px)`;
@@ -745,25 +746,29 @@ function renderTimeline(box,Wk,h){
     Object.assign(gh.style,{transform:`translate3d(${r.left-ex0}px,${r.top}px,0) scale(1.04)`});
     const pt=ev&&ev.clientX!=null?{x:ev.clientX,y:ev.clientY}:{x:r.left+r.width/2,y:r.top+r.height/2};
     const off={x:pt.x-r.left+ex0,y:pt.y-r.top};
-    tlDrag={box,src:{uid:s.uid,set:s.set},slots,t0,t:t0,minT,ghost:gh,pt,hold:0,splitUid:null,plan:{kind:"none"}};
+    tlDrag={box,src:{uid:s.uid,set:s.set},slots,t0,t:t0,minT,ghost:gh,pt,last:0,grid:null,splitUid:null,plan:{kind:"none"}};
     buzz(30);renderTimeline(box,Wk,h);
     const scroller=(()=>{let e=box.parentElement;while(e&&e!==document.body){const cs=getComputedStyle(e);if(/(auto|scroll)/.test(cs.overflowY)&&e.scrollHeight>e.clientHeight+2)return e;e=e.parentElement}return null})();
     let aimT=0;
     const move=(x,y)=>{if(!tlDrag)return;tlDrag.pt={x,y};gh.style.transform=`translate3d(${x-off.x}px,${y-off.y}px,0) scale(1.04)`;
       if(!aimT)aimT=requestAnimationFrame(()=>{aimT=0;if(tlDrag)aim()})}; // Ziel höchstens einmal pro Bild neu berechnen
+    /* Ziel aus den FESTEN Plätzen (gemessen direkt nach dem Zeichnen, ohne Rutsch-Animation) – so kann ein gerade
+       rutschendes Kästchen nie unter dem Finger landen und zurücktauschen. Wechsel nur, wenn der Finger klar im Kästchen ist. */
     function aim(){
-      const {x,y}=tlDrag.pt,hit=document.elementFromPoint(x,y);
-      let t=null;const bx=hit&&hit.closest&&hit.closest(".tlb[data-slot]");
-      if(performance.now()<tlDrag.hold)return; // Kästchen rutschen noch
-      if(bx&&box.contains(bx)){const k=+bx.dataset.slot;t=k>=tlDrag.t?k+1:k} // Platz dieses Kästchens nehmen, es rutscht dahin, wo der Satz war
-      else if(hit&&hit.closest&&hit.closest(".tlb.ph"))return;
+      const G=tlDrag.grid,cur=box.querySelector(".tl");if(!G||!cur)return;
+      const T=cur.getBoundingClientRect(),x=tlDrag.pt.x-T.left,y=tlDrag.pt.y-T.top;
+      if(performance.now()-tlDrag.last<90)return;
+      let t=null;
+      const inBox=(r,m)=>{const mx=(r.r-r.l)*m,my=(r.b-r.t)*m;return x>r.l+mx&&x<r.r-mx&&y>r.t+my&&y<r.b-my};
+      if(G.some(r=>r.ph&&inBox(r,0)))return;                       // Finger auf dem eigenen Platz → nichts tun
+      const hit=G.find(r=>!r.ph&&inBox(r,.18));
+      if(hit){const k=hit.slot;t=k>=tlDrag.t?k+1:k}                 // Platz dieses Kästchens nehmen, es rutscht dahin, wo der Satz war
       else{ // hinter das letzte Kästchen = ans Ende
-        const all=[...box.querySelectorAll(".tlb[data-slot],.tlb.ph")];if(!all.length)return;
-        const lr=all[all.length-1].getBoundingClientRect(),tlr=tl.getBoundingClientRect();
-        if(y>lr.bottom&&y<tlr.bottom+40||(y>=lr.top&&y<=lr.bottom&&Math.abs(x-(lr.left+lr.width/2))>lr.width/2))t=slots.length;else return;
+        const L=G[G.length-1];if(!L)return;
+        if(y>L.b+8&&y<T.height+40||(y>=L.t&&y<=L.b&&x>L.r+12))t=slots.length;else return;
       }
       if(t<tlDrag.minT)return;
-      if(t!==tlDrag.t){tlDrag.hold=performance.now()+230;setTimeout(()=>{if(tlDrag)aim()},240);tlDrag.t=t;tlDrag.plan=planFor(t);tlDrag.splitUid=tlDrag.plan.kind==="move"&&tlDrag.plan.split?tlDrag.plan.split:null;buzz(10);renderTimeline(box,Wk,h)}
+      if(t!==tlDrag.t){tlDrag.last=performance.now();tlDrag.t=t;tlDrag.plan=planFor(t);tlDrag.splitUid=tlDrag.plan.kind==="move"&&tlDrag.plan.split?tlDrag.plan.split:null;buzz(10);renderTimeline(box,Wk,h)}
     }
     /* t = Einfügestelle in der Satzfolge (ohne den gezogenen Satz) → verschieben, innerhalb der Übung umsortieren oder nichts */
     function planFor(t){
