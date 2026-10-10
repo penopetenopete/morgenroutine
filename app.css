@@ -670,3 +670,5 @@ body.esel #essen{padding-bottom:170px}
 :root{--mix:#2EE6B0}
 .row.lkm{box-shadow:inset 3px 0 0 var(--mix)}
 .row .lnk.mix{border-color:var(--mix);color:var(--mix);background:#062a22}
+/* Pause kopieren: Leiste schwebt unten, nichts verschiebt sich */
+.tlhead .tlcopy{position:fixed;left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:40;margin:0;background:#10262b;box-shadow:0 10px 30px rgba(0,0,0,.55)}

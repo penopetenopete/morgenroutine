@@ -420,7 +420,7 @@ function renderRoutine(){
   $("rSum").textContent=`${R.days.length>1?"Tag "+(rDay+1)+" von "+R.days.length+" · ":""}${act.length} ${act.length===1?"Übung":"Übungen"} · ca. ${Math.round(estimate(act,R.settings,R.pauses)/60)} min`;
   $("rStart").disabled=!act.length;
   $("rView").querySelectorAll("[data-v]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===rView));
-  $("rList").hidden=rView!=="list";$("rTl").hidden=rView!=="tl";
+  $("rList").hidden=rView!=="list";$("rTl").hidden=rView!=="tl";$("rAdd").hidden=rView==="tl";
   if(rView==="tl"){
     renderTimeline($("rTl"),{items,settings:R.settings,pauses:R.pauses,audio:R.audio},{
       onPause:(pk,v)=>{setPause(R.id,pk,v);renderRoutine()},
@@ -666,10 +666,12 @@ function renderTimeline(box,Wk,h){
   if(row.length)flush();
   const own=Object.keys(AM).length;
   const sw=can?`<div class="tlsw" id="tlSw" role="switch" tabindex="0" aria-checked="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span>${own?`<button class="tlrs" id="tlAudReset" aria-label="Alles auf Smart">↺</button>`:""}<i class="tlswk"></i></div>`:"";
-  const copy=tlCopy&&!mus()?`<div class="tlcopy"><span>Pause <b>${pauseText(tlCopy.v)}</b> kopiert – andere Pausen antippen${tlCopy.n?` · ${tlCopy.n}× eingefügt`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
+  const copy=tlCopy&&!mus()?`<div class="tlcopy"><span><b>${pauseText(tlCopy.v)}</b> kopiert${tlCopy.n?` · ${tlCopy.n}×`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
   const oldR=drag?new Map([...box.querySelectorAll("[data-fk]")].map(e=>[e.dataset.fk,e.getBoundingClientRect()])):null;
+  const oldImg=new Map();box.querySelectorAll(".tlpic img[src]").forEach(im=>{const k=im.getAttribute("src")+"|"+im.className;(oldImg.get(k)||oldImg.set(k,[]).get(k)).push(im)});
   box.innerHTML=`<div class="tlhead">${sw}${copy}</div><div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}${drag?" moving":""}${tlFace()==="txt"?" txt":""}"><svg class="tlcab" aria-hidden="true"></svg>${html}</div>`;
   const tl=box.querySelector(".tl");
+  if(oldImg.size)tl.querySelectorAll(".tlpic img[src]").forEach(im=>{const l=oldImg.get(im.getAttribute("src")+"|"+im.className);if(l&&l.length)im.replaceWith(l.pop())});
   if(oldR&&oldR.size)box.querySelectorAll("[data-fk]").forEach(e=>{const o=oldR.get(e.dataset.fk);if(!o)return;const n=e.getBoundingClientRect(),dx=o.left-n.left,dy=o.top-n.top;
     if(Math.abs(dx)<1&&Math.abs(dy)<1)return;e.style.transition="none";e.style.transform=`translate(${dx}px,${dy}px)`;
     requestAnimationFrame(()=>requestAnimationFrame(()=>{e.style.transition="transform .2s ease";e.style.transform=""}))});
@@ -773,7 +775,7 @@ function renderTimeline(box,Wk,h){
       return {kind:"move",after:prev,split:B&&prev.set<(B.o.sets||1)?B.uid:null};
     }
     let raf=0;const loop=()=>{if(!tlDrag)return;const {y}=tlDrag.pt,top=scroller?scroller.getBoundingClientRect().top:0,bot=scroller?scroller.getBoundingClientRect().bottom:innerHeight;
-      const Z=80,d=y<top+Z?-Math.ceil(9*(top+Z-y)/Z):y>bot-Z?Math.ceil(9*(y-(bot-Z))/Z):0;
+      const Z=48,d=y<top+Z?-Math.ceil(6*(top+Z-y)/Z):y>bot-Z?Math.ceil(6*(y-(bot-Z))/Z):0;
       if(d){const before=scroller?scroller.scrollTop:scrollY;if(scroller)scroller.scrollTop+=d;else window.scrollBy(0,d);if((scroller?scroller.scrollTop:scrollY)!==before)aim()}
       raf=requestAnimationFrame(loop)};raf=requestAnimationFrame(loop);
     const pm=e=>move(e.clientX,e.clientY);
@@ -1365,7 +1367,7 @@ function renderPlan(box,{hub,rerender}){
     if(pick)action=`<button class="act nxbtn" data-nx="${i}" aria-label="Als Nächstes">▶</button>`+action;
     return rowHTML(it,i,{lock:i<firstFree||rm,cls:(rm?"off ":"")+(past?"done-row ":"")+(isNext?"nx-row ":"")+(inMix(MXW,i)?" lkm":linkCls(W.items,i)),tags,extra,action,mix:MXW.some(([a,b])=>i>=a&&i<b),link:free(i)&&free(i+1)?it.link:null});
   }).join("")+`</div>`;
-  h+=`<button class="btn ghost" data-pladd>＋ Übung hinzufügen</button></div>`;
+  h+=`<button class="btn ghost" data-pladd${planView==="tl"?" hidden":""}>＋ Übung hinzufügen</button></div>`;
   box.innerHTML=h;
   const sc2=box.querySelector(".plscroll");sc2.scrollTop=top;
   box.querySelectorAll(".plview [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;tlCopy=null;tlMove=null;tlAutoKey=null;rerender()});
