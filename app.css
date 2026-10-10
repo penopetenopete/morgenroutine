@@ -598,7 +598,7 @@ body.esel #essen{padding-bottom:170px}
 .tlcab{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;z-index:0}
 .tlcab .cb0{fill:none;stroke:#05080B;stroke-width:9;stroke-linecap:round;stroke-linejoin:round}
 .tlcab .cb1{fill:none;stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
-.tlcab .cb2{fill:none;stroke:#fff;stroke-opacity:.35;stroke-width:1.4;stroke-linecap:round;stroke-dasharray:2 9;animation:tlflow 1s linear infinite}
+.tlcab .cb2{fill:none;stroke:#fff;stroke-opacity:.35;stroke-width:1.4;stroke-linecap:round;stroke-dasharray:2 9;animation:tlflow 1s steps(11) infinite}
 @keyframes tlflow{from{stroke-dashoffset:22}to{stroke-dashoffset:0}}
 @media (prefers-reduced-motion:reduce){.tlcab .cb2{animation:none}}
 .tlrow,.tlret{position:relative;z-index:1}

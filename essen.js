@@ -819,6 +819,6 @@ $("eMore").onclick=moreSheet;
 if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk=addDays(curDay,d);if(nk<addDays(t,-14)||nk>addDays(t,1))return;
   curDay=nk;editId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
-loadBLS().catch(()=>{}); // vorladen (offline-Cache)
+setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
 window.__essen={E:()=>E,prepImport,applyImport,readE,setDay:k=>{curDay=k;renderEssen()}};
 })();

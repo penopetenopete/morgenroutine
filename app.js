@@ -321,7 +321,9 @@ function cats(){
 const allWorkouts=()=>[rawRoutine("morgen"),...S.routines].filter(Boolean);
 const catOf=r=>cats().find(c=>c.id===r.cat)||null;
 const woColor=r=>{const c=catOf(r);return c?c.c:"#8D9BAB"};
-function woThumb(r){const it=(r.days[0]&&r.days[0].items||[]).find(x=>EXB[x.ex]);if(!it)return "";try{return F.tlThumb(EXB[it.ex],Object.assign({},exDef(it.ex),it.o),woColor(r),160,1)}catch(_){return ""}}
+const PX1="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+function woThumb(r){if(F&&F.cacheReady===false)return PX1; // gespeicherte Bilder noch nicht geladen → gleich danach neu zeichnen
+  const it=(r.days[0]&&r.days[0].items||[]).find(x=>EXB[x.ex]);if(!it)return "";try{return F.tlThumb(EXB[it.ex],Object.assign({},exDef(it.ex),it.o),woColor(r),160,1)}catch(_){return ""}}
 const WD=["Mo","Di","Mi","Do","Fr","Sa","So"];
 const wdIdx=d=>(new Date(d).getDay()+6)%7;
 function weekDone(rid,wd){const t=new Date();t.setHours(0,0,0,0);const mon=new Date(t);mon.setDate(t.getDate()-wdIdx(t));const day=new Date(mon);day.setDate(mon.getDate()+wd);
@@ -404,7 +406,7 @@ function planSheet(id,focus){
   };
   draw();
 }
-document.querySelectorAll("[data-shade]").forEach(b=>b.onclick=()=>{setG("shade",+b.dataset.shade);F.setShade(gv("shade"));renderHome()});
+document.querySelectorAll("[data-shade]").forEach(b=>b.onclick=()=>{setG("shade",+b.dataset.shade);F.setShade(gv("shade"));for(const k in TLIMG)delete TLIMG[k];renderHome()});
 $("snd").onchange=e=>{setG("sound",e.target.checked);muteIcon()};
 $("vib").onchange=e=>setG("vib",e.target.checked);
 $("gConfirm").onchange=e=>setG("confirm",e.target.checked);
@@ -651,15 +653,19 @@ let tlCabN=0;
 function tlCable(tl,boxes,colOf,musCol,curI){
   const svg=tl.querySelector(".tlcab");if(!svg)return;
   const T=tl.getBoundingClientRect(),els=[...tl.querySelectorAll(".tlb[data-b],.tlb.ph,.tlb.tladd")];
-  const pos=els.map(el=>{const r=el.getBoundingClientRect();return {l:r.left-T.left,r:r.right-T.left,t:r.top-T.top,b:r.bottom-T.top,cy:(r.top+r.bottom)/2-T.top,c:getComputedStyle(el).getPropertyValue("--c").trim()||"#3A4C60",done:el.classList.contains("done")}});
+  // aktuelle Lage (mit Rutsch-Animation) zum Zeichnen, Endlage (ohne Verschiebung) für die Frage „gleiche Zeile?“ → Kabel springt beim Tauschen über Zeilen nicht hin und her
+  const pos=els.map(el=>{const r=el.getBoundingClientRect(),cs=getComputedStyle(el);let tx=0,ty=0;if(cs.transform&&cs.transform!=="none"){try{const m=new DOMMatrixReadOnly(cs.transform);tx=m.m41;ty=m.m42}catch(_){}}
+    return {l:r.left-T.left,r:r.right-T.left,t:r.top-T.top,b:r.bottom-T.top,cy:(r.top+r.bottom)/2-T.top,ly:(r.top+r.bottom)/2-T.top-ty,lt:r.top-T.top-ty,lb:r.bottom-T.top-ty,mv:el.classList.contains("drag")?0:Math.hypot(tx,ty),c:cs.getPropertyValue("--c").trim()||"#3A4C60",done:el.classList.contains("done")}});
   let defs="",paths="",g=0;const pre="tlg"+(++tlCabN)+"_";
   for(let i=0;i+1<pos.length;i++){const a=pos[i],b=pos[i+1];let d;
-    if(Math.abs(a.cy-b.cy)<4)d=`M${a.r} ${a.cy}L${b.l} ${b.cy}`;
-    else{const R=14,xe=T.width-5,xs=5,ym=(a.b+b.t)/2;d=`M${a.r} ${a.cy}L${xe-R} ${a.cy}Q${xe} ${a.cy} ${xe} ${a.cy+R}L${xe} ${ym-R}Q${xe} ${ym} ${xe-R} ${ym}L${xs+R} ${ym}Q${xs} ${ym} ${xs} ${ym+R}L${xs} ${b.cy-R}Q${xs} ${b.cy} ${xs+R} ${b.cy}L${b.l} ${b.cy}`}
+    if(Math.abs(a.ly-b.ly)<4)d=`M${a.r} ${a.cy}L${b.l} ${b.cy}`;
+    else{const R=14,xe=T.width-5,xs=5,ym=(a.lb+b.lt)/2+((a.cy-a.ly)+(b.cy-b.ly))/2;d=`M${a.r} ${a.cy}L${xe-R} ${a.cy}Q${xe} ${a.cy} ${xe} ${a.cy+R}L${xe} ${ym-R}Q${xe} ${ym} ${xe-R} ${ym}L${xs+R} ${ym}Q${xs} ${ym} ${xs} ${ym+R}L${xs} ${b.cy-R}Q${xs} ${b.cy} ${xs+R} ${b.cy}L${b.l} ${b.cy}`}
     let col=a.c;
     if(musCol){const bx=boxes.find(x=>x===boxes[i]);col=bx&&bx.next?musCol(bx.next):a.c}
     else if(a.c!==b.c){const id=pre+(g++);defs+=`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${(a.l+a.r)/2}" y1="${a.cy}" x2="${(b.l+b.r)/2}" y2="${b.cy}"><stop offset="0" stop-color="${a.c}"/><stop offset="1" stop-color="${b.c}"/></linearGradient>`;col=`url(#${id})`}
-    const op=a.done&&b.done?' opacity=".3"':els[i+1].classList.contains("tladd")?' class="tlcadd"':"";
+    // Kästchen rutscht gerade an seinen neuen Platz → Kabelstück dorthin ausblenden und beim Ankommen einblenden (keine Linien quer übers Bild)
+    const fade=Math.max(0,Math.min(1,1-Math.max(a.mv,b.mv)/50));if(fade<=0.02)continue;
+    const op=a.done&&b.done?` opacity="${.3*fade}"`:els[i+1].classList.contains("tladd")?' class="tlcadd"':fade<1?` opacity="${fade.toFixed(2)}"`:"";
     paths+=`<g${op}><path d="${d}" class="cb0"/><path d="${d}" class="cb1" stroke="${col}"/><path d="${d}" class="cb2"/></g>`}
   svg.setAttribute("width",T.width);svg.setAttribute("height",T.height);
   svg.innerHTML=`<defs>${defs}</defs>${paths}`;
@@ -764,9 +770,9 @@ function renderTimeline(box,Wk,h){
   const ad=tl.querySelector(".tladd");if(ad){ad.onclick=()=>h.onAdd();ad.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();h.onAdd()}}}
   if(!box._tmBlock){box._tmBlock=1;box.addEventListener("touchmove",e=>{if(tlDrag)e.preventDefault()},{passive:false})}
   const flip=()=>{tlMode=mus()?"pause":"music";tlCopy=null;tlMove=null;h.redraw()};
-  if($("tlSw")){$("tlSw").onclick=flip;$("tlSw").onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();flip()}}}
-  if($("tlAudReset"))$("tlAudReset").onclick=e=>{e.stopPropagation();Object.keys(AM).forEach(k=>h.onAudio(k,null));toast("Alles auf Smart")};
-  if($("tlCopyOk"))$("tlCopyOk").onclick=()=>{tlCopy=null;h.redraw()};
+  if(box.querySelector("#tlSw")){box.querySelector("#tlSw").onclick=flip;box.querySelector("#tlSw").onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();flip()}}}
+  if(box.querySelector("#tlAudReset"))box.querySelector("#tlAudReset").onclick=e=>{e.stopPropagation();Object.keys(AM).forEach(k=>h.onAudio(k,null));toast("Alles auf Smart")};
+  if(box.querySelector("#tlCopyOk"))box.querySelector("#tlCopyOk").onclick=()=>{tlCopy=null;h.redraw()};
   box.querySelectorAll("[data-e]").forEach(b=>{
     const x0=EDG[+b.dataset.e],s=x0.s;
     onLongPress(b,()=>{if(s.dur==null||mus())return;tlCopy={v:s.dur,pk:s.pk,n:0};buzz(30);h.redraw()});
@@ -881,7 +887,7 @@ function renderTimeline(box,Wk,h){
   /* antippen = umschalten; entspricht es danach wieder Smart, wird der eigene Wert gelöscht */
   function toggleAud(s){
     const k=audKey(s),v=audioOf(s,AM)==="music"?"podcast":"music",std=audioOf(s,{});
-    tlFocus=s.type==="work"?"b|"+s.uid+"|"+s.set:"e|"+(s.pk||s.key);
+    tlFocus=null; // angetippt = sichtbar → nicht scrollen
     h.onAudio(k,v===std?null:v);
   }
 }
@@ -1280,6 +1286,7 @@ function back(){
   enter(Math.max(0,j));
 }
 const atHub=()=>{const s=steps[idx];return !!(s&&s.type==="trans"&&s.kind==="next")};
+const hubShown=()=>{const s=steps[idx];return !!(s&&s.type==="trans"&&s.hub)}; // Zwischenseite sichtbar (nicht beim ersten „Mach dich bereit“)
 function rebuildKeep(){
   if(!W||W.ended)return;
   const old=steps,oldIdx=idx,key=W.cur,wasHub=atHub();
@@ -1331,7 +1338,7 @@ function clipFor(ws){
   return e.clip?e.clip(seq):{pre:[],loop:seq};
 }
 const firstPose=c=>(c.pre[0]||c.loop[0])[2];
-function stepUI(){
+function stepUI(){stillK=null;
   const s=steps[idx];if(!s)return;
   const ws=s.type==="work"?s:s.next,it=itemOf(s),e=EXB[ws.ex];
   const key=ws.ex+JSON.stringify(ws.o);
@@ -1456,13 +1463,21 @@ function editW(it,set,after){
 }
 let planView="list";
 /* Übersicht im Workout – im Sheet (mitten in der Übung) und direkt auf der Zwischenseite (hub) */
+/* Neuzeichnen ohne Springen: Scrollpositionen aller scrollenden Eltern merken, Höhe kurz festhalten, danach zurücksetzen */
+function holdScroll(box){
+  const sc=[];for(let el=box;el;el=el.parentElement)if(el.scrollHeight>el.clientHeight+1)sc.push([el,el.scrollTop]);
+  const se=document.scrollingElement;if(se)sc.push([se,se.scrollTop]);
+  const h=box.offsetHeight;if(h)box.style.minHeight=h+"px";
+  return()=>{const put=()=>sc.forEach(([el,t])=>{if(Math.abs(el.scrollTop-t)>1)el.scrollTop=t});put();
+    requestAnimationFrame(()=>{put();box.style.minHeight="";requestAnimationFrame(put)})};
+}
 function renderPlan(box,{hub,rerender}){
   const hubNow=atHub(),curUid=hubNow?null:steps[idx].uid,vis=W.visited||[];
   const nextUid=hubNow?steps[idx].uid:null;
   const firstFree=W.items.reduce((m,x,i)=>vis.includes(x.uid)?i+1:m,0),curPos=W.items.findIndex(x=>x.uid===curUid);
   const free=j=>j>=firstFree&&W.items[j]&&W.items[j].status!=="removed"&&!W.items[j].pair;
   const linkedIn=i=>i>0&&W.items[i-1].link&&W.items[i-1].status!=="removed";
-  const sc=box.querySelector(".plscroll"),top=sc?sc.scrollTop:0;
+  const sc=box.querySelector(".plscroll"),top=sc?sc.scrollTop:0,keep=planView==="tl"&&W.cur!==tlAutoKey?()=>{}:holdScroll(box);
   let h=`<div class="seg plview" role="group" aria-label="Ansicht"><button class="sbtn" data-v="list" aria-pressed="${planView==="list"}">Liste</button><button class="sbtn" data-v="tl" aria-pressed="${planView==="tl"}">Timeline</button></div><div class="plscroll">`;
   if(planView==="tl")h+=`<div class="pltl"></div>`;
   const MXW=mixRanges(W.items);
@@ -1482,7 +1497,7 @@ function renderPlan(box,{hub,rerender}){
   }).join("")+`</div>`;
   h+=`<button class="btn ghost" data-pladd${planView==="tl"?" hidden":""}>＋ Übung hinzufügen</button></div>`;
   box.innerHTML=h;
-  const sc2=box.querySelector(".plscroll");sc2.scrollTop=top;
+  const sc2=box.querySelector(".plscroll");sc2.scrollTop=top;keep();
   box.querySelectorAll(".plview [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;tlCopy=null;tlMove=null;tlAutoKey=null;rerender()});
   box._rr=rerender;if(!box._sw){box._sw=1;hSwipe(box,d=>{const nv=d>0?"tl":"list";if(nv===planView||!box._rr)return;planView=nv;tlCopy=null;tlMove=null;tlAutoKey=null;box._rr();slideIn(box.querySelector(nv==="tl"?".pltl":".pllist"),d)},true)}
   const after=()=>{rebuildKeep();saveW();rerender()};
@@ -1524,10 +1539,10 @@ function renderPlan(box,{hub,rerender}){
 }
 function openPlan(){
   if(!W)return;
-  if(atHub()){closeSheet();return} // auf der Zwischenseite ist die Übersicht schon da
+  if(hubShown()){closeSheet();return} // auf der Zwischenseite ist die Übersicht schon da
   tlAutoKey=null;
   const body=openSheet(W.rname,"Übersicht",`<div id="plBox" class="plbox"></div><button class="btn primary big" id="plOk">Zurück zum Workout</button>`,{onClose:()=>rebuildKeep()});
-  const rr=()=>{if(!W||atHub())return;if($("plBox"))renderPlan($("plBox"),{hub:false,rerender:rr});else openPlan()}; // nach Pause/Editor zurück in die Übersicht
+  const rr=()=>{if(!W||hubShown())return;if($("plBox"))renderPlan($("plBox"),{hub:false,rerender:rr});else openPlan()}; // nach Pause/Editor zurück in die Übersicht
   rr();$("plOk").onclick=closeSheet;
 }
 
@@ -1539,7 +1554,7 @@ function renderHub(s){
   $("hubNext").textContent=itemName(nx);
   $("hubVal").textContent=itemText(nx);
   const im=$("hubImg"),src=thumbOf(nx);if(im.dataset.src!==src){im.src=src;im.dataset.src=src}
-  renderPlan($("hubList"),{hub:true,rerender:()=>{if(W&&atHub())renderHub(steps[idx])}});
+  renderPlan($("hubList"),{hub:true,rerender:()=>{if(W&&hubShown())renderHub(steps[idx])}});
 }
 /* „Übung beenden“: restliche Sätze fallen heute weg (Statistik zeigt z. B. 2 von 3 Sätzen) */
 const doneSets=it=>{const r=W.res[it.uid];return r&&r.sets.length?Math.max(...r.sets.map(x=>x.set)):0};
@@ -1658,7 +1673,7 @@ window.addEventListener("storage",e=>{if(e.key===ACT&&W&&!e.newValue){/* in ande
 /* ---- Hauptschleife ---- */
 const SIDE=["Seite 1","Seite 2"];
 let lastNow=performance.now();
-function size(){const b=$("stagebox");const w=Math.max(80,Math.floor(Math.min(b.clientWidth,b.clientHeight)))||300;$("stage").style.width=$("stage").style.height=w+"px";F.sizeTo(w)}
+function size(){stillK=null;const b=$("stagebox");const w=Math.max(80,Math.floor(Math.min(b.clientWidth,b.clientHeight)))||300;$("stage").style.width=$("stage").style.height=w+"px";F.sizeTo(w)}
 if(window.ResizeObserver)new ResizeObserver(()=>{if(!$("player").hidden)size()}).observe($("stagebox"));
 window.addEventListener("resize",()=>{if(!$("player").hidden)size()});
 function frame(t){
@@ -1670,33 +1685,38 @@ function frame(t){
   requestAnimationFrame(frame);
 }
 const LEAD_MS=3000;let leadSec=-1;
+/* Pro Bild nur schreiben, was sich wirklich ändert (spart Neuberechnen von Layout/Stil auf langsamen Handys) */
+const TXC={};function tx(id){return TXC[id]||(TXC[id]={el:$(id),set v(x){if(this.el.textContent!==x)this.el.textContent=x},set c(x){if(this.el.className!==x)this.el.className=x},set h(x){x=!!x;if(this.el.hidden!==x)this.el.hidden=x}})}
+let stillK=null; // zuletzt gezeichnetes Standbild (Pause/Vorlauf) – gleiches Bild nicht 60× pro Sekunde neu rendern
 function drawPlayer(dt){
-  if(F.previewing)return;
+  if(F.previewing){stillK=null;return}
+  const covered=!$("scrim").hidden;let r3=true; // offenes Fenster (Übersicht, Editor) verdeckt die Figur → nicht rendern
   const s=steps[idx];if(!s||!clip)return;
   const paused=!!W.pauseAt,el=elapsed();
   if(!paused)animT+=dt;
   const ws=s.type==="work"?s:s.next,e=EXB[ws.ex],it=itemOf(s),uniS=isUni(e,ws.o)||!!it.pair;
   let side=ws.side||0;
-  $("totalT").textContent=fmt((now()-W.startedAt)/1000);
-  if(s.type==="trans"&&s.hub){$("hubClock").textContent=fmt(el);$("hubClock").classList.toggle("paused",paused);return}
+  tx("totalT").v=fmt((now()-W.startedAt)/1000);
+  if(s.type==="trans"&&s.hub){tx("hubClock").v=fmt(el);$("hubClock").classList.toggle("paused",paused);return}
   if(s.type==="trans"){
-    const P0=firstPose(clip);F.draw(["",1,P0,P0],1);
+    const sk=s.key+"|t";if(stillK===sk||covered)r3=false;else{const P0=firstPose(clip);F.draw(["",1,P0,P0],1);stillK=sk}
     const open=s.dur==null,left=open?0:curDur(s)-el;
-    $("clock").textContent=open?fmt(el):fmt(Math.ceil(left));
-    $("phase").textContent=s.label;$("phase").className="phase trans";
-    $("sideChip").textContent=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"beginnt mit ":"")+SIDE[side];$("sideChip").className="chip warn";
-    $("repChip").hidden=true;
+    tx("clock").v=open?fmt(el):fmt(Math.ceil(left));
+    tx("phase").v=s.label;tx("phase").c="phase trans"+(paused?" paused":"");
+    tx("sideChip").v=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"beginnt mit ":"")+SIDE[side];tx("sideChip").c="chip warn";
+    tx("repChip").h=true;
     const sec=Math.ceil(left);if(!open&&!paused&&sec!==lastSec){if(sec<=3&&sec>0)snd("tick")}lastSec=sec;
   }else if(W.stepStart+W.pausedMs>(W.pauseAt||now())){ // Vorlauf: Startposition, 3-2-1
     const left=(W.stepStart+W.pausedMs-(W.pauseAt||now()))/1000,sec=Math.ceil(left);
-    const P0=firstPose(clip);F.draw(["",1,P0,P0],1);animT=0;
-    $("clock").textContent=String(sec);$("phase").textContent="Gleich geht's los";$("phase").className="phase trans";
-    $("sideChip").textContent=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"beginnt mit ":"")+SIDE[side];$("sideChip").className="chip warn";
-    $("repChip").hidden=true;
+    animT=0;const sk=s.key+"|l";if(stillK===sk||covered)r3=false;else{const P0=firstPose(clip);F.draw(["",1,P0,P0],1);stillK=sk}
+    tx("clock").v=String(sec);tx("phase").v="Gleich geht's los";tx("phase").c="phase trans"+(paused?" paused":"");
+    tx("sideChip").v=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"beginnt mit ":"")+SIDE[side];tx("sideChip").c="chip warn";
+    tx("repChip").h=true;
     if(!paused&&sec!==leadSec&&sec>0)snd("tick");leadSec=sec;
-    F.render();return;
+    if(r3)F.render();return;
   }else{
     if(leadSec>0){leadSec=-1;snd("go");buzz(60);syncNative()}
+    const sk=paused?s.key+"|p"+animT.toFixed(3):null;if(covered||(sk&&stillK===sk))r3=false;stillK=covered?null:sk;
     const c=clip,pre=F.seqDur(c.pre);
     if(animT<pre){const [ph,k]=F.segAt(c.pre,animT);F.draw(ph,k)}
     else{
@@ -1705,30 +1725,29 @@ function drawPlayer(dt){
         const half=Math.floor(lt/cyc);side=half%2;F.setMirror(side===1);
         const ct=lt-half*cyc,[ph,k]=F.segAt(c.loop,ct);F.draw(ph,k);
         const rep=Math.min(c.reps,Math.floor(ct/c.repDur)+1);
-        $("repChip").hidden=false;$("repChip").className="chip on";$("repChip").textContent=e.oneRun?"Animation":"Wdh "+rep+"/"+c.reps;
+        tx("repChip").h=false;tx("repChip").c="chip on";tx("repChip").v=e.oneRun?"Animation":"Wdh "+rep+"/"+c.reps;
       }else{
         const [ph,k]=F.segAt(c.loop,lt%cyc);F.draw(ph,k);
-        if(ws.mode==="reps"){$("repChip").hidden=false;$("repChip").className="chip on";$("repChip").textContent=e.oneRun?"Animation":"Wdh "+(Math.floor(lt/c.repDur)%c.reps+1)+"/"+c.reps}
-        else if(e.weight!=="none"&&ws.o.kg>0){$("repChip").hidden=false;$("repChip").className="chip";$("repChip").textContent=F.kgText(e.weight,ws.o.kg)}
-        else $("repChip").hidden=true;
+        if(ws.mode==="reps"){tx("repChip").h=false;tx("repChip").c="chip on";tx("repChip").v=e.oneRun?"Animation":"Wdh "+(Math.floor(lt/c.repDur)%c.reps+1)+"/"+c.reps}
+        else if(e.weight!=="none"&&ws.o.kg>0){tx("repChip").h=false;tx("repChip").c="chip";tx("repChip").v=F.kgText(e.weight,ws.o.kg)}
+        else tx("repChip").h=true;
       }
     }
-    $("sideChip").textContent=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"zeigt "+SIDE[side]:SIDE[side]);
-    $("sideChip").className="chip on";
+    tx("sideChip").v=!uniS?(e.perSide?"beide Seiten im Wechsel":"beidseitig"):(ws.both?"zeigt "+SIDE[side]:SIDE[side]);
+    tx("sideChip").c="chip on";
     if(s.mode==="reps"){
-      $("clock").textContent=fmt(el);
-      $("phase").textContent=s.both?"Wiederholungen · beide Seiten":"Wiederholungen"+(uniS?" · "+SIDE[side]:"");
+      tx("clock").v=fmt(el);
+      tx("phase").v=s.both?"Wiederholungen · beide Seiten":"Wiederholungen"+(uniS?" · "+SIDE[side]:"");
     }else{
-      const left=curDur(s)-el;$("clock").textContent=fmt(Math.ceil(left));
-      $("phase").textContent=s.stage!=null?`Stufe ${s.stage+1} von 3`:e.timedReps?"Wiederholungen · "+SIDE[side]:(e.timeWord?"Läuft":"Halten")+(uniS?" · "+SIDE[side]:"");
+      const left=curDur(s)-el;tx("clock").v=fmt(Math.ceil(left));
+      tx("phase").v=s.stage!=null?`Stufe ${s.stage+1} von 3`:e.timedReps?"Wiederholungen · "+SIDE[side]:(e.timeWord?"Läuft":"Halten")+(uniS?" · "+SIDE[side]:"");
       const sec=Math.ceil(left);if(!paused&&sec!==lastSec&&sec<=3&&sec>0)snd("tick");lastSec=sec;
     }
-    $("phase").className="phase";
+    tx("phase").c="phase"+(paused?" paused":"");
   }
-  if(paused){$("phase").classList.add("paused")}
   $("clock").classList.toggle("paused",paused);
-  $("hint").textContent=paused?"Pausiert":"";
-  F.render();
+  tx("hint").v=paused?"Pausiert":"";
+  if(r3)F.render();
 }
 
 /* =================== TEILEN & IMPORT (Andockstelle für Claude, 06.10.2026) ===================
@@ -1891,6 +1910,7 @@ setInterval(()=>{if(document.hidden&&W&&!W.ended&&!$("player").hidden){try{catch
 F.mount($("stage"));F.setShade(gv("shade"));muteIcon();
 history.replaceState({s:"home"},"");
 renderHome();
+if(F&&F.whenReady)F.whenReady.then(()=>{if(!$("home").hidden)renderHome()});
 const a=loadActive();if(a)startPlayer(a);
 requestAnimationFrame(frame);
 checkImport();checkData();

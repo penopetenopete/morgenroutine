@@ -928,9 +928,23 @@ function mount(el){
 }
 /* Vorschaubild (für Listen) */
 const thumbs={};
+/* Fertige Figurenbilder dauerhaft speichern (IndexedDB) → beim nächsten Öffnen nicht neu rendern.
+   Schlüssel enthält Look, Schattierung und eine Prüfsumme der Bewegung – ändert sich eine Übung, wird neu gerendert. */
+const FIG_REV="1"; // hochzählen, wenn sich Figur/Requisiten/Kamera allgemein ändern
+const PC={mem:new Map(),db:null,ready:false,n:0};
+const lookId=()=>(LOOK?"L"+LOOK.base+LOOK.out+(LOOK.tint||0)+(LOOK.thumbOut||0):"D")+fillMat.uniforms.uMode.value;
+function sigOf(e,o){try{const t=JSON.stringify(e.build(o))+JSON.stringify(o);let h=0;for(let i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))|0;return h.toString(36)}catch(_){return "x"}}
+PC.whenReady=new Promise(res=>{let done=false;const fin=()=>{if(!done){done=true;PC.ready=true;res()}};setTimeout(fin,700);
+  try{const rq=indexedDB.open("figbilder",1);rq.onupgradeneeded=()=>{try{rq.result.createObjectStore("t")}catch(_){}};
+    rq.onsuccess=()=>{PC.db=rq.result;try{const cr=PC.db.transaction("t").objectStore("t").openCursor();
+      cr.onsuccess=()=>{const c=cr.result;if(c){if(String(c.key).startsWith(FIG_REV+"|"))PC.mem.set(c.key,c.value);PC.n++;c.continue()}else fin()};cr.onerror=fin}catch(_){fin()}};
+    rq.onerror=fin;rq.onblocked=fin}catch(_){fin()}});
+function pcPut(k,v){if(!v)return;PC.mem.set(k,v);if(!PC.db)return;
+  try{const st=PC.db.transaction("t","readwrite").objectStore("t");if(++PC.n>900){st.clear();PC.n=1}st.put(v,k)}catch(_){}}
 function thumb(e,o){
   if(!renderer)return "";
   const key=e.id+JSON.stringify(o);if(thumbs[key])return thumbs[key];
+  const pk=FIG_REV+"|a|"+lookId()+"|"+key+"|"+sigOf(e,o),hit=PC.mem.get(pk);if(hit)return thumbs[key]=hit;
   const save=[cur,curOpt,curProps,yaw,pitch,dist,target.clone()];
   const s=show(e,o);const pick=s.length>2?s[1]:s[0];draw(pick,o.mode==="hold"?0:1);
   const tc=new T.PerspectiveCamera(35,1,.05,50);dist*=.92;placeCam(tc);
@@ -940,7 +954,7 @@ function thumb(e,o){
   renderer.setPixelRatio(pr);renderer.setSize(sz.x,sz.y,false);
   [cur,curOpt,curProps,yaw,pitch,dist]=save;target=save[6];
   if(cur)curProps=showProps(cur,curOpt);
-  thumbs[key]=src;return src;
+  thumbs[key]=src;pcPut(pk,src);return src;
 }
 
 /* Kleine animierte Vorschau (Editor): rendert mit demselben Renderer und kopiert jedes Bild in ein 2D-Canvas */
@@ -950,6 +964,7 @@ const tlThumbs={};let LOOK=null;
 function tlThumb(e,o,hex,size=192,asp=1){
   if(!renderer||!e)return "";
   const key=e.id+JSON.stringify(o)+hex+size+"|"+asp;if(tlThumbs[key])return tlThumbs[key];
+  const pk=FIG_REV+"|b|"+lookId()+"|"+key+"|"+sigOf(e,o),hit=PC.mem.get(pk);if(hit)return tlThumbs[key]=hit;
   const save=[cur,curOpt,curProps,yaw,pitch,dist,target.clone()];
   const col=new T.Color(hex),oc=OUT_FIG.uniforms.uC.value.clone(),rc=fillMat.uniforms.uRim.value.clone(),ow=OUT_FIG.uniforms.uW.value,gv=grid.visible;
   try{
@@ -967,7 +982,7 @@ function tlThumb(e,o,hex,size=192,asp=1){
     const tc=new T.PerspectiveCamera(35,asp,.05,50);placeCam(tc);
     const pr=renderer.getPixelRatio(),sz=renderer.getSize(new T.Vector2());
     renderer.setPixelRatio(1);renderer.setSize(Math.round(size*asp),size,false);renderer.render(scene,tc);
-    tlThumbs[key]=renderer.domElement.toDataURL("image/png");
+    tlThumbs[key]=renderer.domElement.toDataURL("image/png");pcPut(pk,tlThumbs[key]);
     renderer.setPixelRatio(pr);renderer.setSize(sz.x,sz.y,false);
   }finally{
     if(tlThumb._ob)fillMat.uniforms.uBase.value.copy(tlThumb._ob);    OUT_FIG.uniforms.uC.value.copy(oc);OUT_FIG.uniforms.uW.value=ow;fillMat.uniforms.uRim.value.copy(rc);grid.visible=gv;
@@ -990,7 +1005,8 @@ function previewStart(e,o,cv){
 }
 function previewStop(){if(!pv)return false;cancelAnimationFrame(pv.raf);pv=null;return true}
 window.Figur={EX,EXB,STEPS,PLATE,plateSet,kgText,mount,show,draw,segAt,seqDur,render,sizeTo,setMirror,resetCam,thumb,tlThumb,previewStart,previewStop,get previewing(){return !!pv},
-  setShade:m=>{fillMat.uniforms.uMode.value=m},
+  setShade:m=>{if(fillMat.uniforms.uMode.value!==m){Object.keys(thumbs).forEach(k=>delete thumbs[k]);Object.keys(tlThumbs).forEach(k=>delete tlThumbs[k])}fillMat.uniforms.uMode.value=m},
+  get cacheReady(){return PC.ready},whenReady:PC.whenReady,
   /* Look der Figur: null = dunkel (Original); {base:"#hex",out:"#hex",gear:"#hex",load:"#hex",grid:"#hex",gridA,shadow} */
   setLook:L=>{const U=fillMat.uniforms;Object.keys(tlThumbs).forEach(k=>delete tlThumbs[k]);
 LOOK=L;Object.keys(thumbs).forEach(k=>delete thumbs[k]);
