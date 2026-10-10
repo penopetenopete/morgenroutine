@@ -10,10 +10,13 @@ const scene=new T.Scene();
 const cam=new T.PerspectiveCamera(35,1,0.05,50);
 
 /* ---------- Materialien: dunkle Füllung (3 Schattierungen) + farbige Kontur ---------- */
-const fillMat=new T.ShaderMaterial({uniforms:{uMode:{value:2},uRim:{value:new T.Color(0,.55,.65)}},
+const fillMat=new T.ShaderMaterial({uniforms:{uMode:{value:2},uRim:{value:new T.Color(0,.55,.65)},uLight:{value:0},uBase:{value:new T.Color(.86,.83,.78)}},
   vertexShader:`varying vec3 vN;varying vec3 vV;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);vN=normalize(normalMatrix*normal);vV=-mv.xyz;gl_Position=projectionMatrix*mv;}`,
-  fragmentShader:`uniform int uMode;uniform vec3 uRim;varying vec3 vN;varying vec3 vV;void main(){
+  fragmentShader:`uniform int uMode;uniform vec3 uRim;uniform float uLight;uniform vec3 uBase;varying vec3 vN;varying vec3 vV;void main(){
     vec3 n=normalize(vN),v=normalize(vV),l=normalize(vec3(.4,.8,.6));float d=max(dot(n,l),0.);vec3 c;
+    if(uLight>.5){float f=pow(1.-max(dot(n,v),0.),3.);
+      if(uMode==0)c=uBase;else if(uMode==1){float b=d<.25?.72:d<.65?.86:1.;c=uBase*b;}else c=uBase*(.62+.38*d)+uRim*f*.3;
+      gl_FragColor=vec4(c,1.);return;}
     if(uMode==0){c=vec3(.063,.094,.125);}
     else if(uMode==1){float b=d<.25?0.:d<.65?.5:1.;c=mix(vec3(.05,.07,.09),vec3(.17,.2,.24),b);}
     else{float f=pow(1.-max(dot(n,v),0.),3.);c=vec3(.05,.065,.085)+uRim*f*.55;}
@@ -943,7 +946,7 @@ function thumb(e,o){
 /* Kleine animierte Vorschau (Editor): rendert mit demselben Renderer und kopiert jedes Bild in ein 2D-Canvas */
 let pv=null;
 /* Bild für die Timeline: Figur in Übungsfarbe, immer ganz und mittig im Bild */
-const tlThumbs={};
+const tlThumbs={};let LOOK=null;
 function tlThumb(e,o,hex,size=192,asp=1){
   if(!renderer||!e)return "";
   const key=e.id+JSON.stringify(o)+hex+size+"|"+asp;if(tlThumbs[key])return tlThumbs[key];
@@ -952,6 +955,8 @@ function tlThumb(e,o,hex,size=192,asp=1){
   try{
     const s=show(e,o);const pick=s.length>2?s[1]:s[0];draw(pick,o.mode==="hold"?0:1);
     OUT_FIG.uniforms.uC.value.copy(col);OUT_FIG.uniforms.uW.value=.014;fillMat.uniforms.uRim.value.copy(col).multiplyScalar(.75);grid.visible=false;
+    const ob=fillMat.uniforms.uBase.value.clone();if(LOOK){if(LOOK.tint)fillMat.uniforms.uBase.value.copy(col).lerp(new T.Color(1,1,1),LOOK.tint);if(LOOK.thumbOut)OUT_FIG.uniforms.uC.value.copy(col).multiplyScalar(LOOK.thumbOut)}
+    tlThumb._ob=ob;
     scene.updateMatrixWorld(true);
     const box=new T.Box3().setFromObject(bones.pelvis.g);
     for(const n in props)if(props[n].visible)box.union(new T.Box3().setFromObject(props[n]));
@@ -965,7 +970,7 @@ function tlThumb(e,o,hex,size=192,asp=1){
     tlThumbs[key]=renderer.domElement.toDataURL("image/png");
     renderer.setPixelRatio(pr);renderer.setSize(sz.x,sz.y,false);
   }finally{
-    OUT_FIG.uniforms.uC.value.copy(oc);OUT_FIG.uniforms.uW.value=ow;fillMat.uniforms.uRim.value.copy(rc);grid.visible=gv;
+    if(tlThumb._ob)fillMat.uniforms.uBase.value.copy(tlThumb._ob);    OUT_FIG.uniforms.uC.value.copy(oc);OUT_FIG.uniforms.uW.value=ow;fillMat.uniforms.uRim.value.copy(rc);grid.visible=gv;
     [cur,curOpt,curProps,yaw,pitch,dist]=save;target=save[6];if(cur)curProps=showProps(cur,curOpt);
   }
   return tlThumbs[key]||"";
@@ -986,5 +991,12 @@ function previewStart(e,o,cv){
 function previewStop(){if(!pv)return false;cancelAnimationFrame(pv.raf);pv=null;return true}
 window.Figur={EX,EXB,STEPS,PLATE,plateSet,kgText,mount,show,draw,segAt,seqDur,render,sizeTo,setMirror,resetCam,thumb,tlThumb,previewStart,previewStop,get previewing(){return !!pv},
   setShade:m=>{fillMat.uniforms.uMode.value=m},
+  /* Look der Figur: null = dunkel (Original); {base:"#hex",out:"#hex",gear:"#hex",load:"#hex",grid:"#hex",gridA,shadow} */
+  setLook:L=>{const U=fillMat.uniforms;Object.keys(tlThumbs).forEach(k=>delete tlThumbs[k]);
+LOOK=L;
+    if(!L){U.uLight.value=0;OUT_FIG.uniforms.uC.value.setRGB(0,.9,1);OUT_GEAR.uniforms.uC.value.setRGB(.17,.36,.45);OUT_LOAD.uniforms.uC.value.setRGB(.91,.93,.95);
+      grid.material.vertexColors=true;grid.material.needsUpdate=true;grid.material.color.set(0xffffff);grid.material.opacity=1;grid.material.transparent=false;shadow.material.opacity=.35;U.uRim.value.setRGB(0,.55,.65);render&&render();return}
+    U.uLight.value=1;U.uBase.value.set(L.base);if(L.rim)U.uRim.value.set(L.rim);OUT_FIG.uniforms.uC.value.set(L.out);OUT_GEAR.uniforms.uC.value.set(L.gear);OUT_LOAD.uniforms.uC.value.set(L.load);
+    grid.material.vertexColors=false;grid.material.needsUpdate=true;grid.material.color.set(L.grid);grid.material.transparent=true;grid.material.opacity=L.gridA==null?.5:L.gridA;shadow.material.opacity=L.shadow==null?.12:L.shadow;render&&render()},
   get current(){return cur}};
 })();
