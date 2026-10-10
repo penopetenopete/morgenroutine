@@ -766,3 +766,4 @@ html[data-theme="hell"] .tlcab .tlcadd .cb1{stroke:var(--line)}
 .tle span.two b{display:flex;flex-direction:column;align-items:center}
 .tle span.two small{font-size:.62rem;opacity:.75}
 .wrow.empty.more{padding:9px 12px 9px 72px}
+html[data-theme="hell"] .edprev canvas{background:radial-gradient(circle at 50% 40%,#FFFDF8,#E9E1D3)}
