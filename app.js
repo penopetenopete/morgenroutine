@@ -73,7 +73,10 @@ function migrateOld(s){
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(_){}}
 const gv=k=>S.g[k]!=null?S.g[k]:G_DEF[k];
 /* Look: „hell“ (Sand, Standard) oder „dunkel“ */
-function applyTheme(){const t=gv("theme")||"hell";document.documentElement.dataset.theme=t;const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==="hell"?"#F2EEE6":"#0B0F14"}
+function applyTheme(){const t=gv("theme")||"hell";document.documentElement.dataset.theme=t;const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==="hell"?"#F2EEE6":"#0B0F14";
+  /* Figur: groß = Porzellan, Kästchen/Listen = Übungsfarbe (wie Pastell, kräftiger) */
+  if(F&&F.setLook){F.setLook(t==="hell"?FIG_HELL:null);if(typeof TLIMG!=="undefined")for(const k in TLIMG)delete TLIMG[k];try{F.render()}catch(e){}}}
+const FIG_HELL={base:"#E9E2D6",rim:"#FFFFFF",out:"#C4573B",gear:"#B9AC97",load:"#7E7366",grid:"#BFB29C",gridA:.55,shadow:.13,tint:.42,thumbOut:.8};
 applyTheme();
 function setG(k,v){S.g[k]=v;save()}
 
@@ -358,7 +361,7 @@ function renderHome(){
   if(a)$("resume").innerHTML=`<span class="dot"></span><span><b>Workout läuft · ${esc(a.rname)}</b><span class="small">seit ${fmt((now()-a.startedAt)/1000)} · antippen zum Weitermachen</span></span>`;
 }
 $("openSet").onclick=()=>{const p=$("setPanel");renderHome();openSheet("","Einstellungen","",{onClose:()=>{$("setHold").appendChild(p)}});$("shBody").appendChild(p)};
-document.querySelectorAll("[data-theme]").forEach(b=>b.onclick=()=>{setG("theme",b.dataset.theme);applyTheme();Object.keys(TLIMG).length;document.querySelectorAll("[data-theme]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.theme===b.dataset.theme))});
+document.querySelectorAll("[data-theme]").forEach(b=>b.onclick=()=>{setG("theme",b.dataset.theme);applyTheme();renderHome();document.querySelectorAll("[data-theme]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.theme===b.dataset.theme))});
 $("woAdd").onclick=()=>{
   openSheet("","Neu",`<h3>Neues Workout in …</h3><div class="chips2">${cats().map(c=>`<button class="chip2" data-nw="${c.id}" style="--c:${c.c}"><i></i>${esc(c.name)}</button>`).join("")}</div><button class="btn" id="ncNew">＋ Neuer Bereich</button>`);
   $("shBody").querySelectorAll("[data-nw]").forEach(b=>b.onclick=()=>{closeSheet();newRoutine(b.dataset.nw)});
@@ -620,7 +623,7 @@ const AUD_SVG={music:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
   podcast:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>'};
 let tlMode="pause",tlCopy=null; // tlCopy = {v, n} solange „Pause kopieren“ läuft
 /* Timeline-Kästchen: Bild (3D-Figur in Übungsfarbe) oder Schrift – Doppeltippen dreht alle um wie Münzen */
-let tlTapT=null;const TLIMG={};
+let tlTapT=null;var TLIMG={};
 const tlFace=()=>(S.settings&&S.settings.tlFace)||"img";
 function tlFlip(tl){const f=tlFace()==="img"?"txt":"img";S.settings=S.settings||{};S.settings.tlFace=f;save();buzz(15);
   tl.querySelectorAll(".tlb .tlcoin").forEach((c,i)=>c.style.transitionDelay=Math.min(i*18,300)+"ms");tl.classList.toggle("txt",f==="txt");

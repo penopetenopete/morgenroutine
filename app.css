@@ -701,7 +701,7 @@ html[data-theme="hell"] img.eic,html[data-theme="hell"] img.emini{background:#ff
 html[data-theme="hell"] .eswipe{background:#FBE2DA}
 html[data-theme="hell"] .dtab[aria-selected="true"],html[data-theme="hell"] .sbtn[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 html[data-theme="hell"] .ering .rbg,html[data-theme="hell"] .rbg{stroke:var(--line)}
-html[data-theme="hell"] .stage{background:radial-gradient(circle at 50% 40%,#1a2430,#0B0F14)}
+html[data-theme="hell"] .stage{background:radial-gradient(circle at 50% 40%,#FFFDF8,#E9E1D3)}
 html[data-theme="hell"] .tlhead{background:var(--bg)}
 html[data-theme="hell"] .sheet .tlhead{background:var(--card)}
 html[data-theme="hell"] .row.dragging{background:var(--card)}
