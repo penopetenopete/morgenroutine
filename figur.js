@@ -10,17 +10,17 @@ const scene=new T.Scene();
 const cam=new T.PerspectiveCamera(35,1,0.05,50);
 
 /* ---------- Materialien: dunkle Füllung (3 Schattierungen) + farbige Kontur ---------- */
-const fillMat=new T.ShaderMaterial({uniforms:{uMode:{value:2}},
+const fillMat=new T.ShaderMaterial({uniforms:{uMode:{value:2},uRim:{value:new T.Color(0,.55,.65)}},
   vertexShader:`varying vec3 vN;varying vec3 vV;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);vN=normalize(normalMatrix*normal);vV=-mv.xyz;gl_Position=projectionMatrix*mv;}`,
-  fragmentShader:`uniform int uMode;varying vec3 vN;varying vec3 vV;void main(){
+  fragmentShader:`uniform int uMode;uniform vec3 uRim;varying vec3 vN;varying vec3 vV;void main(){
     vec3 n=normalize(vN),v=normalize(vV),l=normalize(vec3(.4,.8,.6));float d=max(dot(n,l),0.);vec3 c;
     if(uMode==0){c=vec3(.063,.094,.125);}
     else if(uMode==1){float b=d<.25?0.:d<.65?.5:1.;c=mix(vec3(.05,.07,.09),vec3(.17,.2,.24),b);}
-    else{float f=pow(1.-max(dot(n,v),0.),3.);c=vec3(.05,.065,.085)+vec3(0.,.55,.65)*f*.55;}
+    else{float f=pow(1.-max(dot(n,v),0.),3.);c=vec3(.05,.065,.085)+uRim*f*.55;}
     gl_FragColor=vec4(c,1.);}`});
-const outline=(r,g,b)=>new T.ShaderMaterial({side:T.BackSide,
-  vertexShader:`void main(){vec4 mv=modelViewMatrix*vec4(position,1.);vec3 n=normalize(normalMatrix*normal);mv.xyz+=n*.009;gl_Position=projectionMatrix*mv;}`,
-  fragmentShader:`void main(){gl_FragColor=vec4(${r.toFixed(3)},${g.toFixed(3)},${b.toFixed(3)},1.);}`});
+const outline=(r,g,b)=>new T.ShaderMaterial({side:T.BackSide,uniforms:{uC:{value:new T.Color(r,g,b)},uW:{value:.009}},
+  vertexShader:`uniform float uW;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);vec3 n=normalize(normalMatrix*normal);mv.xyz+=n*uW;gl_Position=projectionMatrix*mv;}`,
+  fragmentShader:`uniform vec3 uC;void main(){gl_FragColor=vec4(uC,1.);}`});
 const OUT_FIG=outline(0,.9,1), OUT_GEAR=outline(.17,.36,.45), OUT_LOAD=outline(.91,.93,.95);
 
 const grid=new T.PolarGridHelper(1.2,12,5,48,0x00E5FF,0x00E5FF);
@@ -942,6 +942,34 @@ function thumb(e,o){
 
 /* Kleine animierte Vorschau (Editor): rendert mit demselben Renderer und kopiert jedes Bild in ein 2D-Canvas */
 let pv=null;
+/* Bild für die Timeline: Figur in Übungsfarbe, immer ganz und mittig im Bild */
+const tlThumbs={};
+function tlThumb(e,o,hex,size=192,asp=1){
+  if(!renderer||!e)return "";
+  const key=e.id+JSON.stringify(o)+hex+size+"|"+asp;if(tlThumbs[key])return tlThumbs[key];
+  const save=[cur,curOpt,curProps,yaw,pitch,dist,target.clone()];
+  const col=new T.Color(hex),oc=OUT_FIG.uniforms.uC.value.clone(),rc=fillMat.uniforms.uRim.value.clone(),ow=OUT_FIG.uniforms.uW.value,gv=grid.visible;
+  try{
+    const s=show(e,o);const pick=s.length>2?s[1]:s[0];draw(pick,o.mode==="hold"?0:1);
+    OUT_FIG.uniforms.uC.value.copy(col);OUT_FIG.uniforms.uW.value=.014;fillMat.uniforms.uRim.value.copy(col).multiplyScalar(.75);grid.visible=false;
+    scene.updateMatrixWorld(true);
+    const box=new T.Box3().setFromObject(bones.pelvis.g);
+    for(const n in props)if(props[n].visible)box.union(new T.Box3().setFromObject(props[n]));
+    // Kamera so weit weg, dass die ganze Figur (samt Kopf) sicher ins Bild passt – mittig
+    const sz3=box.getSize(new T.Vector3()),diag=Math.hypot(sz3.x,sz3.z),tv=Math.tan(T.MathUtils.degToRad(17.5)),th=tv*asp;
+    const hExt=sz3.y*Math.cos(pitch)+diag*Math.sin(Math.abs(pitch));
+    target=box.getCenter(new T.Vector3());dist=Math.max(hExt/2/tv,diag/2/th)*1.06+diag/2;
+    const tc=new T.PerspectiveCamera(35,asp,.05,50);placeCam(tc);
+    const pr=renderer.getPixelRatio(),sz=renderer.getSize(new T.Vector2());
+    renderer.setPixelRatio(1);renderer.setSize(Math.round(size*asp),size,false);renderer.render(scene,tc);
+    tlThumbs[key]=renderer.domElement.toDataURL("image/png");
+    renderer.setPixelRatio(pr);renderer.setSize(sz.x,sz.y,false);
+  }finally{
+    OUT_FIG.uniforms.uC.value.copy(oc);OUT_FIG.uniforms.uW.value=ow;fillMat.uniforms.uRim.value.copy(rc);grid.visible=gv;
+    [cur,curOpt,curProps,yaw,pitch,dist]=save;target=save[6];if(cur)curProps=showProps(cur,curOpt);
+  }
+  return tlThumbs[key]||"";
+}
 function previewStart(e,o,cv){
   previewStop();if(!renderer||!cv)return;
   const ctx=cv.getContext("2d"),sz=cv.width,seq=show(e,o);let t=0,last=performance.now();
@@ -956,7 +984,7 @@ function previewStart(e,o,cv){
   pv.raf=requestAnimationFrame(loop);
 }
 function previewStop(){if(!pv)return false;cancelAnimationFrame(pv.raf);pv=null;return true}
-window.Figur={EX,EXB,STEPS,PLATE,plateSet,kgText,mount,show,draw,segAt,seqDur,render,sizeTo,setMirror,resetCam,thumb,previewStart,previewStop,get previewing(){return !!pv},
+window.Figur={EX,EXB,STEPS,PLATE,plateSet,kgText,mount,show,draw,segAt,seqDur,render,sizeTo,setMirror,resetCam,thumb,tlThumb,previewStart,previewStop,get previewing(){return !!pv},
   setShade:m=>{fillMat.uniforms.uMode.value=m},
   get current(){return cur}};
 })();

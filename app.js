@@ -538,7 +538,49 @@ function audioOf(s,map){
 const AUD_SVG={music:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3" fill="currentColor"/><circle cx="17" cy="16" r="3" fill="currentColor"/></svg>',
   podcast:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>'};
 let tlMode="pause",tlCopy=null; // tlCopy = {v, n} solange „Pause kopieren“ läuft
-let tlFocus=null,tlAutoKey=null,tlMove=null,tlDrag=null; // tlFocus: Element nach dem Neuzeichnen zeigen · tlDrag: Satz wird gerade gezogen
+/* Timeline-Kästchen: Bild (3D-Figur in Übungsfarbe) oder Schrift – Doppeltippen dreht alle um wie Münzen */
+let tlTapT=null;const TLIMG={};
+const tlFace=()=>(S.settings&&S.settings.tlFace)||"img";
+function tlFlip(tl){const f=tlFace()==="img"?"txt":"img";S.settings=S.settings||{};S.settings.tlFace=f;save();buzz(15);
+  tl.querySelectorAll(".tlb .tlcoin").forEach((c,i)=>c.style.transitionDelay=Math.min(i*18,300)+"ms");tl.classList.toggle("txt",f==="txt");
+  setTimeout(()=>tl.querySelectorAll(".tlb .tlcoin").forEach(c=>c.style.transitionDelay=""),900)}
+const tlImgO=o=>{const x=Object.assign({},o);delete x.sets;return x};
+function tlImg(s,col,a){const k=s.ex+"|"+JSON.stringify(tlImgO(s.o))+"|"+col+"|"+a;return TLIMG[k]||null}
+function tlFillImgs(tl,after){
+  const todo=[...tl.querySelectorAll("img[data-th]")];if(!todo.length)return;
+  const step=()=>{if(!tl.isConnected)return;const t0=performance.now();
+    while(todo.length&&performance.now()-t0<14){const im=todo.shift(),[ex,o,col,a]=JSON.parse(im.dataset.th),k=ex+"|"+JSON.stringify(o)+"|"+col+"|"+a;
+      if(!TLIMG[k])try{TLIMG[k]=F.tlThumb(EXB[ex],o,col,180,a)||""}catch(_){TLIMG[k]=""}
+      if(TLIMG[k])im.src=TLIMG[k];im.removeAttribute("data-th")}
+    if(todo.length)requestAnimationFrame(step)};
+  requestAnimationFrame(step);
+}
+function tlVal(e,o){
+  if(!e||!o)return "";
+  let v=e.drop?"3 × "+fmtSecs(o.secs):o.mode==="hold"?(o.secs<60?o.secs+" s":fmt(o.secs)):o.reps+"×";
+  if(e.weight&&e.weight!=="none"&&o.kg>0)v+=" · "+F.kgText(e.weight,o.kg);
+  return v;
+}
+/* Kabel: verbindet alle Kästchen in Reihenfolge; Zeilenende → läuft unten zurück zum Anfang der nächsten Zeile */
+let tlCabN=0;
+function tlCable(tl,boxes,colOf,musCol,curI){
+  const svg=tl.querySelector(".tlcab");if(!svg)return;
+  const T=tl.getBoundingClientRect(),els=[...tl.querySelectorAll(".tlb[data-b],.tlb.ph")];
+  const pos=els.map(el=>{const r=el.getBoundingClientRect();return {l:r.left-T.left,r:r.right-T.left,t:r.top-T.top,b:r.bottom-T.top,cy:(r.top+r.bottom)/2-T.top,c:getComputedStyle(el).getPropertyValue("--c").trim(),done:el.classList.contains("done")}});
+  let defs="",paths="",g=0;const pre="tlg"+(++tlCabN)+"_";
+  for(let i=0;i+1<pos.length;i++){const a=pos[i],b=pos[i+1];let d;
+    if(Math.abs(a.cy-b.cy)<4)d=`M${a.r} ${a.cy}L${b.l} ${b.cy}`;
+    else{const R=14,xe=T.width-5,xs=5,ym=(a.b+b.t)/2;d=`M${a.r} ${a.cy}L${xe-R} ${a.cy}Q${xe} ${a.cy} ${xe} ${a.cy+R}L${xe} ${ym-R}Q${xe} ${ym} ${xe-R} ${ym}L${xs+R} ${ym}Q${xs} ${ym} ${xs} ${ym+R}L${xs} ${b.cy-R}Q${xs} ${b.cy} ${xs+R} ${b.cy}L${b.l} ${b.cy}`}
+    let col=a.c;
+    if(musCol){const bx=boxes.find(x=>x===boxes[i]);col=bx&&bx.next?musCol(bx.next):a.c}
+    else if(a.c!==b.c){const id=pre+(g++);defs+=`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${(a.l+a.r)/2}" y1="${a.cy}" x2="${(b.l+b.r)/2}" y2="${b.cy}"><stop offset="0" stop-color="${a.c}"/><stop offset="1" stop-color="${b.c}"/></linearGradient>`;col=`url(#${id})`}
+    const op=a.done&&b.done?' opacity=".3"':"";
+    paths+=`<g${op}><path d="${d}" class="cb0"/><path d="${d}" class="cb1" stroke="${col}"/><path d="${d}" class="cb2"/></g>`}
+  svg.setAttribute("width",T.width);svg.setAttribute("height",T.height);
+  svg.innerHTML=`<defs>${defs}</defs>${paths}`;
+}
+let tlFocus=null,tlAutoKey=null,tlMove=null,tlDrag=null;
+window.addEventListener("resize",()=>document.querySelectorAll("#rTl,.pltl").forEach(b=>{if(b._cab)try{b._cab()}catch(_){}})); // tlFocus: Element nach dem Neuzeichnen zeigen · tlDrag: Satz wird gerade gezogen
 function renderTimeline(box,Wk,h){
   /* übersprungene Übungen bleiben sichtbar (grau, antippen = wieder rein) */
   const skipped=new Set(Wk.items.filter(it=>it.status==="removed"&&!it.deleted).map(it=>it.uid));
@@ -567,7 +609,12 @@ function renderTimeline(box,Wk,h){
       lastBox={box:true,k,s,i};seq.push(lastBox);
     }else if(seq.length)seq.push({edge:true,s,i});
   });
-  const boxes=seq.filter(x=>x.box),PER=3;
+  /* L und R eines Satzes = ein Kästchen, die Seitenpause sitzt in der Mitte */
+  for(let j=0;j+2<seq.length;j++){const a=seq[j],e=seq[j+1],b=seq[j+2];
+    if(a.box&&!a.lr&&e.edge&&!e.none&&e.s.kind==="side"&&b.box&&a.s.uid===b.s.uid&&a.s.set===b.s.set&&(a.s.part||0)===(b.s.part||0)&&!a.s.side&&b.s.side&&!a.s.both)
+      seq.splice(j,3,{box:true,lr:true,k:a.k,s:a.s,sR:b.s,i:a.i,i2:b.i2!=null?b.i2:b.i,mid:e});}
+  const boxes=seq.filter(x=>x.box),PER=3,EDG=[];
+  seq.forEach((x,j)=>{if(x.box){const n=seq[j+1];x.next=n&&n.edge&&!n.none?n.s:null}});
   if(!boxes.length){box.innerHTML='<div class="note" style="padding:14px">Noch keine Sätze.</div>';return}
   const firstNext=curI>=0?boxes.find(b=>b.i>curI&&!skipped.has(b.s.uid)):null;
   const prevBox=x=>{for(let j=seq.indexOf(x)-1;j>=0;j--)if(seq[j].box)return seq[j];return null};
@@ -580,26 +627,31 @@ function renderTimeline(box,Wk,h){
   /* Slot-Nummern (Reihenfolge der Sätze ohne den gezogenen) für die Zielsuche */
   let slotN=-1,lastSK="";const slotOf=new Map();
   boxes.forEach(b=>{const pl=drag&&drag.plan;const ph=b.s.uid==="__ph"||(drag&&(!pl||pl.kind==="none")&&b.s.uid===drag.src.uid&&b.s.set===drag.src.set)||(pl&&pl.kind==="reorder"&&b.s.uid===pl.uid&&b.s.set===pl.to);const k=b.s.uid+"|"+b.s.set;if(ph){slotOf.set(b,"ph");return}if(k!==lastSK){slotN++;lastSK=k}slotOf.set(b,slotN)});
-  const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,sk=skipped.has(s.uid),st=sk?" skip":curI<0?"":last<curI?" done":b.i<=curI?" now":b===firstNext?" next":"",it=Wk.items.find(x=>x.uid===s.uid)||(s.uid==="__ph"?srcIt:Wk.items.find(x=>x.uid===(drag&&drag.splitUid)))||{},e=EXB[s.ex],uni=isUni(EXB[s.ex],s.o);
-    const sl=slotOf.get(b),fk=drag?` data-fk="${sl}|${s.side||0}|${s.part||0}"`:"";if(sl==="ph")return `<span class="tlb ph" style="--c:${colOf[drag.src.uid]}"${fk}><b>${esc(e.name)}</b><small>hierhin</small></span>`;
-    const side=s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
-    return `<button class="tlb${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}" data-slot="${sl}"${fk}${audA(s)}${st===" done"?" disabled":""}>${aud(s)}<b>${esc(e.name)}</b><small>${sk?"übersprungen":"S"+s.set+(side?" · "+side:"")}</small></button>`};
+  const img=(s,m,half)=>{const a=half?.55:1.1,u=tlImg(s,colOf[s.uid],a);return `<img alt=""${m?' class="m"':""}${u?` src="${u}"`:` data-th="${esc(JSON.stringify([s.ex,tlImgO(s.o),colOf[s.uid],a]))}"`}>`};
+  const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,sk=skipped.has(s.uid),st=sk?" skip":curI<0?"":last<curI?" done":b.i<=curI?" now":b===firstNext?" next":"",it=Wk.items.find(x=>x.uid===s.uid)||(s.uid==="__ph"?srcIt:Wk.items.find(x=>x.uid===(drag&&drag.splitUid)))||{},e=EXB[s.ex]||{name:""},uni=isUni(EXB[s.ex],s.o);
+    const sl=slotOf.get(b),fk=drag?` data-fk="${sl}|${b.lr?"lr":s.side||0}|${s.part||0}"`:"";
+    if(sl==="ph")return `<span class="tlb ph${b.lr?" lr":""}" style="--c:${colOf[drag.src.uid]}"${fk}></span>`;
+    const side=b.lr?"":s.both?"L+R":uni||it.pair?(s.side?"R":"L"):"";
+    const val=sk?"übersprungen":tlVal(e,s.o);
+    const front=b.lr?`<div class="tlpic"><span>${img(s,0,1)}<i>L</i></span><span>${img(b.sR,1,1)}<i>R</i></span></div>`:`<div class="tlpic"><span>${img(s,s.side)}${side?`<i>${side}</i>`:""}</span></div>`;
+    const mid=b.lr?edgeHTML(b.mid,false,true):"";
+    return `<div role="button" tabindex="0" class="tlb${b.lr?" lr":""}${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}" data-slot="${sl}"${fk}${audA(s)} aria-label="${esc(e.name)} ${val}"><div class="tlcoin"><div class="tlf tlfi">${front}<small>${val}</small></div><div class="tlf tlft"><b>${esc(e.name)}</b>${side?`<em>${side}</em>`:""}<small>${val}</small></div></div>${aud(s)}${mid}</div>`};
   const nextBox=x=>{for(let j=seq.indexOf(x)+1;j<seq.length;j++)if(seq[j].box)return seq[j];return null};
   const sameSet=x=>{const pb=prevBox(x),nb=nextBox(x);return !!(pb&&nb&&pb.s.uid===nb.s.uid&&pb.s.set===nb.s.set)};
   const dropOk=x=>{const pb=prevBox(x);if(!pb||sameSet(x))return false;if(skipped.has(pb.s.uid))return false;if(curI>=0&&(pb.i2!=null?pb.i2:pb.i)<=curI)return false;return true};
-  const edgeHTML=(x,turn)=>{
+  const edgeHTML=(x,turn,inbox)=>{
     if(x.none)return `<span class="tle${turn?" turn":""} none"><i></i></span>`;
     const s=x.s,open=s.dur==null,dn=curI>=0&&x.i<curI,sk=skipped.has(s.uid);
     const lab=open?"▶":pauseText(s.dur);
     const src=tlCopy&&tlCopy.pk===s.pk?" src":"";
-    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${sk?" skip":""}${src}" ${(open&&(dn||!can))||sk?"disabled":""} data-e="${seq.indexOf(x)}" data-k="e|${s.pk||s.key}"${audA(s)} aria-label="Pause ${lab}"><i></i><span>${aud(s)}<b>${lab}</b></span></button>`};
+    return `<button class="tle${turn?" turn":""}${open?" open":""}${s.custom?" custom":""}${s.kind==="side"?" side":""}${dn?" done":""}${sk?" skip":""}${src}" ${(open&&(dn||!can))||sk?"disabled":""} data-e="${EDG.push(x)-1}" data-k="e|${s.pk||s.key}"${audA(s)} aria-label="Pause ${lab}"${inbox?' data-in="1"':""}><i></i><span>${aud(s)}<b>${lab}</b></span></button>`};
   let html="",row=[],ri=0;
-  const flush=()=>{html+=`<div class="tlrow${ri%2?" rev":""}">${row.join("")}</div>`;row=[];ri++};
+  const flush=()=>{html+=`<div class="tlrow">${row.join("")}</div>`;row=[];ri++};
   let bi=0;
   for(let i=0;i<seq.length;i++){
     const x=seq[i];
     if(x.box){row.push(boxHTML(x));bi++;continue}
-    if(bi%PER===0&&bi<boxes.length){flush();html+=`<div class="tlturnrow ${(ri-1)%2?"l":"r"}">${edgeHTML(x,true)}</div>`}
+    if(bi%PER===0&&bi<boxes.length){flush();html+=`<div class="tlret">${edgeHTML(x,true)}</div>`}
     else row.push(edgeHTML(x,false));
   }
   if(row.length)flush();
@@ -607,18 +659,21 @@ function renderTimeline(box,Wk,h){
   const sw=can?`<div class="tlsw" id="tlSw" role="switch" tabindex="0" aria-checked="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span>${own?`<button class="tlrs" id="tlAudReset" aria-label="Alles auf Smart">↺</button>`:""}<i class="tlswk"></i></div>`:"";
   const copy=tlCopy&&!mus()?`<div class="tlcopy"><span>Pause <b>${pauseText(tlCopy.v)}</b> kopiert – andere Pausen antippen${tlCopy.n?` · ${tlCopy.n}× eingefügt`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
   const oldR=drag?new Map([...box.querySelectorAll("[data-fk]")].map(e=>[e.dataset.fk,e.getBoundingClientRect()])):null;
-  box.innerHTML=`<div class="tlhead">${sw}${copy}</div><div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}${drag?" moving":""}">${html}</div>`;
+  box.innerHTML=`<div class="tlhead">${sw}${copy}</div><div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}${drag?" moving":""}${tlFace()==="txt"?" txt":""}"><svg class="tlcab" aria-hidden="true"></svg>${html}</div>`;
   const tl=box.querySelector(".tl");
   if(oldR&&oldR.size)box.querySelectorAll("[data-fk]").forEach(e=>{const o=oldR.get(e.dataset.fk);if(!o)return;const n=e.getBoundingClientRect(),dx=o.left-n.left,dy=o.top-n.top;
     if(Math.abs(dx)<1&&Math.abs(dy)<1)return;e.style.transition="none";e.style.transform=`translate(${dx}px,${dy}px)`;
     requestAnimationFrame(()=>requestAnimationFrame(()=>{e.style.transition="transform .2s ease";e.style.transform=""}))});
+  const cab=()=>tlCable(tl,boxes,colOf,mus()?(s=>audioOf(s,AM)==="music"?"#5BE38C":"#B18CFF"):null,curI);cab();box._cab=cab;
+  if(oldR&&oldR.size)setTimeout(()=>{if(tl.isConnected)cab()},230);
+  tlFillImgs(tl,cab);
   if(!box._tmBlock){box._tmBlock=1;box.addEventListener("touchmove",e=>{if(tlDrag)e.preventDefault()},{passive:false})}
   const flip=()=>{tlMode=mus()?"pause":"music";tlCopy=null;tlMove=null;h.redraw()};
   if($("tlSw")){$("tlSw").onclick=flip;$("tlSw").onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();flip()}}}
   if($("tlAudReset"))$("tlAudReset").onclick=e=>{e.stopPropagation();Object.keys(AM).forEach(k=>h.onAudio(k,null));toast("Alles auf Smart")};
   if($("tlCopyOk"))$("tlCopyOk").onclick=()=>{tlCopy=null;h.redraw()};
   box.querySelectorAll("[data-e]").forEach(b=>{
-    const s=seq[+b.dataset.e].s;
+    const x0=EDG[+b.dataset.e],s=x0.s;
     onLongPress(b,()=>{if(s.dur==null||mus())return;tlCopy={v:s.dur,pk:s.pk,n:0};buzz(30);h.redraw()});
     b.onclick=()=>{
       if(b.dataset.lp){delete b.dataset.lp;return}
@@ -631,15 +686,20 @@ function renderTimeline(box,Wk,h){
   box.querySelectorAll("[data-b]").forEach(b=>{
     const s=boxes[+b.dataset.b].s,it=Wk.items.find(x=>x.uid===s.uid);
     if(drag||!it)return; // Vorschau beim Ziehen: nichts antippbar
-    if(h.onMove&&!it.pair&&!b.disabled&&!skipped.has(s.uid)&&!b.classList.contains("now")&&!drag)
+    const done=b.classList.contains("done");
+    if(h.onMove&&!it.pair&&!done&&!skipped.has(s.uid)&&!b.classList.contains("now")&&!drag)
       onLongPress(b,ev=>{if(mus()||tlCopy)return;startDrag(b,s,ev)});
-    b.onclick=()=>{
+    b.onclick=ev=>{
+      if(ev.target.closest("[data-e]"))return;
       if(b.dataset.lp){delete b.dataset.lp;return}
-      if(skipped.has(s.uid)){if(h.onUnskip){tlFocus=b.dataset.k;h.onUnskip(s.uid)}return}
-      if(mus()){toggleAud(s);return}
-      if(tlCopy){tlCopy=null;h.redraw();return}
-      tlFocus=b.dataset.k;h.onEdit(it,it.pair?0:s.set);
+      if(tlTapT){clearTimeout(tlTapT);tlTapT=null;tlFlip(tl);return} // Doppeltippen: alle Kästchen umdrehen
+      tlTapT=setTimeout(()=>{tlTapT=null;if(!b.isConnected||done)return;
+        if(skipped.has(s.uid)){if(h.onUnskip){tlFocus=b.dataset.k;h.onUnskip(s.uid)}return}
+        if(mus()){toggleAud(s);return}
+        if(tlCopy){tlCopy=null;h.redraw();return}
+        tlFocus=b.dataset.k;h.onEdit(it,it.pair?0:s.set)},260);
     };
+    b.onkeydown=ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();b.click()}};
   });
   /* Scrollen: zuerst zur zuletzt bearbeiteten Stelle, sonst im Workout zur aktuellen/nächsten Übung (oben) */
   if(drag)return;
@@ -780,7 +840,7 @@ function remapSplit(map,b,q,b2){
 function onLongPress(el,fn){
   let t=null,x0=0,y0=0;
   const stop=()=>{clearTimeout(t);t=null};
-  el.addEventListener("pointerdown",e=>{x0=e.clientX;y0=e.clientY;stop();t=setTimeout(()=>{t=null;el.dataset.lp=1;fn({clientX:x0,clientY:y0})},450)});
+  el.addEventListener("pointerdown",e=>{if(el.classList.contains("tlb")&&e.target.closest("[data-in]"))return;x0=e.clientX;y0=e.clientY;stop();t=setTimeout(()=>{t=null;el.dataset.lp=1;fn({clientX:x0,clientY:y0})},450)});
   el.addEventListener("pointermove",e=>{if(t&&Math.hypot(e.clientX-x0,e.clientY-y0)>10)stop()});
   ["pointerup","pointercancel","pointerleave"].forEach(ev=>el.addEventListener(ev,stop));
   el.addEventListener("contextmenu",e=>e.preventDefault());
