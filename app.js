@@ -557,13 +557,13 @@ function tlFillImgs(tl,after){
   const step=()=>{if(!tl.isConnected)return;const t0=performance.now();
     while(todo.length&&performance.now()-t0<14){const im=todo.shift(),[ex,o,col,a]=JSON.parse(im.dataset.th),k=ex+"|"+JSON.stringify(o)+"|"+col+"|"+a;
       if(!TLIMG[k])try{TLIMG[k]=F.tlThumb(EXB[ex],o,col,180,a)||""}catch(_){TLIMG[k]=""}
-      if(TLIMG[k])im.src=TLIMG[k];im.removeAttribute("data-th")}
+      if(TLIMG[k]){im.src=TLIMG[k];im.dataset.k=k}im.removeAttribute("data-th")}
     if(todo.length)requestAnimationFrame(step)};
   requestAnimationFrame(step);
 }
 function tlVal(e,o){
   if(!e||!o)return "";
-  let v=e.drop?"3 × "+fmtSecs(o.secs):o.mode==="hold"?(o.secs<60?o.secs+" s":fmt(o.secs)):o.reps+"×";
+  let v=e.drop?"3×"+fmtSecs(o.secs):o.mode==="hold"?(o.secs<60?o.secs+" s":fmt(o.secs)):o.reps+"×";
   if(e.weight&&e.weight!=="none"&&o.kg>0)v+=" · "+F.kgText(e.weight,o.kg);
   return v;
 }
@@ -633,7 +633,7 @@ function renderTimeline(box,Wk,h){
   /* Slot-Nummern (Reihenfolge der Sätze ohne den gezogenen) für die Zielsuche */
   let slotN=-1,lastSK="";const slotOf=new Map();
   boxes.forEach(b=>{const pl=drag&&drag.plan;const ph=b.s.uid==="__ph"||(drag&&(!pl||pl.kind==="none")&&b.s.uid===drag.src.uid&&b.s.set===drag.src.set)||(pl&&pl.kind==="reorder"&&b.s.uid===pl.uid&&b.s.set===pl.to);const k=b.s.uid+"|"+b.s.set;if(ph){slotOf.set(b,"ph");return}if(k!==lastSK){slotN++;lastSK=k}slotOf.set(b,slotN)});
-  const img=(s,m,half)=>{const a=half?.55:1.1,u=tlImg(s,colOf[s.uid],a);return `<img alt="" draggable="false"${m?' class="m"':""}${u?` src="${u}"`:` data-th="${esc(JSON.stringify([s.ex,tlImgO(s.o),colOf[s.uid],a]))}"`}>`};
+  const img=(s,m,half)=>{const a=half?.55:1.1;return `<img alt="" draggable="false"${m?' class="m"':""} data-th="${esc(JSON.stringify([s.ex,tlImgO(s.o),colOf[s.uid],a]))}">`};
   const boxHTML=b=>{const s=b.s,last=b.i2!=null?b.i2:b.i,sk=skipped.has(s.uid),st=sk?" skip":curI<0?"":last<curI?" done":b.i<=curI?" now":b===firstNext?" next":"",it=Wk.items.find(x=>x.uid===s.uid)||(s.uid==="__ph"?srcIt:Wk.items.find(x=>x.uid===(drag&&drag.splitUid)))||{},e=EXB[s.ex]||{name:""},uni=isUni(EXB[s.ex],s.o);
     const sl=slotOf.get(b),fk=drag?` data-fk="${sl}|${b.lr?"lr":s.side||0}|${s.part||0}"`:"";
     if(sl==="ph")return `<span class="tlb ph${b.lr?" lr":""}" style="--c:${colOf[drag.src.uid]}"${fk}></span>`;
@@ -642,7 +642,7 @@ function renderTimeline(box,Wk,h){
     const two=b.lr||s.both;
     const front=two?`<div class="tlpic"><span>${img(s,0,1)}<i>L</i></span><span>${img(b.sR||s,1,1)}<i>R</i></span></div>`:`<div class="tlpic"><span>${img(s,s.side)}${side?`<i>${side}</i>`:""}</span></div>`;
     const mid=b.lr?edgeHTML(b.mid,false,true):"";
-    return `<div role="button" tabindex="0" class="tlb${b.lr||s.both?" lr":""}${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}" data-slot="${sl}"${fk}${audA(s)} aria-label="${esc(e.name)} ${val}"><div class="tlcoin"><div class="tlf tlfi">${front}<small>${val}</small></div><div class="tlf tlft"><b>${esc(e.name)}</b>${side?`<em>${side}</em>`:""}<small>${val}</small></div></div>${aud(s)}${mid}</div>`};
+    return `<div role="button" tabindex="0" class="tlb${b.lr||s.both?" lr":""}${st}${isSrc(s)?" src":""}" style="--c:${colOf[s.uid]}" data-b="${boxes.indexOf(b)}" data-k="b|${s.uid}|${s.set}" data-slot="${sl}"${fk}${audA(s)} aria-label="${esc(e.name)} ${val}"><div class="tlcoin"><div class="tlf tlfi">${front}<small>${val}</small></div><div class="tlf tlft"><b>${esc(e.name)}</b><small>${val}</small>${side==="L"||side==="R"?`<span class="tlsd one${side==="R"?" r":""}"><i>${side}</i></span>`:side?`<em>${side}</em>`:""}${two?`<span class="tlsd"><i>L</i><i>R</i></span>`:""}</div></div>${aud(s)}${mid}</div>`};
   const nextBox=x=>{for(let j=seq.indexOf(x)+1;j<seq.length;j++)if(seq[j].box)return seq[j];return null};
   const sameSet=x=>{const pb=prevBox(x),nb=nextBox(x);return !!(pb&&nb&&pb.s.uid===nb.s.uid&&pb.s.set===nb.s.set)};
   const dropOk=x=>{const pb=prevBox(x);if(!pb||sameSet(x))return false;if(skipped.has(pb.s.uid))return false;if(curI>=0&&(pb.i2!=null?pb.i2:pb.i)<=curI)return false;return true};
@@ -668,18 +668,20 @@ function renderTimeline(box,Wk,h){
   const sw=can?`<div class="tlsw" id="tlSw" role="switch" tabindex="0" aria-checked="${mus()}"><span class="tlswl"><em class="au au-music">${AUD_SVG.music}</em>Musik &amp; <em class="au au-podcast">${AUD_SVG.podcast}</em>Podcast</span>${own?`<button class="tlrs" id="tlAudReset" aria-label="Alles auf Smart">↺</button>`:""}<i class="tlswk"></i></div>`:"";
   const copy=tlCopy&&!mus()?`<div class="tlcopy"><span><b>${pauseText(tlCopy.v)}</b> kopiert${tlCopy.n?` · ${tlCopy.n}×`:""}</span><button class="btn primary" id="tlCopyOk">Fertig</button></div>`:"";
   const oldR=drag?new Map([...box.querySelectorAll("[data-fk]")].map(e=>[e.dataset.fk,e.getBoundingClientRect()])):null;
-  const oldImg=new Map();box.querySelectorAll(".tlpic img[src]").forEach(im=>{const k=im.getAttribute("src")+"|"+im.className;(oldImg.get(k)||oldImg.set(k,[]).get(k)).push(im)});
+  const oldImg=new Map();box.querySelectorAll(".tlpic img[data-k]").forEach(im=>{const k=im.dataset.k+"|"+im.className;(oldImg.get(k)||oldImg.set(k,[]).get(k)).push(im)});
   box.innerHTML=`<div class="tlhead">${sw}${copy}</div><div class="tl${mus()?" mus":""}${tlCopy&&!mus()?" copying":""}${drag?" moving":""}${tlFace()==="txt"?" txt":""}"><svg class="tlcab" aria-hidden="true"></svg>${html}</div>`;
   const tl=box.querySelector(".tl");
   if(drag){const T0=tl.getBoundingClientRect();drag.grid=[...tl.querySelectorAll(".tlb[data-slot],.tlb.ph")].map(e=>{const r=e.getBoundingClientRect();return {ph:e.classList.contains("ph"),slot:+e.dataset.slot,l:r.left-T0.left,r:r.right-T0.left,t:r.top-T0.top,b:r.bottom-T0.top}})}
-  if(oldImg.size)tl.querySelectorAll(".tlpic img[src]").forEach(im=>{const l=oldImg.get(im.getAttribute("src")+"|"+im.className);if(l&&l.length)im.replaceWith(l.pop())});
+  tl.querySelectorAll(".tlpic img[data-th]").forEach(im=>{const [ex,o,col,a]=JSON.parse(im.dataset.th),k=ex+"|"+JSON.stringify(o)+"|"+col+"|"+a;
+    const l=oldImg.get(k+"|"+im.className);if(l&&l.length){im.replaceWith(l.pop());return}
+    if(TLIMG[k]){im.src=TLIMG[k];im.dataset.k=k;im.removeAttribute("data-th")}});
   if(oldR&&oldR.size)box.querySelectorAll("[data-fk]").forEach(e=>{const o=oldR.get(e.dataset.fk);if(!o)return;const n=e.getBoundingClientRect(),dx=o.left-n.left,dy=o.top-n.top;
     if(Math.abs(dx)<1&&Math.abs(dy)<1)return;e.style.transition="none";e.style.transform=`translate(${dx}px,${dy}px)`;
     requestAnimationFrame(()=>requestAnimationFrame(()=>{e.style.transition="transform .2s ease";e.style.transform=""}))});
   const cab=()=>tlCable(tl,boxes,colOf,mus()?(s=>audioOf(s,AM)==="music"?"#5BE38C":"#B18CFF"):null,curI);cab();box._cab=cab;
   if(oldR&&oldR.size){const t0=performance.now(),fl=()=>{if(!tl.isConnected)return;cab();if(performance.now()-t0<260)requestAnimationFrame(fl)};requestAnimationFrame(fl)}
   tl.addEventListener("dragstart",e=>e.preventDefault());
-  tlFillImgs(tl,cab);
+  if(!drag)tlFillImgs(tl,cab); // während des Ziehens keine neuen 3D-Bilder rechnen
   const ad=tl.querySelector(".tladd");if(ad){ad.onclick=()=>h.onAdd();ad.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();h.onAdd()}}}
   if(!box._tmBlock){box._tmBlock=1;box.addEventListener("touchmove",e=>{if(tlDrag)e.preventDefault()},{passive:false})}
   const flip=()=>{tlMode=mus()?"pause":"music";tlCopy=null;tlMove=null;h.redraw()};
@@ -719,7 +721,7 @@ function renderTimeline(box,Wk,h){
   if(drag)return;
   requestAnimationFrame(()=>{
     if(!box.isConnected||!tl.isConnected)return; // inzwischen neu gezeichnet – der neue Durchlauf scrollt
-    let el=null,blk="center";
+    let el=null,blk="nearest"; // nur scrollen, wenn die Stelle sonst nicht zu sehen wäre
     if(h.curKey&&h.curKey!==tlAutoKey){tlAutoKey=h.curKey;tlFocus=null;el=box.querySelector(".tlb.now,.tlb.next");blk="start"} // neue Stelle im Workout: aktuelle Übung nach oben
     else if(tlFocus){el=box.querySelector(`[data-k="${CSS.escape(tlFocus)}"]`);tlFocus=null}
     if(el)try{el.scrollIntoView({block:blk})}catch(_){}
@@ -788,8 +790,10 @@ function renderTimeline(box,Wk,h){
     const end=()=>{window.removeEventListener("pointermove",pm);window.removeEventListener("touchmove",tm);window.removeEventListener("pointerup",end);window.removeEventListener("touchend",end);window.removeEventListener("touchcancel",end);
       cancelAnimationFrame(raf);gh.remove();const d=tlDrag;tlDrag=null;if(!d)return;
       const pl=d.plan||{kind:"none"};
-      if(pl.kind==="move"){tlFocus="b|"+d.src.uid+"|"+d.src.set;h.onMove(d.src.uid,d.src.set,pl.after&&pl.after.uid,pl.after&&pl.after.set,false)}
-      else if(pl.kind==="reorder"&&h.onReorder){tlFocus="b|"+pl.uid+"|"+pl.to;h.onReorder(pl.uid,pl.from,pl.to)}
+      const sc=scroller,sy=sc?sc.scrollTop:scrollY,keep=()=>{if(sc)sc.scrollTop=sy;else window.scrollTo(0,sy)};
+      tlFocus=null;requestAnimationFrame(()=>{keep();requestAnimationFrame(keep)});
+      if(pl.kind==="move"){h.onMove(d.src.uid,d.src.set,pl.after&&pl.after.uid,pl.after&&pl.after.set,false)}
+      else if(pl.kind==="reorder"&&h.onReorder){h.onReorder(pl.uid,pl.from,pl.to)}
       else renderTimeline(box,Wk,h)};
     window.addEventListener("pointermove",pm);window.addEventListener("touchmove",tm,{passive:false});
     window.addEventListener("pointerup",end);window.addEventListener("touchend",end);window.addEventListener("touchcancel",end);

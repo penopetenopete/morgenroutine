@@ -672,3 +672,10 @@ body.esel #essen{padding-bottom:170px}
 .row .lnk.mix{border-color:var(--mix);color:var(--mix);background:#062a22}
 /* Pause kopieren: Leiste schwebt unten, nichts verschiebt sich */
 .tlhead .tlcopy{position:fixed;left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:40;margin:0;background:#10262b;box-shadow:0 10px 30px rgba(0,0,0,.55)}
+/* Ziehen: Kabel-Punkte pausieren, Schrift-Ansicht mit L/R */
+.tl.moving .tlcab .cb2{animation:none}
+.tlsd{position:absolute;left:4px;right:4px;bottom:4px;display:flex;justify-content:space-between;pointer-events:none}
+.tlsd i{font-style:normal;font-family:var(--f-display);font-weight:700;font-size:.6rem;line-height:14px;color:#0B0F14;background:var(--c);border-radius:5px;padding:0 4px}
+.tlb.lr .tlft small{margin-bottom:2px}
+.tlb.lr .tlft small,.tlft:has(.tlsd) small{padding:0 16px;white-space:nowrap}
+.tlsd.one.r{justify-content:flex-end}
