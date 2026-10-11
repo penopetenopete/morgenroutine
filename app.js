@@ -1899,7 +1899,7 @@ function backupOk(p){
   const NO="Datei passt nicht";
   if(!isObj(p)||p.all!==true||!isObj(p.S))return NO;
   const s=p.S;
-  if(s.routines&&(!Array.isArray(s.routines)||!s.routines.every(r=>!r||routineOk(r))))return NO;
+  if(s.routines!==undefined&&(!Array.isArray(s.routines)||!s.routines.every(r=>!r||routineOk(r))))return NO;
   if(s.morgenR&&!routineOk(s.morgenR))return NO;
   if(s.g===null||s.last===null)return NO;
   if(Array.isArray(s.plans)&&!s.plans.every(x=>x&&x.days!=null))return NO;

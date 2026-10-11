@@ -124,6 +124,8 @@ const FAELLE = {
   "Hülle: ohne all": { huelle: true, f: p => { delete p.all; return p; } },
   "Hülle: S als Array": { huelle: true, f: p => { p.S = []; return p; } },
   "routines als Zahl": { f: p => { p.S.routines = 5; } },
+  "routines gleich null": { f: p => { p.S.routines = null; } },
+  "routines gleich 0": { f: p => { p.S.routines = 0; } },
   "Routine mit days als Zahl": { f: p => { p.S.routines[0].days = 5; } },
   "Routine mit leerem days": { f: p => { p.S.routines[0].days = []; } },
   "Tag ohne items": { f: p => { delete p.S.routines[0].days[0].items; } },
@@ -138,7 +140,7 @@ const FAELLE = {
   "essen.goals gleich null": { essen: true, f: p => { p.essen.goals = null; } },
 };
 
-test("Ablehnung: sechzehn Eingaben ergeben „Datei passt nicht“, der Speicher bleibt unverändert", async () => {
+test("Ablehnung: achtzehn Eingaben ergeben „Datei passt nicht“, der Speicher bleibt unverändert", async () => {
   for (const [name, fall] of Object.entries(FAELLE)) {
     let p = await frisch();
     const q = fall.f(p);
@@ -149,7 +151,7 @@ test("Ablehnung: sechzehn Eingaben ergeben „Datei passt nicht“, der Speicher
     assert.equal(h.A.restoreData(p), NO, name);
     assert.deepEqual(host(h.dump()), vorher, name);
   }
-  assert.equal(Object.keys(FAELLE).length, 16);
+  assert.equal(Object.keys(FAELLE).length, 18);
 });
 
 test("Ablehnung nur bei Startbruch: mit genau diesen Daten startet die App nicht", async () => {
