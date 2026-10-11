@@ -927,7 +927,7 @@ function mount(el){
   el.addEventListener("pointerup",()=>drag=null);el.addEventListener("pointercancel",()=>drag=null);
 }
 /* Vorschaubild (für Listen) */
-const thumbs={};
+const thumbs={};let GEN=0; // zählt Bild-Renderings in den gemeinsamen Renderer (Bühne danach neu zeichnen)
 /* Fertige Figurenbilder dauerhaft speichern (IndexedDB) → beim nächsten Öffnen nicht neu rendern.
    Schlüssel enthält Look, Schattierung und eine Prüfsumme der Bewegung – ändert sich eine Übung, wird neu gerendert. */
 const FIG_REV="1"; // hochzählen, wenn sich Figur/Requisiten/Kamera allgemein ändern
@@ -949,7 +949,7 @@ function thumb(e,o){
   const s=show(e,o);const pick=s.length>2?s[1]:s[0];draw(pick,o.mode==="hold"?0:1);
   const tc=new T.PerspectiveCamera(35,1,.05,50);dist*=.92;placeCam(tc);
   const pr=renderer.getPixelRatio(),sz=renderer.getSize(new T.Vector2());
-  renderer.setPixelRatio(1);renderer.setSize(128,128,false);renderer.render(scene,tc);
+  GEN++;  renderer.setPixelRatio(1);renderer.setSize(128,128,false);renderer.render(scene,tc);
   const src=renderer.domElement.toDataURL("image/png");
   renderer.setPixelRatio(pr);renderer.setSize(sz.x,sz.y,false);
   [cur,curOpt,curProps,yaw,pitch,dist]=save;target=save[6];
@@ -981,7 +981,7 @@ function tlThumb(e,o,hex,size=192,asp=1){
     target=box.getCenter(new T.Vector3());dist=Math.max(hExt/2/tv,diag/2/th)*1.06+diag/2;
     const tc=new T.PerspectiveCamera(35,asp,.05,50);placeCam(tc);
     const pr=renderer.getPixelRatio(),sz=renderer.getSize(new T.Vector2());
-    renderer.setPixelRatio(1);renderer.setSize(Math.round(size*asp),size,false);renderer.render(scene,tc);
+    GEN++;    renderer.setPixelRatio(1);renderer.setSize(Math.round(size*asp),size,false);renderer.render(scene,tc);
     tlThumbs[key]=renderer.domElement.toDataURL("image/png");pcPut(pk,tlThumbs[key]);
     renderer.setPixelRatio(pr);renderer.setSize(sz.x,sz.y,false);
   }finally{
@@ -1006,7 +1006,7 @@ function previewStart(e,o,cv){
 function previewStop(){if(!pv)return false;cancelAnimationFrame(pv.raf);pv=null;return true}
 window.Figur={EX,EXB,STEPS,PLATE,plateSet,kgText,mount,show,draw,segAt,seqDur,render,sizeTo,setMirror,resetCam,thumb,tlThumb,previewStart,previewStop,get previewing(){return !!pv},
   setShade:m=>{if(fillMat.uniforms.uMode.value!==m){Object.keys(thumbs).forEach(k=>delete thumbs[k]);Object.keys(tlThumbs).forEach(k=>delete tlThumbs[k])}fillMat.uniforms.uMode.value=m},
-  get cacheReady(){return PC.ready},whenReady:PC.whenReady,
+  get cacheReady(){return PC.ready},get gen(){return GEN},whenReady:PC.whenReady,
   /* Look der Figur: null = dunkel (Original); {base:"#hex",out:"#hex",gear:"#hex",load:"#hex",grid:"#hex",gridA,shadow} */
   setLook:L=>{const U=fillMat.uniforms;Object.keys(tlThumbs).forEach(k=>delete tlThumbs[k]);
 LOOK=L;Object.keys(thumbs).forEach(k=>delete thumbs[k]);

@@ -1692,9 +1692,10 @@ function frame(t){
 const LEAD_MS=3000;let leadSec=-1;
 /* Pro Bild nur schreiben, was sich wirklich ändert (spart Neuberechnen von Layout/Stil auf langsamen Handys) */
 const TXC={};function tx(id){return TXC[id]||(TXC[id]={el:$(id),set v(x){if(this.el.textContent!==x)this.el.textContent=x},set c(x){if(this.el.className!==x)this.el.className=x},set h(x){x=!!x;if(this.el.hidden!==x)this.el.hidden=x}})}
-let stillK=null; // zuletzt gezeichnetes Standbild (Pause/Vorlauf) – gleiches Bild nicht 60× pro Sekunde neu rendern
+let stillK=null,figGen=-1; // zuletzt gezeichnetes Standbild (Pause/Vorlauf) – gleiches Bild nicht 60× pro Sekunde neu rendern
 function drawPlayer(dt){
   if(F.previewing){stillK=null;return}
+  if(F.gen!==figGen){figGen=F.gen;stillK=null} // ein Vorschaubild wurde gerechnet → Bühne neu zeichnen
   const covered=!$("scrim").hidden;let r3=true; // offenes Fenster (Übersicht, Editor) verdeckt die Figur → nicht rendern
   const s=steps[idx];if(!s||!clip)return;
   const paused=!!W.pauseAt,el=elapsed();
