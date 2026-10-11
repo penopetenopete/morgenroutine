@@ -16,7 +16,9 @@
   // ---------- Speicher ----------
   let S = load();
   function load() { try { return Object.assign({ log: [], rewind: 2, short: 20 }, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) { return { log: [], rewind: 2, short: 20 }; } }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  // Speicherfehler (12.10.2026): gemeinsame, gedrosselte Meldung aus app.js; ohne sie (alte app.js im Cache) die eigene Meldung
+  function storeFail() { try { if (window.AppKit && window.AppKit.storeFail) window.AppKit.storeFail(); else toast("Speichern ging nicht"); } catch (e) {} }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { storeFail(); } }
   function log(text, kind) {
     if (T) { T.addLog({ text, kind: kind || "" }).catch(() => {}); return; }
     S.log.unshift({ t: Date.now(), text, kind: kind || "" }); S.log = S.log.slice(0, 200); save();
@@ -31,8 +33,9 @@
   async function challenge(v) { const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)); return btoa(String.fromCharCode(...new Uint8Array(d))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
   async function login() {
     const v = randStr(64), st = randStr(16);
-    localStorage.setItem(KEY + "_pkce", JSON.stringify({ v, st, redirect: REDIRECT }));
-    const p = new URLSearchParams({ response_type: "code", client_id: CLIENT_ID, scope: SCOPES, code_challenge_method: "S256", code_challenge: await challenge(v), redirect_uri: REDIRECT, state: st });
+    // Ohne gespeicherten PKCE-Zustand ließe sich die Rückkehr nicht zuordnen: abbrechen, mit Meldung, ohne Drossel (12.10.2026)
+    try { localStorage.setItem(KEY + "_pkce", JSON.stringify({ v, st, redirect: REDIRECT })); } catch (e) { toast("Speichern ging nicht"); return; }
+    const p =new URLSearchParams({ response_type: "code", client_id: CLIENT_ID, scope: SCOPES, code_challenge_method: "S256", code_challenge: await challenge(v), redirect_uri: REDIRECT, state: st });
     const url = "https://accounts.spotify.com/authorize?" + p;
     if (NATIVE) await CAP.Plugins.Browser.open({ url }); else location.href = url;
   }

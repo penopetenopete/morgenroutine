@@ -43,8 +43,9 @@ let E=null;
 try{E=JSON.parse(localStorage.getItem(EK)||"null")}catch(_){}
 if(!E||!E.foods)E=seed();
 /* 09.10.2026: kein Weizengluten mehr im Frühstück */
-if(!(E.mig>=1)){const m=E.meals&&E.meals.fruehstueck;if(m)m.items=m.items.filter(i=>i.food!=="gluten");E.mig=1;try{localStorage.setItem(EK,JSON.stringify(E))}catch(_){}}
-function esave(){try{localStorage.setItem(EK,JSON.stringify(E))}catch(_){toast("Speichern ging nicht")}}
+if(!(E.mig>=1)){const m=E.meals&&E.meals.fruehstueck;if(m)m.items=m.items.filter(i=>i.food!=="gluten");E.mig=1;esave()}
+/* 12.10.2026: Speicherfehler über die gemeinsame, gedrosselte Meldung aus app.js (Rückfall: direkter Toast, falls eine alte app.js im Cache liegt) */
+function esave(){try{localStorage.setItem(EK,JSON.stringify(E))}catch(_){if(K.storeFail)K.storeFail();else toast("Speichern ging nicht")}}
 const day=k=>E.days[k]||(E.days[k]={e:[]});
 const dayGet=k=>E.days[k]||{e:[]};
 function tidyDay(k){const d=E.days[k];if(d&&!d.e.length&&!(d.acts&&d.acts.length))delete E.days[k]}

@@ -58,3 +58,65 @@ test("Drossel: höchstens eine Meldung je 10 Sekunden, Rückstellen der Uhr meld
   uhr = 500; h.A.save();
   assert.equal(toastText(h), MELDUNG);
 });
+
+test("laufendes Workout: saveW() wirft nicht und meldet", () => {
+  const h = loadApp();
+  h.A.W = { id: "t", ended: false };
+  h.failSet = () => true;
+  assert.doesNotThrow(() => h.A.saveW());
+  assert.equal(toastText(h), MELDUNG);
+  h.A.W = null;
+});
+
+test("Ernährung: esave() meldet über die gemeinsame Meldung", () => {
+  const h = loadApp({}, { withEssenSpotify: true });
+  h.el("toast").textContent = "";
+  h.failSet = () => true;
+  const E = h.ctx.TrainingEssen;
+  assert.doesNotThrow(() => E.set(E.get()));
+  assert.equal(toastText(h), MELDUNG);
+});
+
+test("Spotify-Einstellungen: save() meldet über die gemeinsame Meldung", async () => {
+  const h = loadApp({}, { withEssenSpotify: true });
+  h.el("toast").textContent = "";
+  h.failSet = () => true;
+  await h.ctx.TrainingSpotify.setSmart(false);
+  assert.equal(toastText(h), MELDUNG);
+});
+
+test("gemeinsame Drossel: Fehler in Training und Ernährung zählen zusammen", () => {
+  let uhr = 1000;
+  const h = loadApp({}, { withEssenSpotify: true, now: () => uhr });
+  const leeren = () => { h.el("toast").textContent = ""; };
+  leeren();
+  h.failSet = () => true;
+  uhr = 1000; h.A.save();
+  assert.equal(toastText(h), MELDUNG);
+  leeren();
+  uhr = 2000;
+  const E = h.ctx.TrainingEssen;
+  E.set(E.get());
+  assert.equal(toastText(h), "");
+});
+
+test("Spotify-Anmeldung: scheitert das Speichern, Meldung und keine Anmeldeseite", async () => {
+  const h = loadApp({}, { withEssenSpotify: true });
+  h.ctx.TrainingSpotify.openMenu();
+  await new Promise(r => setImmediate(r));
+  const login = h.el("spLogin").onclick;
+  assert.equal(typeof login, "function");
+  const href = h.ctx.location.href;
+  h.failSet = k => k.endsWith("_pkce");
+  await assert.doesNotReject(async () => login());
+  assert.equal(h.el("spNow").textContent, MELDUNG);
+  assert.equal(h.ctx.location.href, href);
+});
+
+test("Start mit vollem Speicher: läuft durch, S ist da, Meldung steht", () => {
+  let h;
+  assert.doesNotThrow(() => { h = loadApp({}, { withEssenSpotify: true, failSet: () => true }); });
+  assert.equal(typeof h.A.S(), "object");
+  assert.equal(Array.isArray(h.A.S().routines), true);
+  assert.equal(toastText(h), MELDUNG);
+});

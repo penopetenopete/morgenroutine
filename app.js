@@ -1130,7 +1130,7 @@ function buildSteps(Wk){
 
 let W=null,steps=[],idx=0;
 function loadActive(){try{const a=JSON.parse(localStorage.getItem(ACT)||"null");return a&&!a.ended?a:null}catch(_){return null}}
-function saveW(){if(!W)return;try{localStorage.setItem(ACT,JSON.stringify(W))}catch(_){}}
+function saveW(){if(!W)return;try{localStorage.setItem(ACT,JSON.stringify(W))}catch(_){storeFail()}}
 function startWorkout(){
   const items=dayItems().map(it=>({uid:it.uid,ex:it.ex,o:clone(it.o),base:it.base?clone(it.base):null,pair:it.pair?clone(it.pair):null,link:!!it.link,so:clone(it.so||{}),status:it.status,planned:true,sf:!!it.sf,um:it.um,mix:!!it.mix}));
   W={v:1,id:"w"+now().toString(36),rid:R.id,rname:R.name,day:rDay,days:R.days.length,settings:clone(R.settings),pauses:clone(R.pauses||{}),audio:clone(R.audio||{}),
