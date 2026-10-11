@@ -71,7 +71,11 @@ function migrateOld(s){
   (o.log||[]).forEach(l=>s.log.push({d:l.d,t:l.t,rid:"morgen",rname:"Morgenroutine",day:0,items:[]}));
   const lg=(o.log||[]).slice(-1)[0];if(lg)s.last.morgen={day:0,d:lg.d};
 }
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(_){}}
+/* Speicherfehler (12.10.2026): höchstens ein Hinweis je 10 s, gemeinsam für alle Speicher (Training, Workout, Ernährung, Spotify); wirft nie */
+const STORE_WARN_MS=10000;
+let storeWarnAt=null;
+function storeFail(){try{const t=now();if(storeWarnAt!=null&&t>=storeWarnAt&&t-storeWarnAt<STORE_WARN_MS)return;toast("Speichern ging nicht");storeWarnAt=t}catch(_){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(_){storeFail()}}
 const gv=k=>S.g[k]!=null?S.g[k]:G_DEF[k];
 /* Look: „hell“ (Sand, Standard) oder „dunkel“ */
 function applyTheme(){const t=gv("theme")||"hell";document.documentElement.dataset.theme=t;const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==="hell"?"#F2EEE6":"#0B0F14";
@@ -1920,7 +1924,7 @@ const a=loadActive();if(a)startPlayer(a);
 requestAnimationFrame(frame);
 checkImport();checkData();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
-window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S};
+window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
 window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
 })();
