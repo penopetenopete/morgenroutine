@@ -241,3 +241,23 @@ test("Knopf: „Alles ersetzen“ lädt nur nach Erfolg neu; ungültige Eingabe 
   assert.equal(toastText(h3), FAIL);
   assert.equal(h3.replaced.length, 0);
 });
+
+/* Kein Spotify in der Sicherung (D-03): erfundene Zugangstexte im Spotify-Speicher */
+const SPOTIFY = JSON.stringify({ tok: { access: "GEHEIM-ZUGANG", refresh: "GEHEIM-ERNEUERN" }, log: [], rewind: 2, short: 20 });
+
+test("Sicherung enthält keinen Spotify-Zugang: genau v, all, S, cat, essen", async () => {
+  const h = loadApp({ ...gewachsen(false), spotify_labor_v1: SPOTIFY }, OPT);
+  const p = await h.A.readData(await h.A.dataLink());
+  assert.deepEqual(Object.keys(p).sort(), ["S", "all", "cat", "essen", "v"]);
+  const text = JSON.stringify(p);
+  assert.equal(text.includes("GEHEIM-ZUGANG"), false);
+  assert.equal(text.includes("GEHEIM-ERNEUERN"), false);
+  assert.equal(text.includes("spotify_labor_v1"), false);
+});
+
+test("Wiederherstellung lässt den Spotify-Speicher unverändert", async () => {
+  const p = await frisch();
+  const h = loadApp({ ...gewachsen(false), spotify_labor_v1: SPOTIFY }, OPT);
+  assert.equal(h.A.restoreData(p), null);
+  assert.equal(h.dump().spotify_labor_v1, SPOTIFY);
+});
