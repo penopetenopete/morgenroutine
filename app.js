@@ -1875,11 +1875,50 @@ async function readData(t){
   if(!m)throw new Error("Kein Daten-Link");
   const p=JSON.parse(await zip(b64u.dec(m[1]),true));if(!p||!p.all||!p.S)throw new Error("Kein Daten-Link");return p;
 }
+/* Prüfung vor dem Schreiben (12.10.2026): lehnt nur ab, womit die App nicht mehr starten würde (oder was der Start verwerfen würde).
+   Nebenfelder, null und Namen bleiben ungeprüft – echte, lange genutzte Daten dürfen nie abgewiesen werden. Rückgabe null = passt, sonst der Meldungstext */
+const isObj=v=>v!==null&&typeof v==="object"&&!Array.isArray(v);
+function routineOk(r){
+  if(!r||typeof r!=="object"||!Array.isArray(r.days)||!r.days.length)return false;
+  return r.days.every(d=>d&&typeof d==="object"&&Array.isArray(d.items)&&d.items.every(it=>it!=null));
+}
+function backupOk(p){
+  const NO="Datei passt nicht";
+  if(!isObj(p)||p.all!==true||!isObj(p.S))return NO;
+  const s=p.S;
+  if(s.routines&&(!Array.isArray(s.routines)||!s.routines.every(r=>!r||routineOk(r))))return NO;
+  if(s.morgenR&&!routineOk(s.morgenR))return NO;
+  if(s.g===null||s.last===null)return NO;
+  if(Array.isArray(s.plans)&&!s.plans.every(x=>x&&x.days!=null))return NO;
+  if(s.cats&&(!Array.isArray(s.cats)||!s.cats.every(c=>c!=null)))return NO;
+  const e=p.essen;
+  if(e&&(!e.foods||e.days==null||e.goals==null))return NO;
+  return null;
+}
+/* Wiederherstellung als Ganzes: bei Fehler Rücknahme aller geschriebenen Schlüssel; nicht geschriebene werden nie angefasst */
+function undoWrites(done,old){
+  const left=[];
+  for(const k of done.slice().reverse()){try{if(old[k]==null)localStorage.removeItem(k);else localStorage.setItem(k,old[k])}catch(_){left.push(k)}}
+  left.forEach(k=>{try{localStorage.removeItem(k)}catch(_){}});
+  left.forEach(k=>{try{if(old[k]!=null)localStorage.setItem(k,old[k])}catch(_){}});
+}
+function restoreData(p){
+  const bad=backupOk(p);if(bad)return bad;
+  if((W&&!W.ended)||loadActive())return "Erst Workout beenden";
+  const list=[[KEY,p.S]];if(p.cat)list.push([CAT,p.cat]);if(p.essen)list.push(["essen_v1",p.essen]);
+  const old={},done=[];
+  try{list.forEach(([k])=>{old[k]=localStorage.getItem(k)})}catch(_){return "Speichern ging nicht"}
+  try{for(const [k,v] of list){localStorage.setItem(k,JSON.stringify(v));done.push(k)}}
+  catch(_){undoWrites(done,old);return "Speichern ging nicht"}
+  try{localStorage.removeItem(ACT)}catch(_){}
+  return null;
+}
 function offerData(p){
+  const bad=backupOk(p);if(bad){toast(bad);return}
   const r=(p.S.routines||[]).length,w=(p.S.log||[]).length;
   openSheet("Daten übertragen","Alles übernehmen?",`<div class="note">${r} eigene ${r===1?"Routine":"Routinen"}, ${w} ${w===1?"Workout":"Workouts"} in der Statistik, Einstellungen und Morgenroutine${p.essen?", Ernährung":""}.</div><div class="note warnbox">Ersetzt alles, was in dieser App gespeichert ist.</div><button class="btn primary big" id="dtOk">Alles ersetzen</button><button class="btn ghost" id="dtNo">Abbrechen</button>`);
   $("dtOk").onclick=()=>{
-    try{localStorage.setItem(KEY,JSON.stringify(p.S));if(p.cat)localStorage.setItem(CAT,JSON.stringify(p.cat));if(p.essen)localStorage.setItem("essen_v1",JSON.stringify(p.essen));localStorage.removeItem(ACT)}catch(e){toast("Speichern ging nicht");return}
+    const m=restoreData(p);if(m){toast(m);return}
     closeSheet();location.replace(location.pathname);
   };
   $("dtNo").onclick=closeSheet;
@@ -1931,5 +1970,5 @@ checkImport();checkData();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
 })();
