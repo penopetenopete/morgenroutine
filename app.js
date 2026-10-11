@@ -16,6 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1";
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
+const APP_VER="28"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -355,7 +356,7 @@ function renderHome(){
   /* Einstellungen (Fenster) */
   document.querySelectorAll("[data-shade]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.shade===gv("shade")));
   document.querySelectorAll("button[data-theme]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.theme===(gv("theme")||"hell")));
-  $("snd").checked=gv("sound");$("vib").checked=gv("vib");$("gConfirm").checked=gv("confirm");$("gLead").checked=gv("lead");$("gTips").checked=gv("tips");
+  if($("appVer"))$("appVer").textContent="Version "+APP_VER;$("snd").checked=gv("sound");$("vib").checked=gv("vib");$("gConfirm").checked=gv("confirm");$("gLead").checked=gv("lead");$("gTips").checked=gv("tips");
   $("gPauses").innerHTML=wheelRow("gRest","Pause nach jedem Satz",EXB.balance,"rest")+wheelRow("gSide","Pause zwischen den Seiten",EXB.balance,"sw");
   $("gPauses").querySelectorAll(".wheelrow").forEach(row=>{const k=row.dataset.k==="rest"?"rest":"side";initWheel(row,EXB.balance,{get:()=>gv(k),set:v=>setG(k,v)})});
   const a=loadActive();
@@ -760,11 +761,15 @@ function renderTimeline(box,Wk,h){
   tl.querySelectorAll(".tlpic img[data-th]").forEach(im=>{const [ex,o,col,a]=JSON.parse(im.dataset.th),k=ex+"|"+JSON.stringify(o)+"|"+col+"|"+a;
     const l=oldImg.get(k+"|"+im.className);if(l&&l.length){im.replaceWith(l.pop());return}
     if(TLIMG[k]){im.src=TLIMG[k];im.dataset.k=k;im.removeAttribute("data-th")}});
+  const mvEls=[];
   if(oldR&&oldR.size)box.querySelectorAll("[data-fk]").forEach(e=>{const o=oldR.get(e.dataset.fk);if(!o)return;const n=e.getBoundingClientRect(),dx=o.left-n.left,dy=o.top-n.top;
-    if(Math.abs(dx)<1&&Math.abs(dy)<1)return;e.style.transition="none";e.style.transform=`translate(${dx}px,${dy}px)`;
+    if(Math.abs(dx)<1&&Math.abs(dy)<1)return;mvEls.push(e);e.style.transition="none";e.style.transform=`translate(${dx}px,${dy}px)`;
     requestAnimationFrame(()=>requestAnimationFrame(()=>{e.style.transition="transform .2s ease";e.style.transform=""}))});
   const cab=()=>tlCable(tl,boxes,colOf,mus()?(s=>audioOf(s,AM)==="music"?"#5BE38C":"#B18CFF"):null,curI);cab();box._cab=cab;
-  if(oldR&&oldR.size){const t0=performance.now(),fl=()=>{if(!tl.isConnected)return;cab();if(performance.now()-t0<260)requestAnimationFrame(fl)};requestAnimationFrame(fl)}
+  // Kabel mitzeichnen, bis wirklich alle Kästchen angekommen sind (auf langsamen Handys dauert das Rutschen länger als 0,2 s)
+  if(mvEls.length){const t0=performance.now(),fl=()=>{if(!tl.isConnected)return;cab();
+    const moving=mvEls.some(e=>e.isConnected&&(e.style.transform||getComputedStyle(e).transform!=="none"));
+    if(moving&&performance.now()-t0<1500)requestAnimationFrame(fl);else requestAnimationFrame(()=>{if(tl.isConnected)cab()})};requestAnimationFrame(fl)}
   tl.addEventListener("dragstart",e=>e.preventDefault());
   if(!drag)tlFillImgs(tl,cab); // während des Ziehens keine neuen 3D-Bilder rechnen
   const ad=tl.querySelector(".tladd");if(ad){ad.onclick=()=>h.onAdd();ad.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();h.onAdd()}}}
