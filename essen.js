@@ -4,6 +4,7 @@
    food:  {id,name,brand?,base:"g"|"stk",kcal,p,c,f,fib,stkG?,def?,src:"own"|"bls"|"off",code?}  Werte pro 100 g bzw. pro Stück
    entry: {id,slot,food,amt,u?:"stk",g?:{id,name,tpl?}}   g = eingefügte Mahlzeit (Kopie, Vorlage bleibt unverändert)
    tpl:   {id,name,slot?,items:[{food,amt,u?}]}
+   Unlesbare Daten: Rohwert bleibt unter "essen_defekt_v1" erhalten (12.10.2026, nie exportiert, ohne Bedienelement).
    Andockstelle für Claude: Link #e=<base64url(deflate-raw(JSON))>, Format siehe importEssen().
    Lebensmittel-Quellen: eigene Liste · BLS 4.0 (bls.json, offline, Max Rubner-Institut, CC BY 4.0) · Open Food Facts (online). */
 (function(){
@@ -39,8 +40,10 @@ function seed(){
   };
   return {v:1,goals:{kcal:2250,p:141,f:62,c:281},kg:87,burnIn:false,foods,meals,days:{}};
 }
-let E=null;
-try{E=JSON.parse(localStorage.getItem(EK)||"null")}catch(_){}
+let E=null,eraw=null;
+try{eraw=localStorage.getItem(EK);E=JSON.parse(eraw||"null")}catch(_){}
+/* 12.10.2026: unlesbare Daten nicht ersatzlos überschreiben – Rohwert bleibt unter essen_defekt_v1 (nur wenn dort noch nichts liegt) */
+if(eraw&&(!E||!E.foods)){if(K.keepBroken)K.keepBroken("essen_defekt_v1",eraw);toast("Daten beschädigt – Kopie aufbewahrt")}
 if(!E||!E.foods)E=seed();
 /* 09.10.2026: kein Weizengluten mehr im Frühstück */
 if(!(E.mig>=1)){const m=E.meals&&E.meals.fruehstueck;if(m)m.items=m.items.filter(i=>i.food!=="gluten");E.mig=1;esave()}

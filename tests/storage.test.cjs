@@ -120,3 +120,44 @@ test("Start mit vollem Speicher: läuft durch, S ist da, Meldung steht", () => {
   assert.equal(Array.isArray(h.A.S().routines), true);
   assert.equal(toastText(h), MELDUNG);
 });
+
+const DEFEKT = "Daten beschädigt – Kopie aufbewahrt";
+
+test("unlesbare Trainingsdaten: Rohkopie bleibt, Meldung, App läuft mit Startwerten", () => {
+  const h = loadApp({ training_v1: '{"kaputt' });
+  assert.equal(h.dump().training_defekt_v1, '{"kaputt');
+  assert.equal(toastText(h), DEFEKT);
+  assert.equal(Array.isArray(h.A.S().routines), true);
+});
+
+test("vorhandene Kopie wird nicht überschrieben", () => {
+  const h = loadApp({ training_v1: '{"kaputt', training_defekt_v1: "ALT" });
+  assert.equal(h.dump().training_defekt_v1, "ALT");
+});
+
+test("training_v1 ohne Objekt (Array): Kopie unter training_defekt_v1", () => {
+  const h = loadApp({ training_v1: "[1,2]" });
+  assert.equal(h.dump().training_defekt_v1, "[1,2]");
+});
+
+test("lesbare Daten: keine Kopie, keine Meldung, auch beim zweiten Start", () => {
+  const h1 = loadApp({});
+  h1.A.save();
+  const h2 = loadApp(h1.dump());
+  for (const h of [h1, h2]) {
+    assert.deepStrictEqual(Object.keys(h.dump()).filter(k => k.includes("_defekt_")), []);
+    assert.notEqual(toastText(h), DEFEKT);
+  }
+});
+
+test("unlesbare Ernährungsdaten: Kopie unter essen_defekt_v1, Meldung", () => {
+  const h = loadApp({ essen_v1: '{"kaputt' }, { withEssenSpotify: true });
+  assert.equal(h.dump().essen_defekt_v1, '{"kaputt');
+  assert.equal(toastText(h), DEFEKT);
+  assert.equal(typeof h.ctx.TrainingEssen.get().foods, "object");
+});
+
+test("Ernährungsdaten ohne foods: ebenfalls Kopie", () => {
+  const h = loadApp({ essen_v1: '{"x":1}' }, { withEssenSpotify: true });
+  assert.equal(h.dump().essen_defekt_v1, '{"x":1}');
+});

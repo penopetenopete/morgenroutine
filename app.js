@@ -13,7 +13,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 
 /* =================== SPEICHER =================== */
-const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1";
+const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
 const APP_VER="29"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
@@ -40,9 +40,12 @@ const EXAMPLE={name:"Test · Knie-Block",items:[
   ["walkback",{secs:600,sets:1}],["balance",{secs:60,sets:1}],["tibialis",{reps:20,sets:2}],["stepdown",{reps:10,sets:2}],
   ["poliquin",{reps:15,sets:2}],["atgsplit",{mode:"hold",secs:60,sets:1}],["calf",{reps:20,sets:2}]]};
 
+/* Unlesbare Daten (12.10.2026): Rohwert bleibt unter training_defekt_v1 erhalten (nur wenn dort noch nichts liegt), nie exportiert; die App startet mit Startwerten, die Meldung kommt im Abschnitt START */
+let loadBroken=false;
 let S=load();
 function load(){
-  let s=null;try{s=JSON.parse(localStorage.getItem(KEY)||"null")}catch(_){}
+  let s=null,raw=null;try{raw=localStorage.getItem(KEY);s=JSON.parse(raw||"null")}catch(_){}
+  if(raw&&(!s||typeof s!=="object"||Array.isArray(s))){keepBroken("training_defekt_v1",raw);loadBroken=true;s=null}
   const fresh=!s;
   s=Object.assign({v:1,routines:[],morgen:{items:{},settings:{}},g:{},log:[],last:{},lastRes:{},seeded:false},s||{});
   if(fresh)migrateOld(s);
@@ -75,6 +78,7 @@ function migrateOld(s){
 const STORE_WARN_MS=10000;
 let storeWarnAt=null;
 function storeFail(){try{const t=now();if(storeWarnAt!=null&&t>=storeWarnAt&&t-storeWarnAt<STORE_WARN_MS)return;toast("Speichern ging nicht");storeWarnAt=t}catch(_){}}
+function keepBroken(key,raw){try{if(localStorage.getItem(key)==null)localStorage.setItem(key,raw)}catch(_){}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(_){storeFail()}}
 const gv=k=>S.g[k]!=null?S.g[k]:G_DEF[k];
 /* Look: „hell“ (Sand, Standard) oder „dunkel“ */
@@ -1919,12 +1923,13 @@ setInterval(()=>{if(document.hidden&&W&&!W.ended&&!$("player").hidden){try{catch
 F.mount($("stage"));F.setShade(gv("shade"));muteIcon();
 history.replaceState({s:"home"},"");
 renderHome();
+if(loadBroken)toast("Daten beschädigt – Kopie aufbewahrt");
 if(F&&F.whenReady)F.whenReady.then(()=>{if(!$("home").hidden)renderHome()});
 const a=loadActive();if(a)startPlayer(a);
 requestAnimationFrame(frame);
 checkImport();checkData();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
-window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail};
+window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
 window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
 })();
