@@ -261,3 +261,56 @@ test("Wiederherstellung lässt den Spotify-Speicher unverändert", async () => {
   assert.equal(h.A.restoreData(p), null);
   assert.equal(h.dump().spotify_labor_v1, SPOTIFY);
 });
+
+/* Dateiweg (Gerätetest D-01: keine-datei): in der Hülle öffnet der System-Browser die Seite mit #s= */
+const DATEI = "Datei gespeichert (Downloads)";
+const hülle = (h, open) => {
+  const c = { isNativePlatform: () => true, Plugins: {} };
+  if (open) c.Plugins.Browser = { open };
+  h.ctx.Capacitor = c;
+};
+
+test("saveFile außerhalb der Hülle: Blob-Weg und Toast", async () => {
+  const h = loadApp({}, OPT);
+  assert.equal(await h.A.saveFile(await h.A.dataLink()), "blob");
+  assert.equal(toastText(h), DATEI);
+});
+
+test("saveFile in der Hülle: Browser mit #s=, kein Erfolgs-Toast", async () => {
+  const h = loadApp({}, OPT);
+  let url = null;
+  hülle(h, async o => { url = o.url; });
+  const link = await h.A.dataLink();
+  assert.equal(await h.A.saveFile(link), "browser");
+  assert.ok(url.startsWith("https://example.test/morgenroutine/#s="));
+  assert.equal(url.slice(url.indexOf("#s=") + 3), link.slice(link.indexOf("#d=") + 3));
+  assert.notEqual(toastText(h), DATEI);
+});
+
+test("saveFile in der Hülle: lehnt open ab oder fehlt das Plugin, bleibt das Textfeld (link)", async () => {
+  const h = loadApp({}, OPT);
+  hülle(h, async () => { throw new Error("nein"); });
+  assert.equal(await h.A.saveFile(await h.A.dataLink()), "link");
+  const h2 = loadApp({}, OPT);
+  hülle(h2, null);
+  assert.equal(await h2.A.saveFile(await h2.A.dataLink()), "link");
+});
+
+test("checkSave mit gültiger Nutzlast: Fenster „Sicherung speichern“, Datei erst nach dem Tippen", async () => {
+  const h = loadApp({}, OPT);
+  const link = await h.A.dataLink();
+  h.ctx.location.hash = "#s=" + link.slice(link.indexOf("#d=") + 3);
+  await h.A.checkSave();
+  assert.equal(h.el("shTitle").textContent, "Sicherung speichern");
+  assert.notEqual(toastText(h), DATEI);
+  h.el("svGo").onclick();
+  assert.equal(toastText(h), DATEI);
+});
+
+test("checkSave mit kaputter Nutzlast öffnet kein Fenster", async () => {
+  const h = loadApp({}, OPT);
+  h.ctx.location.hash = "#s=" + "A".repeat(60);
+  await h.A.checkSave();
+  assert.notEqual(h.el("shTitle").textContent, "Sicherung speichern");
+  assert.ok(toastText(h).startsWith("Link kaputt") || toastText(h) === NO);
+});

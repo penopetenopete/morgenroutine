@@ -1858,16 +1858,29 @@ async function dataLink(){
   const p={v:1,all:true,S,cat};try{if(window.TrainingEssen)p.essen=TrainingEssen.get()}catch(_){}
   return APP_URL+"#d="+b64u.enc(await zip(JSON.stringify(p)));
 }
+/* Dateiweg (12.10.2026, Gerätetest D-01: die Android-Hülle legt über den Download-Anker keine Datei ab): in der Hülle öffnet der System-Browser
+   die gehostete Seite mit #s=; dort entsteht die Datei nach einem Tippen. Ohne neue APK (nur das vorhandene Browser-Plugin). Letztes Netz: Link im Textfeld */
+const SAVE_URL_MAX=150000;
+function saveBlob(link){
+  const blob=new Blob([link],{type:"text/plain"}),a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download="training-daten-"+new Date().toISOString().slice(0,10)+".txt";document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);toast("Datei gespeichert (Downloads)");
+}
+function inShell(){const c=window.Capacitor;return !!(c&&typeof c.isNativePlatform==="function"&&c.isNativePlatform())}
+function showLink(link){$("shBody").insertAdjacentHTML("beforeend",`<textarea class="pksearch" rows="4" readonly>${esc(link)}</textarea><div class="note">Feld lange drücken → Alles auswählen → Kopieren.</div>`)}
+async function saveFile(link){
+  if(!inShell()){saveBlob(link);return "blob"}
+  const b=window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser,url=APP_URL+"#s="+link.slice(link.indexOf("#d=")+3);
+  if(b&&typeof b.open==="function"&&url.length<=SAVE_URL_MAX){try{await b.open({url});return "browser"}catch(_){}}
+  showLink(link);return "link";
+}
 function exportAll(){
   openSheet("Daten übertragen","Alles mitnehmen",`<div class="note">Routinen, Einstellungen und Statistik. In der anderen App dann Einstellungen → Daten übertragen → Einfügen.</div><button class="btn primary big" id="dtFile">Als Datei speichern</button><button class="btn" id="dtCopy">Als Link kopieren</button>`);
-  $("dtFile").onclick=async()=>{
-    try{const link=await dataLink(),blob=new Blob([link],{type:"text/plain"}),a=document.createElement("a");
-      a.href=URL.createObjectURL(blob);a.download="training-daten-"+new Date().toISOString().slice(0,10)+".txt";document.body.appendChild(a);a.click();a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href),5000);toast("Datei gespeichert (Downloads)")}catch(e){toast("Ging nicht: "+e.message)}};
+  $("dtFile").onclick=async()=>{try{await saveFile(await dataLink())}catch(e){toast("Ging nicht: "+e.message)}};
   $("dtCopy").onclick=async()=>{
     const link=await dataLink();
     try{await navigator.clipboard.writeText(link);toast("Link kopiert")}
-    catch(_){$("shBody").insertAdjacentHTML("beforeend",`<textarea class="pksearch" rows="4" readonly>${esc(link)}</textarea><div class="note">Feld lange drücken → Alles auswählen → Kopieren.</div>`)}
+    catch(_){showLink(link)}
   };
 }
 async function readData(t){
@@ -1940,6 +1953,16 @@ async function checkData(){
   try{offerData(await readData(h))}catch(e){toast("Link kaputt: "+e.message)}
 }
 window.addEventListener("hashchange",checkData);
+async function checkSave(){
+  const m=location.hash.match(/[#&]s=([A-Za-z0-9_-]+)/);if(!m)return;
+  history.replaceState(history.state,"",location.pathname+location.search);
+  try{
+    const p=await readData("#d="+m[1]),bad=backupOk(p);if(bad){toast(bad);return}
+    openSheet("Daten übertragen","Sicherung speichern",`<button class="btn primary big" id="svGo">Als Datei speichern</button>`);
+    $("svGo").onclick=()=>{saveBlob(APP_URL+"#d="+m[1]);closeSheet()};
+  }catch(e){toast("Link kaputt: "+e.message)}
+}
+window.addEventListener("hashchange",checkSave);
 
 
 /* Im Hintergrund (Homescreen, gesperrt) läuft requestAnimationFrame nicht – Ablauf trotzdem jede Sekunde nachziehen */
@@ -1966,9 +1989,9 @@ if(loadBroken)toast("Daten beschädigt – Kopie aufbewahrt");
 if(F&&F.whenReady)F.whenReady.then(()=>{if(!$("home").hidden)renderHome()});
 const a=loadActive();if(a)startPlayer(a);
 requestAnimationFrame(frame);
-checkImport();checkData();
+checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
 })();
