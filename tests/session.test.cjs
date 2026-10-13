@@ -108,3 +108,59 @@ test("Protokoll: login schreibt genau eine feste deutsche Zeile ohne Adresse, Co
   assert.equal(s.log[0].kind, "o");
   assert.equal(/https?:|code=|state=|verifier/i.test(s.log[0].text), false);
 });
+
+/* ---- Aufgabe 2: Die Rückkehr landet an derselben Stelle ---- */
+
+test("Z1 – 20 s Abstand: dieselbe Stelle, W.res unverändert, Player läuft weiter", () => {
+  const T0 = 1700000000000;
+  const h = loadApp({}, { now: () => T0 });
+  const { W, steps } = buildSession(h, T0);
+  h.A.W = W;
+  h.A.saveW();
+  const dump = h.dump();
+  const resVorher = JSON.stringify(W.res);
+
+  const h2 = loadApp(dump, { now: () => T0 + 20000 });
+  assert.equal(h2.A.W.cur, steps[1].key);
+  assert.equal(h2.A.idx, 1);
+  assert.equal(JSON.stringify(h2.A.W.res), resVorher);
+  assert.equal(h2.A.W.ended, false);
+  assert.equal(h2.el("player").hidden, false);
+});
+
+test("Z2 – 200 s Abstand: Satz 2 aktiv, Zeit nachgerechnet, alte Ergebniszeile bleibt erste", () => {
+  const T0 = 1700000000000;
+  const h = loadApp({}, { now: () => T0 });
+  const { W, steps } = buildSession(h, T0);
+  h.A.W = W;
+  h.A.saveW();
+  const dump = h.dump();
+
+  const h2 = loadApp(dump, { now: () => T0 + 200000 });
+  assert.equal(h2.A.W.cur, steps[3].key);
+  assert.equal(h2.A.idx, 3);
+  assert.equal(h2.A.W.ended, false);
+  assert.equal(h2.A.W.res.a.sets[0].done, 12);
+  assert.equal(h2.A.W.res.a.sets.length, 2);
+  assert.equal(h2.A.W.res.a.time, 72);
+  assert.equal(h2.el("player").hidden, false);
+});
+
+test("Beendete Sitzung wird beim Neuladen nicht fortgesetzt", () => {
+  const T0 = 1700000000000;
+  const h = loadApp({}, { now: () => T0 });
+  const { W } = buildSession(h, T0);
+  h.A.W = W;
+  h.A.saveW();
+  const dump = h.dump();
+  dump.training_active_v1 = JSON.stringify(Object.assign({}, W, { ended: true }));
+
+  const h2 = loadApp(dump, { now: () => T0 + 20000 });
+  assert.equal(h2.A.W, null);
+  // Zusätzliches Messergebnis (13.10.2026): der DOM-Stub von harness.cjs legt jedes Element mit
+  // hidden:false an; das echte index.html hat #player hingegen von Anfang an mit dem Attribut
+  // "hidden" markiert. Ohne Wiederaufnahme ruft app.js startPlayer() (und damit $("player").hidden=
+  // false) nie auf – das belegbare Signal dafür ist, dass #home sichtbar bleibt (kein Wechsel zum
+  // Player), nicht der literale Wert von #player.hidden, den der Stub ohnehin nie auf true setzt.
+  assert.equal(h2.el("home").hidden, false);
+});
