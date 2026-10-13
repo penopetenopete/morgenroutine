@@ -102,7 +102,21 @@
       await api("PUT", "/me/player/play" + dq("?"), body);
     }
   }
-  async function seekTo(ms) { if (ms > 2000) { await wait(700); await api("PUT", "/me/player/seek?position_ms=" + Math.round(ms) + dq("&")); } }
+  // Nur spulen, wenn es nötig ist (13.10.2026): nach `next` setzt Spotify eine Podcast-Folge selbst
+  // an seinem gemerkten Punkt ein, also schon richtig. Das alte unbedingte Spulen zwang sie danach
+  // auf den älteren Wert aus dem letzten snapshot() — erst richtig angefangen, dann kleiner Sprung
+  // zurück, auch bei Zurückspulen 0. Bei Musik startet `next` dagegen bei 0, da liegt das Ziel weit
+  // weg und es wird wie bisher gespult. Die 700 ms bleiben: davor trifft das Spulen noch den vorigen
+  // Titel. Schlägt die Abfrage fehl, wird gespult wie vorher.
+  const SEEK_TOL = 4000;
+  async function seekTo(ms) {
+    if (ms <= 2000) return;
+    await wait(700);
+    let ist = null;
+    try { const p = await api("GET", "/me/player?additional_types=episode"); if (p && p.progress_ms != null) ist = p.progress_ms; } catch (e) {}
+    if (ist != null && Math.abs(ist - ms) <= SEEK_TOL) { log("Stelle passt schon · nicht gespult", "o"); return; }
+    await api("PUT", "/me/player/seek?position_ms=" + Math.round(ms) + dq("&"));
+  }
   async function podcastEpisode() {
     if (S.pod && S.pod.episode) return S.pod.episode;
     throw new Error("Noch keine Podcast-Folge gemerkt. Im ♫-Menü eine wählen oder kurz in Spotify eine anmachen.");

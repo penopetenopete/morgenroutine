@@ -544,8 +544,28 @@ public class SpotifyCore {
         withDevice(() -> api("PUT", "/me/player/play" + dq("?"), body));
     }
 
+    private static final long SEEK_TOL = 4000L;
+
+    /**
+     * Spult nur, wenn es nötig ist (13.10.2026). Nach "next" setzt Spotify eine Podcast-Folge selbst
+     * an seinem gemerkten Punkt ein, also schon richtig; das alte unbedingte Spulen zwang sie danach
+     * auf den älteren gespeicherten Wert — erst richtig angefangen, dann kleiner Sprung zurück, auch
+     * bei Zurückspulen 0. Bei Musik startet "next" bei 0, da liegt das Ziel weit weg und es wird wie
+     * bisher gespult. Die 700 ms bleiben: davor trifft das Spulen noch den vorigen Titel.
+     * Schlägt die Abfrage fehl, wird gespult wie vorher.
+     */
     private void seekTo(long ms) throws Exception {
-        if (ms > 2000) { Thread.sleep(700); withDevice(() -> api("PUT", "/me/player/seek?position_ms=" + ms + dq("&"), null)); }
+        if (ms <= 2000) return;
+        Thread.sleep(700);
+        Long ist = null;
+        try {
+            // Direkt, nicht über withDevice: das gibt keinen Wert zurück, und ein Fehler hier
+            // (auch 404 = nichts läuft) soll nur heißen „Position unbekannt" – dann wird gespult.
+            JSONObject p = api("GET", "/me/player?additional_types=episode", null);
+            if (p != null && p.has("progress_ms") && !p.isNull("progress_ms")) ist = p.optLong("progress_ms");
+        } catch (Exception ignored) { }
+        if (ist != null && Math.abs(ist - ms) <= SEEK_TOL) { addLog("Stelle passt schon · nicht gespult", "o"); return; }
+        withDevice(() -> api("PUT", "/me/player/seek?position_ms=" + ms + dq("&"), null));
     }
 
     /** Muss im Worker-Thread laufen. Gibt null bei Erfolg zurück, sonst die Fehlermeldung. */
