@@ -132,12 +132,23 @@ function addItems(rid,day,exs){
   });
 }
 function deleteItem(rid,day,uid){
-  const a=rawItems(rid,day);if(!a)return;const i=a.findIndex(x=>x.uid===uid);if(i>=0){if(i>0&&a[i-1].link&&!a[i].link)a[i-1].link=false;a.splice(i,1)}save();
+  const a=rawItems(rid,day);if(!a)return;const i=a.findIndex(x=>x.uid===uid);
+  if(i>=0){if(i>0&&a[i-1].link&&!a[i].link)a[i-1].link=false;
+    /* Blockschalter weitergeben: trug die gelöschte Übung das `sf` und bleibt der Block bestehen,
+       erbt die nächste Übung den Schalter – sonst fiele „Seite für Seite“ aus (13.10.2026, CR-01) */
+    if(a[i].sf&&a[i].link&&a[i+1])a[i+1].sf=true;
+    a.splice(i,1)}
+  save();
 }
 /* uids = neue Reihenfolge der sichtbaren Übungen */
 function orderItems(rid,day,uids){
   const a=rawItems(rid,day);if(!a)return;const pos=u=>{const i=uids.indexOf(u);return i<0?1e3:i};
-  const sorted=a.slice().sort((x,y)=>pos(x.uid)-pos(y.uid));a.length=0;a.push(...sorted);save();
+  const sorted=a.slice().sort((x,y)=>pos(x.uid)-pos(y.uid));a.length=0;a.push(...sorted);
+  /* Blockschalter nachführen: `sf` gehört dem Block, liegt aber an seiner ersten Übung. Nach dem
+     Verschieben innerhalb eines Blocks wandert der Schalter auf die neue erste Übung, sonst fiele
+     „Seite für Seite“ lautlos aus (13.10.2026, CR-01) */
+  let b0=0;a.forEach((it,i)=>{const ende=!it.link||i===a.length-1;if(ende){const bl=a.slice(b0,i+1);if(bl.length>1&&bl.some(x=>x.sf)){bl.forEach(x=>delete x.sf);bl[0].sf=true}b0=i+1}});
+  save();
 }
 function linkItem(rid,day,uid,v){
   const a=rawItems(rid,day),x=a&&a.find(z=>z.uid===uid);if(x){x.link=v;save()}
@@ -1094,10 +1105,16 @@ const effSets=it=>it.pair?(it.cut===0?0:1):Math.min(it.o.sets||1,it.cut!=null?it
 /* Pausen zentral (Hauptmenü → Einstellungen): nach jedem Satz und zwischen den Seiten – für alle Übungen gleich */
 const restOf=()=>gv("rest");
 const swOf=()=>gv("side");
-/* Blöcke: verknüpfte Übungen (it.link = mit der nächsten verknüpft) laufen als Supersatz */
+/* Blöcke: verknüpfte Übungen (it.link = mit der nächsten verknüpft) laufen als Supersatz.
+   Erst gruppieren, dann die stillgelegten Einträge je Block herausnehmen: der Blockschalter `sf`
+   sitzt an der ersten Übung des Blocks, und die darf übersprungen (status "removed") oder auf null
+   Sätze gestellt sein, ohne dass „Seite für Seite“ lautlos ausfällt. Deshalb trägt der Block den
+   Schalter als eigene Eigenschaft `bl.sf` – gelesen wird er nur dort (ein `sf` an einer späteren
+   Übung bleibt wirkungslos, wie festgelegt). (13.10.2026, Befund CR-01) */
 function blocksOf(items){
-  const act=items.filter(it=>it.status!=="removed"&&effSets(it)>0),out=[];
-  act.forEach(it=>{const b=out[out.length-1],l=b&&b[b.length-1];if(l&&l.link&&!l.pair&&!it.pair)b.push(it);else out.push([it])});
+  const all=[],out=[];
+  items.forEach(it=>{const b=all[all.length-1],l=b&&b[b.length-1];if(l&&l.link&&!l.pair&&!it.pair)b.push(it);else all.push([it])});
+  all.forEach(b=>{const act=b.filter(it=>it.status!=="removed"&&effSets(it)>0);if(act.length){act.sf=!!b[0].sf;out.push(act)}});
   return out;
 }
 function blockRange(items,i){let a=i,b=i;while(a>0&&items[a-1].link&&items[a-1].status!=="removed")a--;while(b<items.length-1&&items[b].link)b++;return [a,b]}
@@ -1123,7 +1140,7 @@ function buildSteps(Wk){
     for(let r=1;r<=max;r++){
       const mem=bl.filter(it=>effSets(it)>=r);
       if(r>1){const prev=bl.filter(it=>effSets(it)>=r-1);T(mem[0].uid,"Satzpause",restOf(prev[prev.length-1],st),"set",{pk:mem[0].uid+"|set|"+r})}
-      if(bl[0].sf&&mem.length>1&&mem.every(it=>isUni(EXB[it.ex],setOpt(it,r)))){
+      if(bl.sf&&mem.length>1&&mem.every(it=>isUni(EXB[it.ex],setOpt(it,r)))){
         [0,1].forEach(sd=>{
           if(sd)T(mem[0].uid,"Seitenwechsel",swOf(),"side",{pk:mem[0].uid+"|side|"+r});
           mem.forEach((it,j)=>{const e=EXB[it.ex],o=setOpt(it,r);
@@ -2016,5 +2033,5 @@ checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken,saveW};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()}};
 })();

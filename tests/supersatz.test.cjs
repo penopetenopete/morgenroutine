@@ -164,3 +164,67 @@ test("aria-pressed spiegelt den Zustand: nach dem Einschalten steht data-sf=\"tr
   assert.match(h.el("shBody").innerHTML, /data-sf="false" aria-pressed="false"/);
   assert.match(h.el("shBody").innerHTML, /data-sf="true" aria-pressed="true"/);
 });
+
+/* Befund CR-01 (13.10.2026): „Seite für Seite" fiel lautlos auf „Je Übung" zurück, sobald die
+   Übung, die den Blockschalter trägt, übersprungen, gelöscht oder nach hinten gezogen wurde.
+   blocksOf filterte vor dem Gruppieren, buildSteps las danach bl[0].sf. Die folgenden Fälle
+   halten das Verhalten fest; sie deckten zugleich WR-02 ab (Blöcke mit drei Übungen). */
+
+function blockItems(F, extras) {
+  return extras.map((ex, i) => Object.assign(
+    { uid: "abc"[i], ex: "pigeon", o: Object.assign({}, F.EXB.pigeon.def, { sets: 1, reps: 10 }), so: {}, status: "plan" },
+    ex));
+}
+const seiten = (A, items) => A.buildSteps({ v: 1, id: "w1", items, res: {}, pauses: {}, settings: {}, audio: {}, visited: [] })
+  .filter(s => s.type === "work").map(s => s.uid + ":" + s.side).join(" ");
+
+test("CR-01: Dreier-Block läuft Seite für Seite — erst alle links, dann alle rechts", () => {
+  const h = loadApp();
+  const items = blockItems(h.F, [{ link: true, sf: true }, { link: true }, {}]);
+  assert.equal(seiten(h.A, items), "a:0 b:0 c:0 a:1 b:1 c:1");
+});
+
+test("CR-01: erste Übung des Blocks mitten im Workout übersprungen — Seite für Seite bleibt", () => {
+  const h = loadApp();
+  const items = blockItems(h.F, [{ link: true, sf: true }, { link: true }, {}]);
+  items[0].status = "removed";
+  assert.equal(seiten(h.A, items), "b:0 c:0 b:1 c:1");
+});
+
+test("CR-01: erste Übung des Blocks auf null Sätze — Seite für Seite bleibt", () => {
+  const h = loadApp();
+  const items = blockItems(h.F, [{ link: true, sf: true }, { link: true }, {}]);
+  items[0].cut = 0;
+  assert.equal(seiten(h.A, items), "b:0 c:0 b:1 c:1");
+});
+
+test("CR-01: ein sf an einer späteren Übung bleibt wirkungslos (festgelegte Regel, P-04)", () => {
+  const h = loadApp();
+  const items = blockItems(h.F, [{ link: true }, { link: true, sf: true }, {}]);
+  assert.notEqual(seiten(h.A, items), "a:0 b:0 c:0 a:1 b:1 c:1");
+});
+
+test("CR-01: Verschieben innerhalb des Blocks führt den Schalter auf die neue erste Übung nach", () => {
+  const h = loadApp();
+  h.A.S().routines = [{ id: "r1", name: "T", pauses: {}, audio: {}, settings: {},
+    days: [{ items: blockItems(h.F, [{ link: true, sf: true }, { link: true }, {}]) }] }];
+  h.A.save();
+  h.A.orderItems("r1", 0, ["b", "a", "c"]);
+  const raw = h.A.getRoutine("r1").days[0].items;
+  assert.deepEqual(raw.map(x => x.uid), ["b", "a", "c"]);
+  assert.equal(raw[0].sf, true, "der Schalter sitzt an der neuen ersten Übung");
+  assert.equal(raw[1].sf, undefined, "und nicht mehr an der verschobenen");
+  assert.equal(seiten(h.A, raw), "b:0 a:0 c:0 b:1 a:1 c:1");
+});
+
+test("CR-01: Löschen der Trägerübung vererbt den Schalter an die nächste im Block", () => {
+  const h = loadApp();
+  h.A.S().routines = [{ id: "r1", name: "T", pauses: {}, audio: {}, settings: {},
+    days: [{ items: blockItems(h.F, [{ link: true, sf: true }, { link: true }, {}]) }] }];
+  h.A.save();
+  h.A.deleteItem("r1", 0, "a");
+  const raw = h.A.getRoutine("r1").days[0].items;
+  assert.deepEqual(raw.map(x => x.uid), ["b", "c"]);
+  assert.equal(raw[0].sf, true);
+  assert.equal(seiten(h.A, raw), "b:0 c:0 b:1 c:1");
+});
