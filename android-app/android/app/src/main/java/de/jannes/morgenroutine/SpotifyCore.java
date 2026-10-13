@@ -564,7 +564,12 @@ public class SpotifyCore {
             JSONObject p = api("GET", "/me/player?additional_types=episode", null);
             if (p != null && p.has("progress_ms") && !p.isNull("progress_ms")) ist = p.optLong("progress_ms");
         } catch (Exception ignored) { }
-        if (ist != null && Math.abs(ist - ms) <= SEEK_TOL) { addLog("Stelle passt schon · nicht gespult", "o"); return; }
+        boolean passt = ist != null && Math.abs(ist - ms) <= SEEK_TOL;
+        // Immer protokollieren, auch wenn gespult wird: nur so ist am Gerät zu sehen, ob der
+        // Sprung vom Spulen kommt und wie weit Ist und Ziel auseinanderliegen (13.10.2026).
+        // Nur Zeitangaben, keine Adresse, kein Titel, keine Zugangsdaten.
+        addLog("Spulen: ist " + (ist == null ? "unbekannt" : ist + " ms") + ", Ziel " + ms + " ms → " + (passt ? "nicht gespult" : "gespult"), "");
+        if (passt) return;
         withDevice(() -> api("PUT", "/me/player/seek?position_ms=" + ms + dq("&"), null));
     }
 

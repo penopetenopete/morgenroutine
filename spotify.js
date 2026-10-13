@@ -114,7 +114,11 @@
     await wait(700);
     let ist = null;
     try { const p = await api("GET", "/me/player?additional_types=episode"); if (p && p.progress_ms != null) ist = p.progress_ms; } catch (e) {}
-    if (ist != null && Math.abs(ist - ms) <= SEEK_TOL) { log("Stelle passt schon · nicht gespult", "o"); return; }
+    const passt = ist != null && Math.abs(ist - ms) <= SEEK_TOL;
+    // Immer protokollieren, auch wenn gespult wird: nur so ist am Gerät zu sehen, ob der Sprung
+    // vom Spulen kommt und wie weit Ist und Ziel auseinanderliegen. Nur Zeitangaben (13.10.2026).
+    log("Spulen: ist " + (ist == null ? "unbekannt" : Math.round(ist) + " ms") + ", Ziel " + Math.round(ms) + " ms → " + (passt ? "nicht gespult" : "gespult"), "");
+    if (passt) return;
     await api("PUT", "/me/player/seek?position_ms=" + Math.round(ms) + dq("&"));
   }
   async function podcastEpisode() {
