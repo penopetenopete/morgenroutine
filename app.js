@@ -202,7 +202,7 @@ const ICON={
 const thumbOf=it=>{try{return F.thumb(EXB[it.ex],it.o)}catch(_){return ""}};
 
 /* =================== SHEET =================== */
-let sheetClose=null,sheetLocked=false;
+let sheetClose=null,sheetLocked=false,lastEditorRender=null; // lastEditorRender: Testhaken, reicht keine Nutzer-Funktion durch
 function stopPreview(){if(F.previewStop()&&!$("player").hidden&&W){shownKey="";stepUI();size()}}
 window.openSheet=(...a)=>openSheet(...a);window.closeSheet=()=>closeSheet();
 function openSheet(eyebrow,title,html,{onClose,locked}={}){
@@ -1039,6 +1039,7 @@ function openEditor(it,ctx){
     if(it.o[k]===v)delete so[k];else so[k]=v;
     if(!Object.keys(so).length)delete it.so[S1];
   };
+  let opened=false; // true ab dem zweiten render() – nur dann bleibt die Scrollposition stehen
   const render=()=>{
     const o=O();let h="";
     if(!it.pair){
@@ -1061,7 +1062,10 @@ function openEditor(it,ctx){
     if(S1&&!it.pair)h+=`<div class="row2"><button class="btn" id="edDup">Satz duplizieren</button>${(it.o.sets||1)>1?`<button class="btn danger" id="edDel">Satz löschen</button>`:""}</div>`;
     if(ctx.onDelete)h+=`<button class="btn danger" id="edDelEx">Ganze Übung löschen</button>`;
     const n=it.o.sets||1;
+    const prevScroll=opened?$("shBody").scrollTop:null;
     const body=openSheet(S1?`Satz ${S1} von ${n}`:(e.group&&!it.pair?e.group:"Übung"),itemName(it),`<div class="edprev"><canvas id="edCv" width="240" height="240" aria-label="Vorschau ${esc(e.name)}"></canvas><div class="small">${esc(e.de||"")}</div></div>`+h,{onClose:ctx.onClose});
+    if(opened&&prevScroll!=null)$("shBody").scrollTop=prevScroll;
+    opened=true;
     F.previewStart(e,O(),$("edCv"));
     body.querySelectorAll(".sbtn:not(.sfbtn)").forEach(b=>b.onclick=()=>{put(b.dataset.k,b.dataset.v);persist();render()});
     if(ctx.sf)body.querySelectorAll(".sfbtn").forEach(b=>b.onclick=()=>{ctx.sf.set(b.dataset.sf==="true");render()});
@@ -1078,6 +1082,7 @@ function openEditor(it,ctx){
     if($("edDel"))$("edDel").onclick=()=>{delSet(it,S1);persist();closeSheet();toast(`Satz ${S1} gelöscht`)};
     if($("edDup"))$("edDup").onclick=()=>{const n=it.o.sets||1,so={};Object.keys(it.so||{}).forEach(k=>{const i=+k;so[i<=S1?i:i+1]=it.so[k]});if(it.so&&it.so[S1])so[S1+1]=clone(it.so[S1]);it.so=so;it.o.sets=n+1;persist();closeSheet();toast(`Satz ${S1} dupliziert – jetzt ${n+1} Sätze`)};
   };
+  lastEditorRender=render;
   render();
 }
 
@@ -2011,5 +2016,5 @@ checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx)};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()}};
 })();
