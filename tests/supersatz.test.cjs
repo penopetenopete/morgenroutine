@@ -94,3 +94,73 @@ test("openEditor: ctx.sf erzeugt data-sf Markup, ohne ctx.sf kommt data-sf nicht
   const ohneSf = h.el("shBody").innerHTML;
   assert.doesNotMatch(ohneSf, /data-sf/);
 });
+
+test("sfOn: liefert null, wenn der Block nur eine Übung hat (Fall S5)", () => {
+  const h = loadApp();
+  const F = h.F;
+  const items = [{ uid: "a", ex: "pigeon", o: Object.assign({}, F.EXB.pigeon.def), status: "plan" }];
+  assert.equal(h.A.sfOn(items, 0), null);
+});
+
+test("sfOn: liefert null, wenn eine Übung des Blocks beidseitig ist (heelsit, Fall S4)", () => {
+  const h = loadApp();
+  const F = h.F;
+  const items = [
+    { uid: "a", ex: "pigeon", o: Object.assign({}, F.EXB.pigeon.def), link: true, status: "plan" },
+    { uid: "b", ex: "heelsit", o: Object.assign({}, F.EXB.heelsit.def), status: "plan" },
+  ];
+  assert.equal(h.A.sfOn(items, 0), null);
+});
+
+test("sfOn: liefert null, wenn eine Übung des Blocks status 'removed' trägt", () => {
+  const h = loadApp();
+  const F = h.F;
+  const items = [
+    { uid: "a", ex: "pigeon", o: Object.assign({}, F.EXB.pigeon.def), link: true, status: "plan" },
+    { uid: "b", ex: "rot9090", o: Object.assign({}, F.EXB.rot9090.def), status: "removed" },
+  ];
+  assert.equal(h.A.sfOn(items, 0), null);
+});
+
+test("sfOn: zeigt in jeder Zeile des Blocks auf denselben Eintrag (P-04)", () => {
+  const h = loadApp();
+  const F = h.F;
+  const items = [
+    { uid: "a", ex: "pigeon", o: Object.assign({}, F.EXB.pigeon.def), link: true, status: "plan" },
+    { uid: "b", ex: "rot9090", o: Object.assign({}, F.EXB.rot9090.def), status: "plan" },
+  ];
+  const r0 = h.A.sfOn(items, 0), r1 = h.A.sfOn(items, 1);
+  assert.notEqual(r0, null);
+  assert.equal(r0, r1);
+});
+
+test("Dialog springt nicht: #shBody hat nach dem Neuzeichnen durch einen .sfbtn-Klick denselben scrollTop wie davor", () => {
+  const h = loadApp();
+  const F = h.F;
+  const it = { uid: "a", ex: "pigeon", o: Object.assign({}, F.EXB.pigeon.def), link: true, so: {} };
+  let on = false;
+  const ctx = { rid: null, st: {}, set: 0, sf: { get on() { return on; }, set(v) { on = v; } } };
+
+  h.A.openEditor(it, ctx);
+  h.el("shBody").scrollTop = 123;
+  ctx.sf.set(true);
+  h.A.rerenderEditor();
+  assert.equal(h.el("shBody").scrollTop, 123);
+});
+
+test("aria-pressed spiegelt den Zustand: nach dem Einschalten steht data-sf=\"true\" auf \"true\" und data-sf=\"false\" auf \"false\", und umgekehrt", () => {
+  const h = loadApp();
+  const F = h.F;
+  const it = { uid: "a", ex: "pigeon", o: Object.assign({}, F.EXB.pigeon.def), link: true, so: {} };
+  let on = false;
+  const ctx = { rid: null, st: {}, set: 0, sf: { get on() { return on; }, set(v) { on = v; } } };
+
+  h.A.openEditor(it, ctx);
+  assert.match(h.el("shBody").innerHTML, /data-sf="false" aria-pressed="true"/);
+  assert.match(h.el("shBody").innerHTML, /data-sf="true" aria-pressed="false"/);
+
+  ctx.sf.set(true);
+  h.A.rerenderEditor();
+  assert.match(h.el("shBody").innerHTML, /data-sf="false" aria-pressed="false"/);
+  assert.match(h.el("shBody").innerHTML, /data-sf="true" aria-pressed="true"/);
+});
