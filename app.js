@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="29"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="30"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -141,6 +141,10 @@ function orderItems(rid,day,uids){
 }
 function linkItem(rid,day,uid,v){
   const a=rawItems(rid,day),x=a&&a.find(z=>z.uid===uid);if(x){x.link=v;save()}
+}
+/* Blockschalter „Seite für Seite“ an der ersten Übung des Blocks – fehlt heißt aus */
+function sfItem(rid,day,uid,v){
+  const a=rawItems(rid,day),x=a&&a.find(z=>z.uid===uid);if(x){if(v)x.sf=true;else delete x.sf;save()}
 }
 /* eigene Pause für eine bestimmte Stelle (v=null: wieder Standard) – dauerhaft in der Routine */
 function setPause(rid,pk,v){
@@ -543,8 +547,20 @@ function renderRoutine(){
   makeSortable(list,{onDrop:(a,b)=>{const u=items.map(x=>x.uid);moveArr(u,a,b);orderItems(R.id,rDay,u);renderRoutine()}});
   bindLinks(list,i=>{linkItem(R.id,rDay,items[i].uid,!items[i].link);renderRoutine()});
 }
+/* Regel: Schalter „Seite für Seite“ gilt nur für einen Block aus mehr als einer einseitigen Übung;
+   liefert die erste Übung des Blocks (dort wird gespeichert) oder null */
+function sfOn(items,i){
+  const [a,b]=blockRange(items,i),bl=items.slice(a,b+1);
+  if(bl.length<2)return null;
+  if(bl.some(x=>x.pair||x.status==="removed"))return null;
+  if(!bl.every(x=>isUni(EXB[x.ex],x.o)))return null;
+  return bl[0];
+}
 function editR(it,set){
-  openEditor(it,{rid:R.id,st:R.settings,set,onChange:renderRoutine,skipped:isSkipped(it.uid),
+  const items=dayItems(),i=items.findIndex(x=>x.uid===it.uid);
+  const erste=i>=0?sfOn(items,i):null;
+  const sf=(erste&&!R.preset&&!set)?{get on(){return !!erste.sf},set(v){if(v)erste.sf=true;else delete erste.sf;sfItem(R.id,rDay,erste.uid,v)}}:null;
+  openEditor(it,{rid:R.id,st:R.settings,set,sf,onChange:renderRoutine,skipped:isSkipped(it.uid),
     onSkip:on=>{setSkip(it.uid,on);renderRoutine();toast(on?itemName(it)+" heute übersprungen":itemName(it)+" ist wieder dabei")},
     onDelete:()=>{const all=it.mix?dayItems().filter(x=>x.ex===it.ex&&x.mix):[it];all.forEach(x=>{deleteItem(R.id,rDay,x.uid);setSkip(x.uid,false)});renderRoutine();toast(itemName(it)+" gelöscht")}});
 }
@@ -1027,6 +1043,7 @@ function openEditor(it,ctx){
     const o=O();let h="";
     if(!it.pair){
       for(const [k,l,choices] of e.opts(o))h+=`<div class="opt"><span>${l}</span><div class="seg" role="group" aria-label="${l}">${choices.map(([v,t])=>`<button class="sbtn" data-k="${k}" data-v="${v}" aria-pressed="${o[k]===v}">${t}</button>`).join("")}</div></div>`;
+      if(ctx.sf)h+=`<div class="opt"><span>Reihenfolge</span><div class="seg" role="group" aria-label="Reihenfolge"><button class="sbtn sfbtn" data-sf="false" aria-pressed="${!ctx.sf.on}">Je Übung</button><button class="sbtn sfbtn" data-sf="true" aria-pressed="${!!ctx.sf.on}">Seite für Seite</button></div></div>`;
       const uni=isUni(e,o)||e.perSide;
       if(!S1)h+=wheelRow("sets","Sätze",e,"sets");
       if(o.mode==="hold")h+=wheelRow("secs",e.drop?"Sekunden pro Stufe":e.timeWord||(uni?"Zeit pro Seite":"Zeit"),e,"secs");
@@ -1046,7 +1063,8 @@ function openEditor(it,ctx){
     const n=it.o.sets||1;
     const body=openSheet(S1?`Satz ${S1} von ${n}`:(e.group&&!it.pair?e.group:"Übung"),itemName(it),`<div class="edprev"><canvas id="edCv" width="240" height="240" aria-label="Vorschau ${esc(e.name)}"></canvas><div class="small">${esc(e.de||"")}</div></div>`+h,{onClose:ctx.onClose});
     F.previewStart(e,O(),$("edCv"));
-    body.querySelectorAll(".sbtn").forEach(b=>b.onclick=()=>{put(b.dataset.k,b.dataset.v);persist();render()});
+    body.querySelectorAll(".sbtn:not(.sfbtn)").forEach(b=>b.onclick=()=>{put(b.dataset.k,b.dataset.v);persist();render()});
+    if(ctx.sf)body.querySelectorAll(".sfbtn").forEach(b=>b.onclick=()=>{ctx.sf.set(b.dataset.sf==="true");render()});
     body.querySelectorAll(".wheelrow").forEach(row=>{
       const k=row.dataset.k;
       if(k==="secs2"){initWheel(row,EXB[it.pair.ex2],{get:()=>it.pair.o2.secs,set:v=>{it.pair.o2.secs=v;persist()},std:it.pair.base2?it.pair.base2.secs:null});return}
@@ -1993,5 +2011,5 @@ checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx)};
 })();
