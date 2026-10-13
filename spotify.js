@@ -35,6 +35,11 @@
     const v = randStr(64), st = randStr(16);
     // Ohne gespeicherten PKCE-Zustand ließe sich die Rückkehr nicht zuordnen: abbrechen, mit Meldung, ohne Drossel (12.10.2026)
     try { localStorage.setItem(KEY + "_pkce", JSON.stringify({ v, st, redirect: REDIRECT })); } catch (e) { toast("Speichern ging nicht"); return; }
+    // Laufende Sitzung vor der Umleitung sichern (13.10.2026, WORK-05): location.href bzw. Browser.open verlässt die Seite,
+    // nur was vorher in training_active_v1 steht, überlebt. Ein Fehler hier darf die Anmeldung nicht verhindern.
+    let gesichert = false;
+    try { if (window.AppKit && window.AppKit.saveW) gesichert = window.AppKit.saveW(); } catch (e) {}
+    log(gesichert ? "Anmeldung gestartet · Workout gesichert" : "Anmeldung gestartet", "o");
     const p =new URLSearchParams({ response_type: "code", client_id: CLIENT_ID, scope: SCOPES, code_challenge_method: "S256", code_challenge: await challenge(v), redirect_uri: REDIRECT, state: st });
     const url = "https://accounts.spotify.com/authorize?" + p;
     if (NATIVE) await CAP.Plugins.Browser.open({ url }); else location.href = url;

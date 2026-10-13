@@ -1157,7 +1157,7 @@ function buildSteps(Wk){
 
 let W=null,steps=[],idx=0;
 function loadActive(){try{const a=JSON.parse(localStorage.getItem(ACT)||"null");return a&&!a.ended?a:null}catch(_){return null}}
-function saveW(){if(!W)return;try{localStorage.setItem(ACT,JSON.stringify(W))}catch(_){storeFail()}}
+function saveW(){if(!W)return false;try{localStorage.setItem(ACT,JSON.stringify(W));return true}catch(_){storeFail();return false}}
 function startWorkout(){
   const items=dayItems().map(it=>({uid:it.uid,ex:it.ex,o:clone(it.o),base:it.base?clone(it.base):null,pair:it.pair?clone(it.pair):null,link:!!it.link,so:clone(it.so||{}),status:it.status,planned:true,sf:!!it.sf,um:it.um,mix:!!it.mix}));
   W={v:1,id:"w"+now().toString(36),rid:R.id,rname:R.name,day:rDay,days:R.days.length,settings:clone(R.settings),pauses:clone(R.pauses||{}),audio:clone(R.audio||{}),
@@ -2014,7 +2014,7 @@ const a=loadActive();if(a)startPlayer(a);
 requestAnimationFrame(frame);
 checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
-window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken};
+window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken,saveW};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
 window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()}};
 })();
