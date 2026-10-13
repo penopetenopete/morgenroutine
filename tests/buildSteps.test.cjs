@@ -225,3 +225,65 @@ test("Reihenfolge: Arbeitsschritte folgen den Übungen, key-Werte sind verschied
   assert.equal(new Set(k1).size, k1.length);
   assert.deepStrictEqual(k1, k2);
 });
+
+test("Seite für Seite über zwei Sätze: 16 Schritte, uid-, Seiten- und Satz-Folge je Runde", () => {
+  const steps = build([
+    item("a", "pigeon", { sets: 2, reps: 10 }, { link: true, sf: true }),
+    item("b", "rot9090", { sets: 2, reps: 10 }, { um: "Umbau-Text" }),
+  ]);
+  assert.equal(steps.length, 16);
+  const w = works(steps);
+  assert.deepStrictEqual(w.map(s => s.uid), ["a", "b", "a", "b", "a", "b", "a", "b"]);
+  assert.deepStrictEqual(w.map(s => s.side), [0, 0, 1, 1, 0, 0, 1, 1]);
+  assert.deepStrictEqual(w.map(s => s.set), [1, 1, 1, 1, 2, 2, 2, 2]);
+});
+
+test("Eigene Pausen in der Seiten-Reihenfolge: Umbau pro Seite und Seitenwechsel überschreibbar, falscher Schlüssel wirkungslos", () => {
+  // Umbau-Schlüssel: uid der Übung, vor der der Umbau steht (b, nicht a) – Form: b|umbau|1|0
+  const pkUmbauSeite0 = ["b", "umbau", "1", "0"].join("|");
+  const pkUmbauSeite1 = ["b", "umbau", "1", "1"].join("|");
+  const pkSeitenwechsel = ["a", "side", "1"].join("|");
+  const pkFalsch = ["a", "umbau", "1", "0"].join("|"); // uid der ERSTEN Übung – darf keine Wirkung haben
+  const steps = build([
+    item("a", "pigeon", { sets: 1, reps: 10 }, { link: true, sf: true }),
+    item("b", "rot9090", { sets: 1, reps: 10 }, { um: "Umbau-Text" }),
+  ], { pauses: { [pkUmbauSeite0]: 5, [pkUmbauSeite1]: 8, [pkSeitenwechsel]: 3, [pkFalsch]: 999 } });
+  const umbauSteps = steps.filter(s => s.kind === "umbau");
+  assert.equal(umbauSteps.length, 2);
+  assert.equal(umbauSteps[0].dur, 5);
+  assert.equal(umbauSteps[0].custom, true);
+  assert.equal(umbauSteps[1].dur, 8);
+  assert.equal(umbauSteps[1].custom, true);
+  const sideStep = steps.find(s => s.kind === "side");
+  assert.equal(sideStep.dur, 3);
+  assert.equal(sideStep.custom, true);
+});
+
+test("Gegenprobe ohne Seite für Seite (confirm:true): uid-Folge a,a,b,b je Satz, link-Übergang, kein Umbau", () => {
+  const steps = build([
+    item("a", "pigeon", { sets: 2, reps: 10 }, { link: true }),
+    item("b", "rot9090", { sets: 2, reps: 10 }, { um: "Umbau-Text" }),
+  ], { settings: { confirm: true } });
+  const w = works(steps);
+  assert.deepStrictEqual(w.map(s => s.uid), ["a", "a", "b", "b", "a", "a", "b", "b"]);
+  const linkStep = steps.find(s => s.kind === "link");
+  assert.notEqual(linkStep, undefined);
+  assert.equal(linkStep.dur, 120);
+  assert.equal(kinds(steps).includes("umbau"), false);
+});
+
+test("Schalter ohne Wirkung: beidseitige Übung im Block (S4) und sf an der zweiten Übung (S6)", () => {
+  const s4 = build([
+    item("a", "pigeon", { sets: 1, reps: 10 }, { link: true, sf: true }),
+    item("b", "heelsit", { secs: 60, sets: 1 }),
+  ]);
+  assert.equal(s4.length, 4);
+  assert.deepStrictEqual(kinds(s4), ["next", "link"]);
+
+  const s6 = build([
+    item("a", "pigeon", { sets: 1, reps: 10 }, { link: true }),
+    item("b", "rot9090", { sets: 1, reps: 10 }, { sf: true, um: "Umbau-Text" }),
+  ], { settings: { confirm: true } });
+  assert.equal(s6.length, 8);
+  assert.equal(kinds(s6).includes("umbau"), false);
+});
