@@ -239,6 +239,7 @@ test("Seite für Seite über zwei Sätze: 16 Schritte, uid-, Seiten- und Satz-Fo
 });
 
 test("Eigene Pausen in der Seiten-Reihenfolge: Umbau pro Seite und Seitenwechsel überschreibbar, falscher Schlüssel wirkungslos", () => {
+  // Umbau-Schlüssel: uid der Übung, vor der der Umbau steht (b, nicht a) – Form: b|umbau|1|0
   const pkUmbauSeite0 = ["b", "umbau", "1", "0"].join("|");
   const pkUmbauSeite1 = ["b", "umbau", "1", "1"].join("|");
   const pkSeitenwechsel = ["a", "side", "1"].join("|");
