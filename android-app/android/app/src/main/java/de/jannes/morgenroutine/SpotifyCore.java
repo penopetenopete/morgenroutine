@@ -599,9 +599,18 @@ public class SpotifyCore {
             synchronized (this) { music = st.optJSONObject("music"); modeStr = st.optString("mode", ""); }
 
             if ("music".equals(target) && "queue".equals(modeStr) && "episode".equals(itemType) && music != null) {
-                // Folge überspringen → der eingereihte Song kommt, dann läuft Mix/Radio normal weiter
+                // Folge überspringen → der eingereihte Song kommt, dann läuft Mix/Radio normal weiter.
+                // Lautlos umsetzen (13.10.2026): ein eingereihter Titel startet bei Spotify immer bei 0,
+                // das Spulen danach war als Liedanfang plus Sprung hörbar. Mit Pause davor passiert das
+                // Umsetzen stumm. Scheitert die Pause, läuft es wie bisher – hörbar, aber nicht kaputt.
+                boolean pausiert = false;
+                try { withDevice(() -> api("PUT", "/me/player/pause" + dq("?"), null)); pausiert = true; } catch (Exception ignored) { }
                 withDevice(() -> api("POST", "/me/player/next" + dq("?"), null));
                 seekTo(music.optLong("pos"), music.optString("track", null));
+                if (pausiert) {
+                    try { withDevice(() -> api("PUT", "/me/player/play" + dq("?"), null)); }
+                    catch (Exception e) { addLog("Weiterspielen nach dem Umsetzen ging nicht", "e"); }
+                }
                 setMode(null);
             } else if ("podcast".equals(target) && "track".equals(itemType) && !resumable(p.optJSONObject("context"))) {
                 String ep = podcastEpisode();

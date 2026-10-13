@@ -143,7 +143,15 @@
     if (force) { S.music = force; S.mode = null; }
     const item = p && p.item;
     if (target === "music" && S.mode === "queue" && item && item.type === "episode" && S.music) {
-      await api("POST", "/me/player/next" + dq("?")); await seekTo(S.music.pos || 0, S.music.track || null); S.mode = null;
+      // Lautlos umsetzen (13.10.2026): ein eingereihter Titel startet bei Spotify immer bei 0,
+      // das Spulen danach war als Liedanfang plus Sprung hörbar. Mit Pause davor passiert das
+      // Umsetzen stumm. Scheitert die Pause, läuft es wie bisher – hörbar, aber nicht kaputt.
+      let pausiert = false;
+      try { await api("PUT", "/me/player/pause" + dq("?")); pausiert = true; } catch (e) {}
+      await api("POST", "/me/player/next" + dq("?"));
+      await seekTo(S.music.pos || 0, S.music.track || null);
+      if (pausiert) { try { await api("PUT", "/me/player/play" + dq("?")); } catch (e) { log("Weiterspielen nach dem Umsetzen ging nicht", "e"); } }
+      S.mode = null;
     } else if (target === "podcast" && item && item.type === "track" && !resumable(p.context)) {
       const ep = await podcastEpisode(), pos = S.pod && S.pod.episode === ep ? Math.max(0, (S.pod.pos || 0) - S.rewind * 1000) : 0;
       await api("POST", "/me/player/queue?uri=" + encodeURIComponent(ep) + dq("&"));
