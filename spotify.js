@@ -460,7 +460,7 @@
       document.addEventListener("change", e => { if (e.target && e.target.id === "snd") setTimeout(pushSound, 50); }, true);
     }
     const q = new URLSearchParams(location.search);
-    if (q.has("code") || q.has("error")) { history.replaceState(null, "", location.pathname); await handleRedirect(q); }
+    if (q.has("code") || q.has("error")) { history.replaceState(history.state, "", location.pathname); /* bisherigen state erhalten, wie app.js an vergleichbaren Stellen (13.10.2026) */ await handleRedirect(q); }
     render();
     setInterval(async () => {
       if (document.hidden) return;
