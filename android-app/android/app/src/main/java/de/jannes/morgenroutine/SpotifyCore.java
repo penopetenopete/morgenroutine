@@ -554,21 +554,30 @@ public class SpotifyCore {
      * bisher gespult. Die 700 ms bleiben: davor trifft das Spulen noch den vorigen Titel.
      * Schlägt die Abfrage fehl, wird gespult wie vorher.
      */
-    private void seekTo(long ms) throws Exception {
+    private void seekTo(long ms) throws Exception { seekTo(ms, null); }
+
+    private void seekTo(long ms, String uri) throws Exception {
         if (ms <= 2000) return;
         Thread.sleep(700);
         Long ist = null;
-        try {
-            // Direkt, nicht über withDevice: das gibt keinen Wert zurück, und ein Fehler hier
-            // (auch 404 = nichts läuft) soll nur heißen „Position unbekannt" – dann wird gespult.
-            JSONObject p = api("GET", "/me/player?additional_types=episode", null);
-            if (p != null && p.has("progress_ms") && !p.isNull("progress_ms")) ist = p.optLong("progress_ms");
-        } catch (Exception ignored) { }
+        boolean traf = false;
+        for (int i = 0; i < 6; i++) {
+            JSONObject p;
+            try {
+                // Direkt, nicht über withDevice: das gibt keinen Wert zurück, und ein Fehler hier
+                // (auch 404 = nichts läuft) soll nur heißen „Position unbekannt" – dann wird gespult.
+                p = api("GET", "/me/player?additional_types=episode", null);
+            } catch (Exception e) { break; }
+            JSONObject it = p == null ? null : p.optJSONObject("item");
+            if (uri == null || (it != null && uri.equals(it.optString("uri")))) {
+                traf = true;
+                if (p != null && p.has("progress_ms") && !p.isNull("progress_ms")) ist = p.optLong("progress_ms");
+                break;
+            }
+            Thread.sleep(250);
+        }
         boolean passt = ist != null && Math.abs(ist - ms) <= SEEK_TOL;
-        // Immer protokollieren, auch wenn gespult wird: nur so ist am Gerät zu sehen, ob der
-        // Sprung vom Spulen kommt und wie weit Ist und Ziel auseinanderliegen (13.10.2026).
-        // Nur Zeitangaben, keine Adresse, kein Titel, keine Zugangsdaten.
-        addLog("Spulen: ist " + (ist == null ? "unbekannt" : ist + " ms") + ", Ziel " + ms + " ms → " + (passt ? "nicht gespult" : "gespult"), "");
+        addLog("Spulen: ist " + (ist == null ? (traf ? "unbekannt" : "Stück kam nicht") : ist + " ms") + ", Ziel " + ms + " ms → " + (passt ? "nicht gespult" : "gespult"), "");
         if (passt) return;
         withDevice(() -> api("PUT", "/me/player/seek?position_ms=" + ms + dq("&"), null));
     }
@@ -592,7 +601,7 @@ public class SpotifyCore {
             if ("music".equals(target) && "queue".equals(modeStr) && "episode".equals(itemType) && music != null) {
                 // Folge überspringen → der eingereihte Song kommt, dann läuft Mix/Radio normal weiter
                 withDevice(() -> api("POST", "/me/player/next" + dq("?"), null));
-                seekTo(music.optLong("pos"));
+                seekTo(music.optLong("pos"), music.optString("track", null));
                 setMode(null);
             } else if ("podcast".equals(target) && "track".equals(itemType) && !resumable(p.optJSONObject("context"))) {
                 String ep = podcastEpisode();
@@ -601,7 +610,7 @@ public class SpotifyCore {
                 withDevice(() -> api("POST", "/me/player/queue?uri=" + URLEncoder.encode(ep, "UTF-8") + dq("&"), null));
                 withDevice(() -> api("POST", "/me/player/queue?uri=" + URLEncoder.encode(trackUri, "UTF-8") + dq("&"), null));
                 withDevice(() -> api("POST", "/me/player/next" + dq("?"), null));
-                seekTo(pos);
+                seekTo(pos, ep);
                 setMode("queue");
                 JSONObject ctx = p.optJSONObject("context");
                 addLog("Musikquelle (" + (ctx != null ? ctx.optString("type") : "Einzelsong/Radio") + ") bleibt erhalten – Podcast dazwischengeschoben", "");

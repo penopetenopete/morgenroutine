@@ -109,15 +109,28 @@
   // weg und es wird wie bisher gespult. Die 700 ms bleiben: davor trifft das Spulen noch den vorigen
   // Titel. Schlägt die Abfrage fehl, wird gespult wie vorher.
   const SEEK_TOL = 4000;
-  async function seekTo(ms) {
+  // Warten, bis wirklich das Zielstück läuft, und erst dann entscheiden (13.10.2026, gemessen am
+  // Gerät): nach "next" ist der Aufruf zwar zurück, Spotify spielt aber noch den vorigen Titel.
+  // Eine Messung nach festen 700 ms liest dessen Position (gemessen: ist 278756 ms bei Ziel
+  // 4638851 ms) – der Vergleich ist dann wertlos und es wird immer gespult. Danach startet die
+  // Folge an Spotifys eigenem Punkt, und das Spulen zieht sie auf den älteren Wert zurück: erst
+  // richtig, dann kleiner Sprung zurück. Läuft das Zielstück, ist die Abweichung klein und es
+  // wird nicht gespult; bei Musik startet "next" bei 0, da bleibt es beim Spulen wie bisher.
+  async function seekTo(ms, uri) {
     if (ms <= 2000) return;
     await wait(700);
-    let ist = null;
-    try { const p = await api("GET", "/me/player?additional_types=episode"); if (p && p.progress_ms != null) ist = p.progress_ms; } catch (e) {}
+    let ist = null, traf = false;
+    for (let i = 0; i < 6; i++) {
+      let p = null;
+      try { p = await api("GET", "/me/player?additional_types=episode"); } catch (e) { break; }
+      const it = p && p.item;
+      if (!uri || (it && it.uri === uri)) { traf = true; if (p && p.progress_ms != null) ist = p.progress_ms; break; }
+      await wait(250);
+    }
     const passt = ist != null && Math.abs(ist - ms) <= SEEK_TOL;
-    // Immer protokollieren, auch wenn gespult wird: nur so ist am Gerät zu sehen, ob der Sprung
-    // vom Spulen kommt und wie weit Ist und Ziel auseinanderliegen. Nur Zeitangaben (13.10.2026).
-    log("Spulen: ist " + (ist == null ? "unbekannt" : Math.round(ist) + " ms") + ", Ziel " + Math.round(ms) + " ms → " + (passt ? "nicht gespult" : "gespult"), "");
+    // Immer protokollieren, auch wenn gespult wird: nur so ist am Gerät zu sehen, woran es liegt.
+    // Nur Zeitangaben, kein Titel, keine Adresse, keine Zugangsdaten (P-07).
+    log("Spulen: ist " + (ist == null ? (traf ? "unbekannt" : "Stück kam nicht") : Math.round(ist) + " ms") + ", Ziel " + Math.round(ms) + " ms → " + (passt ? "nicht gespult" : "gespult"), "");
     if (passt) return;
     await api("PUT", "/me/player/seek?position_ms=" + Math.round(ms) + dq("&"));
   }
@@ -130,12 +143,12 @@
     if (force) { S.music = force; S.mode = null; }
     const item = p && p.item;
     if (target === "music" && S.mode === "queue" && item && item.type === "episode" && S.music) {
-      await api("POST", "/me/player/next" + dq("?")); await seekTo(S.music.pos || 0); S.mode = null;
+      await api("POST", "/me/player/next" + dq("?")); await seekTo(S.music.pos || 0, S.music.track || null); S.mode = null;
     } else if (target === "podcast" && item && item.type === "track" && !resumable(p.context)) {
       const ep = await podcastEpisode(), pos = S.pod && S.pod.episode === ep ? Math.max(0, (S.pod.pos || 0) - S.rewind * 1000) : 0;
       await api("POST", "/me/player/queue?uri=" + encodeURIComponent(ep) + dq("&"));
       await api("POST", "/me/player/queue?uri=" + encodeURIComponent(item.uri) + dq("&"));
-      await api("POST", "/me/player/next" + dq("?")); await seekTo(pos); S.mode = "queue";
+      await api("POST", "/me/player/next" + dq("?")); await seekTo(pos, ep); S.mode = "queue";
     } else if (target === "music") {
       S.mode = null; const m = S.music;
       if (m && m.ctx && !m.track) await play({ context_uri: m.ctx });
