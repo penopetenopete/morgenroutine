@@ -195,6 +195,24 @@ function parseAmt(raw){const v=Math.round(Number(String(raw).trim().replace(",",
 const amtShow=v=>String(Math.round((+v||0)*100)/100);
 function amtH(pcs,amt,inl){return `<div class="eamtrow${inl?" in":""}"><input class="eamt" type="number" inputmode="decimal" step="${pcs?0.5:1}" min="0" value="${amtShow(amt)}" aria-label="Menge"><span class="eau">${pcs?"Stk":"g"}</span></div>`}
 let amtGo=false; // true = beim nächsten Binden Feld fokussieren und markieren (Eintippen ersetzt den Wert), ohne die Seite zu scrollen
+/* Zeile über die Tastatur holen (18.10.2026): `preventScroll` beim Fokus verhindert den ruckartigen
+   Sprung des Browsers, lässt die Zeile aber hinter der Tastatur liegen – man sah nicht, was man
+   tippt. Deshalb danach einmal gezielt scrollen, und zwar erst, wenn die Tastatur oben ist: Android
+   verkleinert dabei `visualViewport`, vorher wäre jede Rechnung falsch. `scrollIntoView` kümmert
+   sich um den richtigen Behälter (Tagesliste scrollt die Seite, Dialoge `#shBody`).
+   Reiner Anzeige-Zweck, ohne Zuhörer die bleiben: beides wird wieder abgemeldet. */
+function amtSicht(inp){
+  if(!inp||typeof inp.closest!=="function")return;
+  const row=inp.closest(".eamtrow")||inp;
+  if(!row||typeof row.scrollIntoView!=="function")return;
+  const hol=()=>{try{row.scrollIntoView({block:"center",behavior:"smooth"})}catch(_){try{row.scrollIntoView(false)}catch(__){}}};
+  const vv=window.visualViewport;
+  if(!vv){setTimeout(hol,300);return}
+  let fertig=false;
+  const einmal=()=>{if(fertig)return;fertig=true;vv.removeEventListener("resize",einmal);setTimeout(hol,60)};
+  vv.addEventListener("resize",einmal);
+  setTimeout(einmal,450); // Tastatur blieb zu oder war schon offen: trotzdem holen
+}
 /* done = nach dem Bestätigen (Enter bzw. „Fertig“ auf der Tastatur) zurück in die Ausgangslage:
    die Zeile klappt von selbst wieder zu, man muss nicht nochmal tippen (18.10.2026).
    Bewusst nur bei Enter, nicht bei blur: beim Tippen auf eine andere Zeile würde ein Neuaufbau
@@ -205,7 +223,7 @@ function bindAmt(inp,get,set,done){
   const leave=()=>{take();inp.value=amtShow(get())};
   inp.addEventListener("input",take);inp.addEventListener("change",leave);inp.addEventListener("blur",leave);
   inp.addEventListener("keydown",e=>{if(e.key!=="Enter")return;e.preventDefault();leave();if(done)done();else inp.blur()});
-  if(amtGo){amtGo=false;setTimeout(()=>{inp.focus({preventScroll:true});inp.select()},0)}
+  if(amtGo){amtGo=false;setTimeout(()=>{inp.focus({preventScroll:true});inp.select();amtSicht(inp)},0)}
 }
 const bindAmtObj=(inp,obj,onChange,done)=>bindAmt(inp,()=>obj.amt,v=>{obj.amt=v;esave();onChange()},done);
 const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
