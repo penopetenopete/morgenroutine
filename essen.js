@@ -426,10 +426,10 @@ function score(n,toks){let s=0;const w=" "+n;toks.forEach(t=>{if(w.includes(" "+
 let BLS=null,blsP=null;
 function loadBLS(){if(BLS)return Promise.resolve(BLS);if(!blsP)blsP=fetch("bls.json").then(r=>r.json()).then(a=>{BLS=a.map(x=>({code:x[0],name:x[1],kcal:x[2],p:x[3],c:x[4],f:x[5],fib:x[6],n:norm(x[1])}));return BLS}).catch(e=>{blsP=null;throw e});return blsP}
 const blsFood=b=>({id:"bls:"+b.code,name:b.name,brand:"",base:"g",src:"bls",kcal:b.kcal,p:b.p,c:b.c,f:b.f,fib:b.fib});
-let searchCtx=null,offRes=[],added={},addedN=0,edKey=null,sTab="f";
+let searchCtx=null,offRes=[],added={},addedN=0,edKey=null,sTab="f",ord=[]; // ord = Reihenfolge der Treffer, bleibt nach einer Aktion stehen
 /* keep = gemerkter Stand (nach „Mahlzeit ansehen“ zurück in die Suche) */
 function openSearch(ctx,keep){
-  searchCtx=ctx;if(!keep){offRes=[];added={};addedN=0;edKey=null;sTab="f"}
+  searchCtx=ctx;if(!keep){offRes=[];added={};addedN=0;edKey=null;sTab="f";ord=[]}
   const where=ctx.kind==="tpl"?E.meals[ctx.tid].name:ctx.kind==="grp"?"Zur Mahlzeit":SLOTN[ctx.slot]+(curDay===today()?"":" · "+dayLab(curDay));
   openSheet("",where,`<div class="esbar"><input class="pksearch" id="eQ" type="search" placeholder="Suchen …" autocomplete="off" enterkeyhint="search"><button class="ic" id="eScan" aria-label="Barcode scannen">${CAM}</button><div class="seg etabs" id="eTabs"></div></div><div id="eRes"></div><div class="edone"><button class="btn primary big" id="eDone">Fertig</button></div>`,
     {onClose:()=>{const c=searchCtx;searchCtx=null;renderEssen();if(c&&c.back)setTimeout(c.back,60);else if(c&&c.kind==="tpl")setTimeout(()=>tplSheet(c.tid),60)}});
@@ -457,8 +457,12 @@ function removeAdded(obj,ctx){
   else{const d=day(curDay);d.e=d.e.filter(x=>x!==obj);tidyDay(curDay)}
   esave();
 }
-function drawRes(){
+/* stay = nach einer Aktion (Treffer antippen, Menge, entfernen): Reihenfolge und Scrollposition bleiben, nichts springt.
+   Sonst ordnet die Häufigkeit neu – ein eben gewähltes Lebensmittel würde nach oben wandern. */
+function drawRes(stay){
   const box=$("eRes");if(!box||!searchCtx)return;const ctx=searchCtx,raw=$("eQ").value,toks=norm(raw).split(" ").filter(Boolean);
+  const sb=$("shBody"),y0=sb?sb.scrollTop:0,prev=stay?ord:null,nord=[];
+  const hold=(arr,kf)=>{if(prev)arr=arr.map((x,i)=>{const p=prev.indexOf(kf(x));return [x,i,p<0?1e9:p]}).sort((a,b)=>a[2]-b[2]||a[1]-b[1]).map(a=>a[0]);arr.forEach(x=>nord.push(kf(x)));return arr};
   const u=usage(ctx.slot),uAll=usage(null),pick={};
   const foodRow=(f,key)=>{pick[key]=f;const a=added[key];
     if(a){const pcs=f.base==="stk"||a.u==="stk",ed=edKey===key;return `<div class="erow eadded${ed?" editing":""}" data-key="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}</span><span class="epill on" data-ek="${esc(key)}">${nf(a.amt,1)} ${pcs?"Stk":"g"}</span><span class="echeck">✓</span></div>${ed?amtH(pcs,a.amt,true):""}`}
@@ -471,34 +475,35 @@ function drawRes(){
     tabs.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{sTab=b.dataset.tab;edKey=null;drawRes();$("shBody").scrollTop=0})}}
   let h="";
   if(isDay&&sTab==="m"){
-    const ms=Object.values(E.meals).filter(m=>!toks.length||qMatch(norm(m.name+" "+m.items.map(x=>foodName(E.foods[x.food])).join(" ")),toks))
-      .sort((a,b)=>(u.me[b.id]||0)-(u.me[a.id]||0)||(b.slot===ctx.slot)-(a.slot===ctx.slot)||a.name.localeCompare(b.name));
+    const ms=hold(Object.values(E.meals).filter(m=>!toks.length||qMatch(norm(m.name+" "+m.items.map(x=>foodName(E.foods[x.food])).join(" ")),toks))
+      .sort((a,b)=>(u.me[b.id]||0)-(u.me[a.id]||0)||(b.slot===ctx.slot)-(a.slot===ctx.slot)||a.name.localeCompare(b.name)),m=>"t:"+m.id);
     h+=ms.length?`<div class="list elist">${ms.map(tplRow2).join("")}</div>`:`<div class="note">Keine Mahlzeit gefunden.</div>`;
     h+=`<button class="btn ghost" id="eNewM">＋ Neue Mahlzeit</button>`;
   }else if(!toks.length){
-    const fs=Object.values(E.foods).sort((a,b)=>((u.fo[b.id]||0)*3+(uAll.fo[b.id]||0))-((u.fo[a.id]||0)*3+(uAll.fo[a.id]||0))||a.name.localeCompare(b.name));
+    const fs=hold(Object.values(E.foods).sort((a,b)=>((u.fo[b.id]||0)*3+(uAll.fo[b.id]||0))-((u.fo[a.id]||0)*3+(uAll.fo[a.id]||0))||a.name.localeCompare(b.name)),f=>f.id);
     h+=`<div class="list elist">${fs.slice(0,40).map(f=>foodRow(f,f.id)).join("")}</div>`;
   }else{
     const ms=Object.values(E.meals).filter(m=>qMatch(norm(m.name),toks));
     if(ctx.kind==="day"&&ms.length)h+=`<div class="list elist">${ms.map(tplRow2).join("")}</div>`;
     const own=Object.values(E.foods).filter(f=>qMatch(norm(f.name+" "+(f.brand||"")),toks)).sort((a,b)=>(uAll.fo[b.id]||0)-(uAll.fo[a.id]||0));
-    const rows=own.slice(0,20).map(f=>foodRow(f,f.id));
-    offRes.forEach((f,i)=>{if(!E.foods[f.id])rows.push(foodRow(f,f.id))});
+    const cand=own.slice(0,20);
+    offRes.forEach(f=>{if(!E.foods[f.id])cand.push(f)});
     if(BLS){const ownB=new Set(own.map(f=>f.id));
-      BLS.filter(b=>!ownB.has("bls:"+b.code)&&qMatch(b.n,toks)).map(b=>[score(b.n,toks),b]).sort((a,b)=>b[0]-a[0]).slice(0,30).forEach(([,b])=>rows.push(foodRow(blsFood(b),"bls:"+b.code)));
+      BLS.filter(b=>!ownB.has("bls:"+b.code)&&qMatch(b.n,toks)).map(b=>[score(b.n,toks),b]).sort((a,b)=>b[0]-a[0]).slice(0,30).forEach(([,b])=>cand.push(blsFood(b)));
     }
+    const rows=hold(cand,f=>f.id).map(f=>foodRow(f,f.id));
     h+=rows.length?`<div class="list elist">${rows.join("")}</div>`:BLS?`<div class="note">Nichts gefunden.</div>`:"";
     h+=`<button class="btn ghost" id="eOff">🌐 Marken online suchen</button>`;
   }
   if(!(isDay&&sTab==="m"))h+=`<button class="btn ghost" id="eNew">＋ Neues Lebensmittel</button>`;
-  box.innerHTML=h;
+  box.innerHTML=h;ord=nord;if(sb)sb.scrollTop=y0;
   $("eDone").textContent=addedN?`Fertig · ${addedN} hinzugefügt`:"Fertig";
-  box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;edKey=null;drawRes()});
-  box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;if(edKey)amtGo=true;drawRes()});
-  box.querySelectorAll(".eadded[data-key]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-ek]"))return;const k=r.dataset.key;removeAdded(added[k],ctx);delete added[k];addedN--;if(edKey===k)edKey=null;drawRes()});
+  box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;edKey=null;drawRes(true)});
+  box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;if(edKey)amtGo=true;drawRes(true)});
+  box.querySelectorAll(".eadded[data-key]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-ek]"))return;const k=r.dataset.key;removeAdded(added[k],ctx);delete added[k];addedN--;if(edKey===k)edKey=null;drawRes(true)});
   box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";bindAmtObj(r.nextElementSibling.querySelector(".eamt"),a,()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")})});
   box.querySelectorAll("[data-tpl]").forEach(b=>gesture(b,{
-    tap:()=>{const k="t:"+b.dataset.tpl;if(added[k]){unTpl(added[k]);delete added[k];addedN--;drawRes();return}if(!E.meals[b.dataset.tpl].items.length){tplSheet(b.dataset.tpl,snapSearch());return}added[k]=insertTpl(b.dataset.tpl,curDay,ctx.slot,true);addedN++;drawRes()},
+    tap:()=>{const k="t:"+b.dataset.tpl;if(added[k]){unTpl(added[k]);delete added[k];addedN--;drawRes(true);return}if(!E.meals[b.dataset.tpl].items.length){tplSheet(b.dataset.tpl,snapSearch());return}added[k]=insertTpl(b.dataset.tpl,curDay,ctx.slot,true);addedN++;drawRes(true)},
     long:()=>{buzz();tplSheet(b.dataset.tpl,snapSearch())}}));
   if($("eNewM"))$("eNewM").onclick=()=>{const st=snapSearch();askName("Neue Mahlzeit",$("eQ").value.trim(),n=>{const id=nid();E.meals[id]={id,name:n,slot:ctx.slot,items:[]};esave();tplSheet(id,st)})};
   if($("eOff"))$("eOff").onclick=()=>searchOFF(raw.trim());
