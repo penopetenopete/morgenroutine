@@ -188,20 +188,22 @@ function renderMacro(){
   });
   $("eSlots").innerHTML=h||`<div class="note">Noch nichts eingetragen.</div>`;
 }
-function stepOf(f,u,amt){return (f&&f.base==="stk")||u==="stk"?0.5:amt<20?1:amt<200?5:10}
-/* Waagerechtes Rad für Mengen: wischen, keine Tastatur */
-const RW=56;
-function rulerH(pcs){const vals=pcs?stkVals:gramVals;return `<div class="eruler"><div class="erscroll">${vals.map((v,i)=>`<span data-i="${i}">${nf(v,1)}</span>`).join("")}</div><i class="ermark"></i></div>`}
-function bindRuler(box,obj,pcs,onChange){
-  const sc=box.querySelector(".erscroll");if(!sc)return;const vals=pcs?stkVals:gramVals,items=[...sc.children];
-  let i0=0;vals.forEach((v,i)=>{if(Math.abs(v-obj.amt)<Math.abs(vals[i0]-obj.amt))i0=i});
-  let cur=i0,tmr=null;const mark=i=>items.forEach((s,j)=>s.className=j===i?"on":Math.abs(j-i)===1?"nb":"");
-  mark(cur);requestAnimationFrame(()=>{sc.scrollLeft=cur*RW});sc.scrollLeft=cur*RW;
-  sc.addEventListener("scroll",()=>{const i=Math.max(0,Math.min(vals.length-1,Math.round(sc.scrollLeft/RW)));
-    if(i!==cur){cur=i;mark(i);obj.amt=vals[i];onChange(false)}
-    clearTimeout(tmr);tmr=setTimeout(()=>{esave();onChange(true)},250)},{passive:true});
-  items.forEach(s=>s.onclick=()=>sc.scrollTo({left:+s.dataset.i*RW,behavior:"smooth"}));
+/* ---------- Menge: Zahlenfeld (18.10.2026) – ersetzt Drehrad und Lineal, überall dieselbe Bedienung ----------
+   Gültige Zahl wird sofort übernommen; leer, ungültig oder 0 → alter Wert bleibt; beim Verlassen zeigt das Feld immer den gespeicherten Wert (nie NaN im Speicher). */
+const AMAX=99999;
+function parseAmt(raw){const v=Math.round(Number(String(raw).trim().replace(",","."))*100)/100;return v>0&&v<=AMAX?v:null}
+const amtShow=v=>String(Math.round((+v||0)*100)/100);
+function amtH(pcs,amt,inl){return `<div class="eamtrow${inl?" in":""}"><input class="eamt" type="number" inputmode="decimal" step="${pcs?0.5:1}" min="0" value="${amtShow(amt)}" aria-label="Menge"><span class="eau">${pcs?"Stk":"g"}</span></div>`}
+let amtGo=false; // true = beim nächsten Binden Feld fokussieren und markieren (Eintippen ersetzt den Wert), ohne die Seite zu scrollen
+function bindAmt(inp,get,set){
+  if(!inp)return;
+  const take=()=>{const v=parseAmt(inp.value);if(v===null)return false;if(v!==get())set(v);return true};
+  const leave=()=>{take();inp.value=amtShow(get())};
+  inp.addEventListener("input",take);inp.addEventListener("change",leave);inp.addEventListener("blur",leave);
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();inp.blur()}});
+  if(amtGo){amtGo=false;setTimeout(()=>{inp.focus({preventScroll:true});inp.select()},0)}
 }
+const bindAmtObj=(inp,obj,onChange)=>bindAmt(inp,()=>obj.amt,v=>{obj.amt=v;esave();onChange()});
 const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
 const PLUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const CAM='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/><path d="M8 9v6M11 9v6M14 9v6M16.5 9v6"/></svg>';
@@ -210,7 +212,7 @@ const BIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wid
 let sel=new Set();
 function rowH(en,sub){
   const f=E.foods[en.food],n=nut(f,en.amt,en.u),pcs=(f&&f.base==="stk")||en.u==="stk",unit=pcs?"Stk":"g",ed=editId===en.id;
-  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}${sel.has(en.id)?" sel":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}" data-pill="${en.id}">${nf(en.amt,1)} ${unit}</span><span class="ev">${nf(n.kcal)}</span></div></div>${ed?rulerH(pcs):""}`;
+  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}${sel.has(en.id)?" sel":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}" data-pill="${en.id}">${nf(en.amt,1)} ${unit}</span><span class="ev">${nf(n.kcal)}</span></div></div>${ed?amtH(pcs,en.amt,true):""}`;
 }
 function bindSlots(){
   const S2=$("eSlots"),d=dayGet(curDay);
@@ -225,16 +227,16 @@ function bindSlots(){
       tap:()=>{
         if(sel.size){const a=ids(),all=a.every(i=>sel.has(i));a.forEach(i=>all?sel.delete(i):sel.add(i));renderEssen();return}
         if(r.dataset.gt){open[r.dataset.gt]=!open[r.dataset.gt];renderEssen();return}
-        editId=editId===r.dataset.e?null:r.dataset.e;renderEssen();
+        editId=editId===r.dataset.e?null:r.dataset.e;if(editId)amtGo=true;renderEssen();
       },
       long:()=>{buzz();editId=null;ids().forEach(i=>sel.add(i));renderEssen()},
       swipe:r.dataset.e?()=>delWithUndo(d.e.filter(x=>x.id===r.dataset.e)):null
     });
   });
-  const ru=S2.querySelector(".eruler");
-  if(ru){const en=d.e.find(x=>x.id===editId),f=E.foods[en.food],pcs=(f&&f.base==="stk")||en.u==="stk",row=S2.querySelector(`[data-e="${editId}"]`);
-    bindRuler(ru,en,pcs,()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
-      const sec=row.closest("[data-slothead]"),sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"});
+  const ai=S2.querySelector(".eamt");
+  if(ai){const en=d.e.find(x=>x.id===editId),f=E.foods[en.food],pcs=(f&&f.base==="stk")||en.u==="stk",row=S2.querySelector(`[data-e="${editId}"]`);
+    bindAmtObj(ai,en,()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
+      const sec=row.closest("[data-slothead]");if(!sec)return;const sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"});
   }
   renderSelBar();
 }
@@ -334,80 +336,6 @@ function useSuggestion(x,sl){
   if(x.t==="yday"){copyEntries(dayGet(addDays(curDay,-1)).e.filter(en=>en.slot===sl),curDay,sl);renderEssen();toast(SLOTN[sl]+" wie gestern eingetragen")}
 }
 
-/* ---------- Drehrad (gleiches Aussehen wie im Training) ---------- */
-const gramVals=(()=>{const a=[];for(let v=1;v<20;v++)a.push(v);for(let v=20;v<300;v+=5)a.push(v);for(let v=300;v<1000;v+=10)a.push(v);for(let v=1000;v<=2000;v+=50)a.push(v);return a})();
-const stkVals=(()=>{const a=[];for(let v=0.5;v<=20;v+=0.5)a.push(v);return a})();
-function wheelH(label,vals,unit){
-  return `<div class="wheelrow ewheel"><div class="wl"><span>${esc(label)}</span><input class="eamt" id="eAmtIn" type="number" inputmode="decimal" step="any" min="0" aria-label="Menge eintippen"></div>
-  <div class="wheelbox"><button class="wbtn" data-d="-1" aria-label="weniger">−</button><div class="wheelwrap"><div class="wheel" tabindex="0" role="spinbutton" aria-label="${esc(label)}">${vals.map((v,i)=>`<div data-i="${i}"><b>${nf(v,1)}</b><small>${unit}</small></div>`).join("")}</div></div><button class="wbtn" data-d="1" aria-label="mehr">+</button></div></div>`;
-}
-function wheelInit(row,vals,get,set){
-  const w=row.querySelector(".wheel"),items=[...w.children],inp=row.querySelector(".eamt");
-  const near=v=>{let b=0;vals.forEach((x,i)=>{if(Math.abs(x-v)<Math.abs(vals[b]-v))b=i});return b};
-  let shown=near(get()),tmr=null,prog=false;
-  const mark=i=>items.forEach((d,j)=>d.className=j===i?"on":Math.abs(j-i)===1?"nb":"");
-  const jump=(i,smooth)=>{prog=!smooth;w.scrollTo({top:i*44,behavior:smooth?"smooth":"auto"})};
-  requestAnimationFrame(()=>{w.scrollTop=shown*44});w.scrollTop=shown*44;mark(shown);inp.value=get();
-  w.addEventListener("scroll",()=>{
-    const i=Math.max(0,Math.min(vals.length-1,Math.round(w.scrollTop/44)));
-    if(i!==shown){shown=i;mark(i)}
-    clearTimeout(tmr);tmr=setTimeout(()=>{if(prog){prog=false;return}if(get()!==vals[i]){set(vals[i]);inp.value=vals[i]}},140);
-  },{passive:true});
-  items.forEach(d=>d.onclick=()=>jump(+d.dataset.i,true));
-  row.querySelectorAll(".wbtn").forEach(b=>b.onclick=()=>jump(Math.max(0,Math.min(vals.length-1,shown+(+b.dataset.d))),true));
-  inp.addEventListener("input",()=>{const v=parseFloat(String(inp.value).replace(",","."));if(!(v>0))return;set(v);const i=near(v);if(i!==shown){shown=i;mark(i);jump(i,false)}});
-}
-
-/* ---------- Menge: hinzufügen / ändern ---------- */
-/* o: {mode:"add",food,ctx} | {mode:"edit",id} | {mode:"tplitem",tid,i} */
-function openAmount(o){
-  let en=null,f,amt,u,title,eyebrow;
-  if(o.mode==="edit"){en=dayGet(curDay).e.find(x=>x.id===o.id);if(!en)return;f=E.foods[en.food];amt=en.amt;u=en.u;eyebrow=(en.g?en.g.name+" · ":"")+SLOTN[en.slot]}
-  else if(o.mode==="tplitem"){const it=E.meals[o.tid].items[o.i];f=E.foods[it.food];amt=it.amt;u=it.u;eyebrow="Vorlage · "+E.meals[o.tid].name}
-  else{f=o.food;u=f.du||(f.base==="stk"?undefined:undefined);amt=f.def||(f.base==="stk"||u==="stk"?1:100);eyebrow=o.ctx.kind==="tpl"?"Vorlage · "+E.meals[o.ctx.tid].name:o.ctx.kind==="grp"?"Zutat":SLOTN[o.ctx.slot]}
-  if(!f){toast("Lebensmittel fehlt");return}
-  title=f.name+(f.brand?" · "+f.brand:"");
-  const canStk=f.base==="g"&&f.stkG;
-  const draw=()=>{
-    const pieces=f.base==="stk"||u==="stk";
-    const per=f.base==="stk"?"pro Stück":"pro 100 g";
-    const body=openSheet(eyebrow,title,
-      `<div class="enut" id="eNut"></div>`+
-      (canStk?`<div class="seg"><button class="sbtn" data-u="g" aria-pressed="${!pieces}">Gramm</button><button class="sbtn" data-u="stk" aria-pressed="${pieces}">Stück (${nf(f.stkG)} g)</button></div>`:"")+
-      wheelH(pieces?"Stück":"Gramm",pieces?stkVals:gramVals,pieces?"Stk":"g")+
-      `<div class="note">${per}: ${nf(f.kcal)} kcal · ${nf(f.p,1)} g E · ${nf(f.c,1)} g KH · ${nf(f.f,1)} g F${f.src==="bls"?" · Quelle BLS":f.src==="off"?" · Quelle Open Food Facts":""}</div>`+
-      (o.mode==="add"?`<button class="btn primary big" id="eOk">Hinzufügen</button>`:
-       o.mode==="edit"?`<button class="btn primary big" id="eOk">Fertig</button><div class="row2"><button class="btn" id="eCopy">Kopieren …</button><button class="btn danger" id="eDel">Löschen</button></div>`:
-       `<button class="btn primary big" id="eOk">Fertig</button><button class="btn danger" id="eDel">Aus Vorlage entfernen</button>`)+
-      `<button class="btn ghost" id="eFood">Lebensmittel bearbeiten</button>`);
-    const upd=()=>{const n=nut(f,amt,u);$("eNut").innerHTML=`<span><b class="num">${nf(n.kcal)}</b> kcal</span><span><b class="num">${nf(n.p,1)}</b> g Eiweiß</span><span>${nf(n.f,1)} g F · ${nf(n.c,1)} g KH</span>`};
-    upd();
-    wheelInit(body.querySelector(".ewheel"),pieces?stkVals:gramVals,()=>amt,v=>{amt=v;upd();if(o.mode!=="add")commit(false)});
-    body.querySelectorAll("[data-u]").forEach(b=>b.onclick=()=>{const nu=b.dataset.u==="stk"?"stk":undefined;if(nu===u)return;
-      amt=nu==="stk"?Math.max(0.5,Math.round(amt/f.stkG*2)/2):Math.round(amt*f.stkG);u=nu;if(o.mode!=="add")commit(false);draw()});
-    $("eOk").onclick=()=>{commit(true)};
-    if($("eDel"))$("eDel").onclick=()=>{
-      if(o.mode==="edit"){const d=day(curDay);d.e=d.e.filter(x=>x!==en);tidyDay(curDay);esave();closeSheet();renderEssen();toast("Gelöscht")}
-      else{E.meals[o.tid].items.splice(o.i,1);esave();closeSheet();setTimeout(()=>tplSheet(o.tid),60)}};
-    if($("eCopy"))$("eCopy").onclick=()=>copySheet([en],"Eintrag");
-    $("eFood").onclick=()=>foodForm(f,()=>openAmount(o));
-  };
-  const commit=(close)=>{
-    if(o.mode==="edit"){en.amt=amt;if(u)en.u=u;else delete en.u;esave();if(close){closeSheet();renderEssen()}}
-    else if(o.mode==="tplitem"){const it=E.meals[o.tid].items[o.i];it.amt=amt;if(u)it.u=u;else delete it.u;esave();if(close){closeSheet();setTimeout(()=>tplSheet(o.tid),60)}}
-    else if(close){
-      if(!E.foods[f.id])E.foods[f.id]=f; // BLS / Open Food Facts → in die eigene Liste
-      const x={food:f.id,amt};if(u)x.u=u;
-      const c=o.ctx;
-      if(c.kind==="tpl"){E.meals[c.tid].items.push(x);esave();closeSheet();setTimeout(()=>tplSheet(c.tid),60);return}
-      const ne=Object.assign({id:nid(),slot:c.slot},x);
-      if(c.kind==="grp"){const g=dayGet(curDay).e.find(y=>y.g&&y.g.id===c.gid);if(g){ne.g=Object.assign({},g.g);ne.slot=g.slot;open[c.gid]=true}}
-      day(curDay).e.push(ne);esave();closeSheet();renderEssen();toast(f.name+" eingetragen");
-    }
-  };
-  draw();
-}
-
 /* ---------- Kopieren / Verschieben ---------- */
 function copySheet(list,what,onDone){
   if(!list.length)return;
@@ -428,7 +356,7 @@ function copySheet(list,what,onDone){
   draw();
 }
 
-/* ---------- Mahlzeit-Ansicht (lange drücken): Nährwerte oben, Zutaten mit Rad, ＋ Zutat ----------
+/* ---------- Mahlzeit-Ansicht (lange drücken): Nährwerte oben, Zutaten mit Zahlenfeld, ＋ Zutat ----------
    Gleiche Ansicht für eine Mahlzeit im Tag (grpView) und eine Vorlage (tplSheet). */
 function nutHead(s){const G=E.goals;
   const cell=k=>`<div class="emc" style="--rc:${MET[k].c}"><b class="num">${k==="kcal"?nf(s.kcal):nf(s[k],1)}</b><small>${MET[k].s||"kcal"}</small><i><i style="width:${Math.min(100,s[k]/(G[k]||1)*100).toFixed(0)}%"></i></i></div>`;
@@ -441,14 +369,14 @@ function mealSheet(c){
     const y=keep?$("shBody").scrollTop:0;
     const body=openSheet(c.eyebrow,c.title(),`<div class="emnut" id="mNut">${nutHead(sumE(items))}</div>${c.top?c.top():""}
       <div class="elist emlist">${items.map((it,i)=>{const f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",ed=i===mEd;
-        return `<div class="erow${ed?" editing":""}" data-mi="${i}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}">${nf(it.amt,1)} ${pcs?"Stk":"g"}</span><span class="ev">${nf(nut(f,it.amt,it.u).kcal)}</span>${ed?`<button class="ermv" data-mx="${i}" aria-label="Zutat entfernen">×</button>`:""}</div>${ed?rulerH(pcs):""}`}).join("")}
+        return `<div class="erow${ed?" editing":""}" data-mi="${i}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}">${nf(it.amt,1)} ${pcs?"Stk":"g"}</span><span class="ev">${nf(nut(f,it.amt,it.u).kcal)}</span>${ed?`<button class="ermv" data-mx="${i}" aria-label="Zutat entfernen">×</button>`:""}</div>${ed?amtH(pcs,it.amt,true):""}`}).join("")}
         <button class="eaddin emadd" id="mAdd">＋ Zutat</button></div>${c.actions()}`,{onClose:c.onClose});
     body.scrollTop=y;
-    body.querySelectorAll("[data-mi]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-mx]"))return;const i=+r.dataset.mi;mEd=mEd===i?-1:i;draw(true)});
+    body.querySelectorAll("[data-mi]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-mx]"))return;const i=+r.dataset.mi;mEd=mEd===i?-1:i;if(mEd>=0)amtGo=true;draw(true)});
     body.querySelectorAll("[data-mx]").forEach(b=>b.onclick=()=>{const it=items[+b.dataset.mx];mEd=-1;c.remove(it);esave();if(c.items().length||c.keepEmpty)draw(true);else{closeSheet()}});
-    const ru=body.querySelector(".eruler");
-    if(ru){const it=items[mEd],f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",row=body.querySelector(`[data-mi="${mEd}"]`);
-      bindRuler(ru,it,pcs,()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))})}
+    const ai=body.querySelector(".eamt");
+    if(ai){const it=items[mEd],f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",row=body.querySelector(`[data-mi="${mEd}"]`);
+      bindAmtObj(ai,it,()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))})}
     $("mAdd").onclick=c.add;
     if(c.bind)c.bind(body,draw);
   };
@@ -533,7 +461,7 @@ function drawRes(){
   const box=$("eRes");if(!box||!searchCtx)return;const ctx=searchCtx,raw=$("eQ").value,toks=norm(raw).split(" ").filter(Boolean);
   const u=usage(ctx.slot),uAll=usage(null),pick={};
   const foodRow=(f,key)=>{pick[key]=f;const a=added[key];
-    if(a){const pcs=f.base==="stk"||a.u==="stk",ed=edKey===key;return `<div class="erow eadded${ed?" editing":""}" data-key="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}</span><span class="epill on" data-ek="${esc(key)}">${nf(a.amt,1)} ${pcs?"Stk":"g"}</span><span class="echeck">✓</span></div>${ed?rulerH(pcs):""}`}
+    if(a){const pcs=f.base==="stk"||a.u==="stk",ed=edKey===key;return `<div class="erow eadded${ed?" editing":""}" data-key="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}</span><span class="epill on" data-ek="${esc(key)}">${nf(a.amt,1)} ${pcs?"Stk":"g"}</span><span class="echeck">✓</span></div>${ed?amtH(pcs,a.amt,true):""}`}
     return `<button class="erow" data-pick="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}${f.brand?` <small>${esc(f.brand)}</small>`:""}</span><span class="ev">${nf(f.kcal)}</span><span class="eplus">${PLUS}</span></button>`};
   const tplRow2=m=>{const k="t:"+m.id,s=sumE(m.items),strip=m.items.slice(0,7).map(x=>iconOf(E.foods[x.food]).replace('class="eic"','class="emini"')).join("")+(m.items.length>7?`<span class="emore">+${m.items.length-7}</span>`:"");
     return `<div class="erow emrow2${added[k]?" eadded":""}" data-tpl="${m.id}"><span class="emeal"><span class="enm">${esc(m.name)}</span><span class="estrip">${strip}</span></span><span class="ev">${nf(s.kcal)}</span>${added[k]?`<span class="echeck">✓</span>`:`<span class="eplus">${PLUS}</span>`}</div>`};
@@ -566,9 +494,9 @@ function drawRes(){
   box.innerHTML=h;
   $("eDone").textContent=addedN?`Fertig · ${addedN} hinzugefügt`:"Fertig";
   box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;edKey=null;drawRes()});
-  box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;drawRes()});
+  box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;if(edKey)amtGo=true;drawRes()});
   box.querySelectorAll(".eadded[data-key]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-ek]"))return;const k=r.dataset.key;removeAdded(added[k],ctx);delete added[k];addedN--;if(edKey===k)edKey=null;drawRes()});
-  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";bindRuler(r.nextElementSibling,a,pcs,()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")})});
+  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";bindAmtObj(r.nextElementSibling.querySelector(".eamt"),a,()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")})});
   box.querySelectorAll("[data-tpl]").forEach(b=>gesture(b,{
     tap:()=>{const k="t:"+b.dataset.tpl;if(added[k]){unTpl(added[k]);delete added[k];addedN--;drawRes();return}if(!E.meals[b.dataset.tpl].items.length){tplSheet(b.dataset.tpl,snapSearch());return}added[k]=insertTpl(b.dataset.tpl,curDay,ctx.slot,true);addedN++;drawRes()},
     long:()=>{buzz();tplSheet(b.dataset.tpl,snapSearch())}}));
@@ -824,5 +752,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,setDay:k=>{curDay=k;renderEssen()}};
 })();
