@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="36"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="37"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -634,7 +634,7 @@ function hSwipe(el,fn,inSheet){
   el.addEventListener("touchstart",e=>{
     ok=false;if(e.touches.length!==1)return;const t=e.touches[0];x0=t.clientX;y0=t.clientY;t0=Date.now();
     if(x0<24||x0>innerWidth-24)return; // Zurück-Geste vom Rand nicht abfangen
-    if(e.target.closest(".days,.erscroll,.eruler,.wheel,.wheelwrap,.eswipe,.edock,.ecal,input,textarea,select,.tlghost,.hdl"))return;
+    if(e.target.closest(".days,.wheel,.wheelwrap,.eswipe,.edock,.ecal,input,textarea,select,.tlghost,.hdl"))return;
     ok=true},{passive:true});
   el.addEventListener("touchend",e=>{
     if(!ok||tlDrag)return;ok=false;
