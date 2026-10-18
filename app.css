@@ -572,7 +572,6 @@ body.esel #essen{padding-bottom:170px}
 .emc small{font-family:var(--f-display);font-size:.66rem;color:var(--rc)}
 .emc>i{display:block;height:3px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:4px}
 .emc>i>i{display:block;height:100%;margin:0;background:var(--rc)}
-.emlist>.erow+.erow,.emlist>.eamtrow+.erow{border-top:1px solid var(--line)}
 .emlist .emadd{border-top:1px solid var(--line);min-height:44px;background:color-mix(in srgb,var(--bg) 30%,var(--card))}
 .emslot .sbtn{min-height:34px;font-size:.72rem;flex:1 1 20%}
 .emact{display:grid;grid-template-columns:1fr 1fr;gap:6px}

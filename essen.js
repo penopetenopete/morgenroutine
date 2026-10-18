@@ -241,12 +241,12 @@ function bindSlots(){
   renderSelBar();
 }
 const buzz=()=>{try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}};
-/* Gesten: tippen · nach links wischen = löschen · lange drücken = auswählen */
+/* Gesten: tippen · nach links wischen = löschen · lange drücken = auswählen (long optional) */
 function gesture(el,{tap,long,swipe}){
   el.addEventListener("pointerdown",ev=>{
     if(ev.button>0||ev.target.closest(".egm"))return;
     const x0=ev.clientX,y0=ev.clientY;let mode=null,dx=0;
-    const lt=setTimeout(()=>{mode="long";long()},420);
+    const lt=long?setTimeout(()=>{mode="long";long()},420):0;
     const mv=e=>{
       const ddx=e.clientX-x0,ddy=e.clientY-y0;
       if(!mode){
@@ -308,13 +308,16 @@ function calPop(onPick){
 
 /* Löschen mit Rückgängig */
 let undoT=null;
+function undoBar(text,restore){
+  let u=$("eUndo");if(!u){u=document.createElement("div");u.id="eUndo";u.className="eundo";document.body.appendChild(u)}
+  u.innerHTML=`<span>${esc(text)}</span><button>Rückgängig</button>`;u.hidden=false;
+  u.querySelector("button").onclick=()=>{u.hidden=true;restore()};
+  clearTimeout(undoT);undoT=setTimeout(()=>u.hidden=true,4000);
+}
 function delWithUndo(list){
   const dd=day(curDay),k=curDay,snap=dd.e.slice();
   dd.e=dd.e.filter(x=>!list.includes(x));tidyDay(k);esave();editId=null;renderEssen();
-  let u=$("eUndo");if(!u){u=document.createElement("div");u.id="eUndo";u.className="eundo";document.body.appendChild(u)}
-  u.innerHTML=`<span>${esc(list.length===1?foodName(E.foods[list[0].food]):list.length+" Einträge")} gelöscht</span><button>Rückgängig</button>`;u.hidden=false;
-  u.querySelector("button").onclick=()=>{day(k).e=snap;esave();u.hidden=true;renderEssen()};
-  clearTimeout(undoT);undoT=setTimeout(()=>u.hidden=true,4000);
+  undoBar((list.length===1?foodName(E.foods[list[0].food]):list.length+" Einträge")+" gelöscht",()=>{day(k).e=snap;esave();renderEssen()});
 }
 
 /* ---------- Einfügen ---------- */
@@ -361,19 +364,24 @@ function copySheet(list,what,onDone){
 function nutHead(s){const G=E.goals;
   const cell=k=>`<div class="emc" style="--rc:${MET[k].c}"><b class="num">${k==="kcal"?nf(s.kcal):nf(s[k],1)}</b><small>${MET[k].s||"kcal"}</small><i><i style="width:${Math.min(100,s[k]/(G[k]||1)*100).toFixed(0)}%"></i></i></div>`;
   return cell("kcal")+cell("c")+cell("p")+cell("f")}
-let mEd=-1;
+let mEd=-1,mGen=0;
 function mealSheet(c){
-  mEd=-1;
+  mEd=-1;const me=++mGen;
   const draw=keep=>{
     const items=c.items();if(mEd>=items.length)mEd=-1;
     const y=keep?$("shBody").scrollTop:0;
     const body=openSheet(c.eyebrow,c.title(),`<div class="emnut" id="mNut">${nutHead(sumE(items))}</div>${c.top?c.top():""}
       <div class="elist emlist">${items.map((it,i)=>{const f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",ed=i===mEd;
-        return `<div class="erow${ed?" editing":""}" data-mi="${i}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}">${nf(it.amt,1)} ${pcs?"Stk":"g"}</span><span class="ev">${nf(nut(f,it.amt,it.u).kcal)}</span>${ed?`<button class="ermv" data-mx="${i}" aria-label="Zutat entfernen">×</button>`:""}</div>${ed?amtH(pcs,it.amt,true):""}`}).join("")}
+        return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${ed?" editing":""}" data-mi="${i}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}">${nf(it.amt,1)} ${pcs?"Stk":"g"}</span><span class="ev">${nf(nut(f,it.amt,it.u).kcal)}</span>${ed?`<button class="ermv" data-mx="${i}" aria-label="Zutat entfernen">×</button>`:""}</div></div>${ed?amtH(pcs,it.amt,true):""}`}).join("")}
         <button class="eaddin emadd" id="mAdd">＋ Zutat</button></div>${c.actions()}`,{onClose:c.onClose});
     body.scrollTop=y;
-    body.querySelectorAll("[data-mi]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-mx]"))return;const i=+r.dataset.mi;mEd=mEd===i?-1:i;if(mEd>=0)amtGo=true;draw(true)});
-    body.querySelectorAll("[data-mx]").forEach(b=>b.onclick=()=>{const it=items[+b.dataset.mx];mEd=-1;c.remove(it);esave();if(c.items().length||c.keepEmpty)draw(true);else{closeSheet()}});
+    /* Zutat entfernen: nach links wischen (wie in der Tagesliste) oder ×; Rückgängig bleibt kurz stehen, auch wenn die Ansicht leer wurde und zuging */
+    const delIt=it=>{const back=c.snap(),nm=foodName(E.foods[it.food]);mEd=-1;c.remove(it);esave();
+      undoBar(nm+" entfernt",()=>{back();esave();if(me===mGen&&$("mNut")&&!$("scrim").hidden)draw(true);else renderEssen()});
+      if(c.items().length||c.keepEmpty)draw(true);else closeSheet()};
+    body.querySelectorAll("[data-mi]").forEach(r=>{const i=+r.dataset.mi;
+      gesture(r,{tap:e=>{if(e&&e.target.closest("[data-mx]"))return;mEd=mEd===i?-1:i;if(mEd>=0)amtGo=true;draw(true)},swipe:()=>delIt(items[i])})});
+    body.querySelectorAll("[data-mx]").forEach(b=>b.onclick=()=>delIt(items[+b.dataset.mx]));
     const ai=body.querySelector(".eamt");
     if(ai){const it=items[mEd],f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",row=body.querySelector(`[data-mi="${mEd}"]`);
       bindAmtObj(ai,it,()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))})}
@@ -390,6 +398,7 @@ function grpView(gid,full){
   const toTpl=list=>list.map(x=>{const it={food:x.food,amt:x.amt};if(x.u)it.u=x.u;return it});
   mealSheet({eyebrow:SLOTN[first.slot],title:()=>g().name,items:gl,
     remove:it=>{const d=day(curDay);d.e=d.e.filter(x=>x!==it);tidyDay(curDay)},
+    snap:()=>{const k=curDay,s=day(k).e.slice();return ()=>{day(k).e=s}},
     add:()=>openSearch({kind:"grp",gid,slot:first.slot,back:()=>grpView(gid,full)}),
     onClose:()=>renderEssen(),
     actions:()=>!full?`<div class="emact"><button class="btn" id="gCopy">Kopieren …</button><button class="btn danger" id="gDel">Löschen</button></div>`:`<div class="emact">${tpl()?`<button class="btn" id="gUpd">Vorlage speichern</button>`:""}<button class="btn" id="gNew">Neue Vorlage</button>
@@ -599,6 +608,7 @@ function tplSheet(tid,from){
   const back=()=>from?restoreSearch(from):tplList();
   mealSheet({eyebrow:"Mahlzeit",title:()=>m.name,items:()=>m.items,keepEmpty:true,
     remove:it=>{const i=m.items.indexOf(it);if(i>=0)m.items.splice(i,1)},
+    snap:()=>{const s=m.items.slice();return ()=>{m.items.splice(0,m.items.length,...s)}},
     add:()=>openSearch({kind:"tpl",tid,slot:m.slot||"sn",back:()=>tplSheet(tid,from)}),
     onClose:()=>renderEssen(),
     top:()=>`<div class="seg eslotseg emslot">${SLOTS.map(([sl,n])=>`<button class="sbtn" data-ts="${sl}" aria-pressed="${m.slot===sl}">${n}</button>`).join("")}</div>`,
