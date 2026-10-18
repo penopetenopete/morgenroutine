@@ -90,3 +90,57 @@ test("bindAmt ohne Feld wirft nicht", () => {
   assert.doesNotThrow(() => h.ctx.__essen.bindAmt(null, () => 1, () => {}));
   assert.doesNotThrow(() => h.ctx.__essen.bindAmtObj(null, { amt: 1 }, () => {}));
 });
+
+/* Nach dem Bestätigen zurück in die Ausgangslage (18.10.2026): Enter übernimmt den Wert und meldet
+   „fertig“, damit die Zeile von selbst wieder zuklappt. Bei blur passiert das bewusst NICHT – sonst
+   würde ein Tipp auf eine andere Zeile die gerade angetippte Zeile wegziehen. */
+test("Enter: übernimmt den Wert und meldet fertig", () => {
+  const h = loadApp({}, OPT), en = eintrag(h, 100), f = feld("100");
+  let fertig = 0;
+  h.ctx.__essen.bindAmtObj(f, en, () => {}, () => { fertig++; });
+  tippe(f, "250");
+  f.fire("keydown", { key: "Enter", preventDefault() {} });
+  assert.equal(en.amt, 250);
+  assert.equal(fertig, 1, "fertig genau einmal");
+  assert.equal(f.blurs, 0, "kein blur, wenn es ein fertig gibt (sonst doppelter Neuaufbau)");
+});
+
+test("Enter ohne fertig-Rückruf: blurrt wie vorher", () => {
+  const h = loadApp({}, OPT), en = eintrag(h, 100), f = feld("100");
+  h.ctx.__essen.bindAmtObj(f, en, () => {});
+  tippe(f, "80");
+  f.fire("keydown", { key: "Enter", preventDefault() {} });
+  assert.equal(en.amt, 80);
+  assert.equal(f.blurs, 1);
+});
+
+test("blur meldet kein fertig: Tipp auf eine andere Zeile darf nichts wegziehen", () => {
+  const h = loadApp({}, OPT), en = eintrag(h, 100), f = feld("100");
+  let fertig = 0;
+  h.ctx.__essen.bindAmtObj(f, en, () => {}, () => { fertig++; });
+  tippe(f, "300");
+  f.fire("blur");
+  assert.equal(en.amt, 300, "Wert ist trotzdem übernommen");
+  assert.equal(fertig, 0, "aber kein Zuklappen aus dem blur heraus");
+});
+
+test("Enter mit ungültiger Eingabe: alter Wert bleibt, Feld zeigt ihn wieder, trotzdem fertig", () => {
+  const h = loadApp({}, OPT), en = eintrag(h, 100), f = feld("100");
+  let fertig = 0;
+  h.ctx.__essen.bindAmtObj(f, en, () => {}, () => { fertig++; });
+  tippe(f, "abc");
+  f.fire("keydown", { key: "Enter", preventDefault() {} });
+  assert.equal(en.amt, 100);
+  assert.equal(f.value, "100");
+  assert.equal(fertig, 1);
+  assert.ok(!JSON.stringify(gespeichert(h)).includes("NaN"));
+});
+
+test("andere Taste löst nichts aus", () => {
+  const h = loadApp({}, OPT), en = eintrag(h, 100), f = feld("100");
+  let fertig = 0;
+  h.ctx.__essen.bindAmtObj(f, en, () => {}, () => { fertig++; });
+  f.fire("keydown", { key: "a", preventDefault() {} });
+  assert.equal(fertig, 0);
+  assert.equal(f.blurs, 0);
+});

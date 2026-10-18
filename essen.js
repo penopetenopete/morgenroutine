@@ -195,15 +195,19 @@ function parseAmt(raw){const v=Math.round(Number(String(raw).trim().replace(",",
 const amtShow=v=>String(Math.round((+v||0)*100)/100);
 function amtH(pcs,amt,inl){return `<div class="eamtrow${inl?" in":""}"><input class="eamt" type="number" inputmode="decimal" step="${pcs?0.5:1}" min="0" value="${amtShow(amt)}" aria-label="Menge"><span class="eau">${pcs?"Stk":"g"}</span></div>`}
 let amtGo=false; // true = beim nächsten Binden Feld fokussieren und markieren (Eintippen ersetzt den Wert), ohne die Seite zu scrollen
-function bindAmt(inp,get,set){
+/* done = nach dem Bestätigen (Enter bzw. „Fertig“ auf der Tastatur) zurück in die Ausgangslage:
+   die Zeile klappt von selbst wieder zu, man muss nicht nochmal tippen (18.10.2026).
+   Bewusst nur bei Enter, nicht bei blur: beim Tippen auf eine andere Zeile würde ein Neuaufbau
+   aus dem blur heraus die gerade angetippte Zeile wegziehen, und der Tipp ginge daneben. */
+function bindAmt(inp,get,set,done){
   if(!inp)return;
   const take=()=>{const v=parseAmt(inp.value);if(v===null)return false;if(v!==get())set(v);return true};
   const leave=()=>{take();inp.value=amtShow(get())};
   inp.addEventListener("input",take);inp.addEventListener("change",leave);inp.addEventListener("blur",leave);
-  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();inp.blur()}});
+  inp.addEventListener("keydown",e=>{if(e.key!=="Enter")return;e.preventDefault();leave();if(done)done();else inp.blur()});
   if(amtGo){amtGo=false;setTimeout(()=>{inp.focus({preventScroll:true});inp.select()},0)}
 }
-const bindAmtObj=(inp,obj,onChange)=>bindAmt(inp,()=>obj.amt,v=>{obj.amt=v;esave();onChange()});
+const bindAmtObj=(inp,obj,onChange,done)=>bindAmt(inp,()=>obj.amt,v=>{obj.amt=v;esave();onChange()},done);
 const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
 const PLUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const CAM='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/><path d="M8 9v6M11 9v6M14 9v6M16.5 9v6"/></svg>';
@@ -236,7 +240,8 @@ function bindSlots(){
   const ai=S2.querySelector(".eamt");
   if(ai){const en=d.e.find(x=>x.id===editId),f=E.foods[en.food],pcs=(f&&f.base==="stk")||en.u==="stk",row=S2.querySelector(`[data-e="${editId}"]`);
     bindAmtObj(ai,en,()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
-      const sec=row.closest("[data-slothead]");if(!sec)return;const sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"});
+      const sec=row.closest("[data-slothead]");if(!sec)return;const sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"},
+      ()=>{editId=null;renderEssen()});
   }
   renderSelBar();
 }
@@ -384,7 +389,7 @@ function mealSheet(c){
     body.querySelectorAll("[data-mx]").forEach(b=>b.onclick=()=>delIt(items[+b.dataset.mx]));
     const ai=body.querySelector(".eamt");
     if(ai){const it=items[mEd],f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",row=body.querySelector(`[data-mi="${mEd}"]`);
-      bindAmtObj(ai,it,()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))})}
+      bindAmtObj(ai,it,()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))},()=>{mEd=-1;draw(true)})}
     $("mAdd").onclick=c.add;
     if(c.bind)c.bind(body,draw);
   };
@@ -507,10 +512,14 @@ function drawRes(stay){
   if(!(isDay&&sTab==="m"))h+=`<button class="btn ghost" id="eNew">＋ Neues Lebensmittel</button>`;
   box.innerHTML=h;ord=nord;if(sb)sb.scrollTop=y0;
   $("eDone").textContent=addedN?`Fertig · ${addedN} hinzugefügt`:"Fertig";
-  box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;edKey=null;drawRes(true)});
+  // Tipp auf die graue Kalorienzahl = hinzufuegen und gleich das Mengenfeld oeffnen (18.10.2026);
+  // ueberall sonst auf der Zeile nur hinzufuegen, wie bisher
+  box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=ev=>{const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;
+    const direkt=!!(ev&&ev.target&&ev.target.closest&&ev.target.closest(".ev"));
+    edKey=direkt?k:null;if(direkt)amtGo=true;drawRes(true)});
   box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;if(edKey)amtGo=true;drawRes(true)});
   box.querySelectorAll(".eadded[data-key]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-ek]"))return;const k=r.dataset.key;removeAdded(added[k],ctx);delete added[k];addedN--;if(edKey===k)edKey=null;drawRes(true)});
-  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";bindAmtObj(r.nextElementSibling.querySelector(".eamt"),a,()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")})});
+  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";bindAmtObj(r.nextElementSibling.querySelector(".eamt"),a,()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")},()=>{edKey=null;drawRes(true)})});
   box.querySelectorAll("[data-tpl]").forEach(b=>gesture(b,{
     tap:()=>{const k="t:"+b.dataset.tpl;if(added[k]){unTpl(added[k]);delete added[k];addedN--;drawRes(true);return}if(!E.meals[b.dataset.tpl].items.length){tplSheet(b.dataset.tpl,snapSearch());return}added[k]=insertTpl(b.dataset.tpl,curDay,ctx.slot,true);addedN++;drawRes(true)},
     long:()=>{buzz();tplSheet(b.dataset.tpl,snapSearch())}}));
