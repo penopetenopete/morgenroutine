@@ -143,14 +143,18 @@
     if (force) { S.music = force; S.mode = null; }
     const item = p && p.item;
     if (target === "music" && S.mode === "queue" && item && item.type === "episode" && S.music) {
-      // Lautlos umsetzen (13.10.2026): ein eingereihter Titel startet bei Spotify immer bei 0,
-      // das Spulen danach war als Liedanfang plus Sprung hörbar. Mit Pause davor passiert das
-      // Umsetzen stumm. Scheitert die Pause, läuft es wie bisher – hörbar, aber nicht kaputt.
-      let pausiert = false;
-      try { await api("PUT", "/me/player/pause" + dq("?")); pausiert = true; } catch (e) {}
-      await api("POST", "/me/player/next" + dq("?"));
-      await seekTo(S.music.pos || 0, S.music.track || null);
-      if (pausiert) { try { await api("PUT", "/me/player/play" + dq("?")); } catch (e) { log("Weiterspielen nach dem Umsetzen ging nicht", "e"); } }
+      // Direkt an der Stelle starten statt über die Warteschlange (13.10.2026): ein eingereihter
+      // Titel startet bei Spotify immer bei 0, und "next" hebt eine Pause davor wieder auf
+      // (am Gerät gemessen: "ist 777 ms" trotz Pause) – der Liedanfang war also hörbar, dann der
+      // Sprung. "play" mit Kontext, Titel und Position macht es in einem Aufruf, ohne Vorlauf.
+      // Geht nur bei fortsetzbarer Quelle (Album/eigene Playlist); sonst der alte Weg.
+      const m = S.music;
+      let direkt = false;
+      if (m.track && m.ctx && resumable({ type: m.ctxType, uri: m.ctx })) {
+        try { await play({ context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }); direkt = true; log("Musik direkt an der Stelle gestartet", ""); }
+        catch (e) { log("Direkt starten ging nicht, zurück über die Warteschlange: " + explain(e), "w"); }
+      }
+      if (!direkt) { await api("POST", "/me/player/next" + dq("?")); await seekTo(m.pos || 0, m.track || null); }
       S.mode = null;
     } else if (target === "podcast" && item && item.type === "track" && !resumable(p.context)) {
       const ep = await podcastEpisode(), pos = S.pod && S.pod.episode === ep ? Math.max(0, (S.pod.pos || 0) - S.rewind * 1000) : 0;

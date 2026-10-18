@@ -599,17 +599,27 @@ public class SpotifyCore {
             synchronized (this) { music = st.optJSONObject("music"); modeStr = st.optString("mode", ""); }
 
             if ("music".equals(target) && "queue".equals(modeStr) && "episode".equals(itemType) && music != null) {
-                // Folge überspringen → der eingereihte Song kommt, dann läuft Mix/Radio normal weiter.
-                // Lautlos umsetzen (13.10.2026): ein eingereihter Titel startet bei Spotify immer bei 0,
-                // das Spulen danach war als Liedanfang plus Sprung hörbar. Mit Pause davor passiert das
-                // Umsetzen stumm. Scheitert die Pause, läuft es wie bisher – hörbar, aber nicht kaputt.
-                boolean pausiert = false;
-                try { withDevice(() -> api("PUT", "/me/player/pause" + dq("?"), null)); pausiert = true; } catch (Exception ignored) { }
-                withDevice(() -> api("POST", "/me/player/next" + dq("?"), null));
-                seekTo(music.optLong("pos"), music.optString("track", null));
-                if (pausiert) {
-                    try { withDevice(() -> api("PUT", "/me/player/play" + dq("?"), null)); }
-                    catch (Exception e) { addLog("Weiterspielen nach dem Umsetzen ging nicht", "e"); }
+                // Direkt an der Stelle starten statt über die Warteschlange (13.10.2026): ein eingereihter
+                // Titel startet bei Spotify immer bei 0, und "next" hebt eine Pause davor wieder auf
+                // (am Gerät gemessen: "ist 777 ms" trotz Pause) – der Liedanfang war also hörbar, dann
+                // der Sprung. "play" mit Kontext, Titel und Position macht es in einem Aufruf, ohne
+                // Vorlauf. Geht nur bei fortsetzbarer Quelle (Album/eigene Playlist); sonst der alte Weg.
+                boolean direkt = false;
+                JSONObject mctx = new JSONObject().put("type", music.optString("ctxType", "")).put("uri", music.optString("ctx", ""));
+                if (music.has("track") && music.has("ctx") && resumable(mctx)) {
+                    try {
+                        JSONObject b = new JSONObject();
+                        b.put("context_uri", music.getString("ctx"));
+                        b.put("offset", new JSONObject().put("uri", music.getString("track")));
+                        b.put("position_ms", music.optLong("pos"));
+                        play(b);
+                        direkt = true;
+                        addLog("Musik direkt an der Stelle gestartet", "");
+                    } catch (Exception e) { addLog("Direkt starten ging nicht, zurück über die Warteschlange: " + explain(e), "w"); }
+                }
+                if (!direkt) {
+                    withDevice(() -> api("POST", "/me/player/next" + dq("?"), null));
+                    seekTo(music.optLong("pos"), music.optString("track", null));
                 }
                 setMode(null);
             } else if ("podcast".equals(target) && "track".equals(itemType) && !resumable(p.optJSONObject("context"))) {
