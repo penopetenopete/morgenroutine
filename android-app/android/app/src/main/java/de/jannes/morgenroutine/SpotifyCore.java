@@ -604,13 +604,22 @@ public class SpotifyCore {
                 // (am Gerät gemessen: "ist 777 ms" trotz Pause) – der Liedanfang war also hörbar, dann
                 // der Sprung. "play" mit Kontext, Titel und Position macht es in einem Aufruf, ohne
                 // Vorlauf. Geht nur bei fortsetzbarer Quelle (Album/eigene Playlist); sonst der alte Weg.
+                // Drei Fälle (13.10.2026): ohne Quelle gibt es nichts fortzusetzen – dann den Titel nackt
+                // mit Position starten. Mit fortsetzbarer Quelle (Album/eigene Playlist) Kontext, Titel
+                // und Position zusammen. Nur bei Mix/Radio bleibt der alte Weg über die Warteschlange,
+                // weil dort sonst die Fortsetzung verloren ginge – einziger Fall mit hörbarem Vorlauf.
                 boolean direkt = false;
                 JSONObject mctx = new JSONObject().put("type", music.optString("ctxType", "")).put("uri", music.optString("ctx", ""));
-                if (music.has("track") && music.has("ctx") && resumable(mctx)) {
+                boolean kann = music.has("ctx") && resumable(mctx);
+                if (music.has("track") && (kann || !music.has("ctx"))) {
                     try {
                         JSONObject b = new JSONObject();
-                        b.put("context_uri", music.getString("ctx"));
-                        b.put("offset", new JSONObject().put("uri", music.getString("track")));
+                        if (kann) {
+                            b.put("context_uri", music.getString("ctx"));
+                            b.put("offset", new JSONObject().put("uri", music.getString("track")));
+                        } else {
+                            b.put("uris", new JSONArray().put(music.getString("track")));
+                        }
                         b.put("position_ms", music.optLong("pos"));
                         play(b);
                         direkt = true;

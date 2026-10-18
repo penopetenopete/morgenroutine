@@ -148,11 +148,21 @@
       // (am Gerät gemessen: "ist 777 ms" trotz Pause) – der Liedanfang war also hörbar, dann der
       // Sprung. "play" mit Kontext, Titel und Position macht es in einem Aufruf, ohne Vorlauf.
       // Geht nur bei fortsetzbarer Quelle (Album/eigene Playlist); sonst der alte Weg.
+      // Drei Fälle (13.10.2026): ohne Quelle gibt es nichts fortzusetzen – dann den Titel nackt mit
+      // Position starten. Mit fortsetzbarer Quelle (Album/eigene Playlist) Kontext, Titel und
+      // Position zusammen. Nur bei Mix/Radio bleibt der alte Weg über die Warteschlange, weil dort
+      // sonst die Fortsetzung verloren ginge – das ist der einzige Fall mit hörbarem Vorlauf.
       const m = S.music;
       let direkt = false;
-      if (m.track && m.ctx && resumable({ type: m.ctxType, uri: m.ctx })) {
-        try { await play({ context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }); direkt = true; log("Musik direkt an der Stelle gestartet", ""); }
-        catch (e) { log("Direkt starten ging nicht, zurück über die Warteschlange: " + explain(e), "w"); }
+      if (m.track) {
+        const kann = m.ctx && resumable({ type: m.ctxType, uri: m.ctx });
+        if (kann || !m.ctx) {
+          const body = kann
+            ? { context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }
+            : { uris: [m.track], position_ms: m.pos || 0 };
+          try { await play(body); direkt = true; log("Musik direkt an der Stelle gestartet", ""); }
+          catch (e) { log("Direkt starten ging nicht, zurück über die Warteschlange: " + explain(e), "w"); }
+        }
       }
       if (!direkt) { await api("POST", "/me/player/next" + dq("?")); await seekTo(m.pos || 0, m.track || null); }
       S.mode = null;
