@@ -173,7 +173,7 @@
       // sonst die Fortsetzung verloren ginge – das ist der einzige Fall mit hörbarem Vorlauf.
       const m = S.music;
       let direkt = false;
-      if (m.track) {
+      if (false && m.track) { // am iPhone ignoriert Spotify hier den Einstieg (startet die Playlist vorn, einzeln = Stille) – daher immer über die Warteschlange
         const kann = m.ctx && resumable({ type: m.ctxType, uri: m.ctx });
         if (kann || !m.ctx) {
           const body = kann
@@ -183,9 +183,15 @@
           catch (e) { log("Direkt starten ging nicht, zurück über die Warteschlange: " + explain(e), "w"); }
         }
       }
-      if (!direkt) { await api("POST", "/me/player/next" + dq("?")); await seekTo(m.pos || 0, m.track || null); }
+      if (!direkt) {
+        log("Musik zurück über die Warteschlange: " + (m.name || "Titel") + " (" + fmt(m.pos) + ")", "");
+        let pausiert = false;
+        try { await api("PUT", "/me/player/pause" + dq("?")); pausiert = true; } catch (e) {}
+        await api("POST", "/me/player/next" + dq("?")); await seekTo(m.pos || 0, m.track || null);
+        if (pausiert) { try { await play(); } catch (e) {} }
+      }
       S.mode = null;
-    } else if (target === "podcast" && item && item.type === "track" && !resumable(p.context)) {
+    } else if (target === "podcast" && item && item.type === "track" && (!resumable(p.context) || !(await listeLesbar(item, p.context)))) {
       const ep = await podcastEpisode(), pos = S.pod && S.pod.episode === ep ? Math.max(0, (S.pod.pos || 0) - S.rewind * 1000) : 0;
       await api("POST", "/me/player/queue?uri=" + encodeURIComponent(ep) + dq("&"));
       await api("POST", "/me/player/queue?uri=" + encodeURIComponent(item.uri) + dq("&"));
@@ -275,9 +281,16 @@
      Song selbst holen und als Liste starten – dann beginnt Spotify sofort am richtigen Song und an der Stelle,
      und danach läuft die Playlist ganz normal weiter. Klappt das Holen nicht, bleibt es beim alten Weg. */
   const ctxCache = {};
+  // Lässt sich die Playlist später ab dem Song starten? Wenn nicht (fremde Playlist, Spotify-Mix), den Podcast
+  // nur dazwischenschieben – dann bleibt die Playlist mit dem Song in Spotify erhalten.
+  async function listeLesbar(item, ctx) {
+    try { const u = await titelAb({ ctx: ctx.uri, track: item.uri }); if (u && u.length) return true; } catch (e) {}
+    log("Playlist nicht lesbar – Podcast wird nur dazwischengeschoben", ""); return false;
+  }
   async function titelAb(m) {
-    let base = null, field = x => x && x.track;
-    if (/^spotify:playlist:/.test(m.ctx)) base = "/playlists/" + m.ctx.split(":").pop() + "/tracks?fields=next,items(track(uri,type))&limit=100";
+    // Seit Februar 2026 heißt der Playlist-Endpunkt /items (vorher /tracks → jetzt 403), Feld "item" statt "track"
+    let base = null, field = x => x && (x.item || x.track);
+    if (/^spotify:playlist:/.test(m.ctx)) base = "/playlists/" + m.ctx.split(":").pop() + "/items?limit=50";
     else if (/^spotify:album:/.test(m.ctx)) { base = "/albums/" + m.ctx.split(":").pop() + "/tracks?limit=50"; field = x => x; }
     else if (/:collection$/.test(m.ctx)) base = "/me/tracks?limit=50";
     if (!base) return null;
@@ -501,7 +514,7 @@
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" id="spDev">Gerät suchen</button><button class="btn" id="spOut">Abmelden</button></div>
         <div class="sp-res" id="spDevList" style="margin-top:8px"></div>
-        <div class="sp-loghead"><span class="small">Protokoll</span><button class="btn" id="spLogCopy">Kopieren</button></div><div class="sp-log" id="spLog"></div>
+        <div class="sp-loghead"><span class="small">Protokoll</span><span style="display:flex;gap:6px"><button class="btn" id="spLogClear">Leeren</button><button class="btn" id="spLogCopy">Kopieren</button></span></div><div class="sp-log" id="spLog"></div>
       </details>`;
     box.querySelectorAll(".sp-seg button").forEach(b => b.onclick = () => switchTo(b.dataset.src));
     $("spSmart").onchange = e => setSmart(e.target.checked);
@@ -517,6 +530,7 @@
     $("spDev").onclick = () => findDevices("spDevList");
     $("spDevFind").onclick = () => findDevices("spDevTop");
     $("spOpenApp").onclick = openSpotifyApp;
+    $("spLogClear").onclick = async () => { if (T) { try { await T.clearLog(); } catch (e) {} S.nlog = []; } else { S.log = []; save(); } $("spLog").innerHTML = ""; };
     $("spLogCopy").onclick = async () => { const L = T ? (S.nlog || []) : S.log; const txt = L.slice(0, 80).map(e => new Date(e.t).toLocaleTimeString("de-DE", { hour12: false }) + "  " + e.text).join("\n");
       try { await navigator.clipboard.writeText(txt); $("spLogCopy").textContent = "Kopiert ✓"; } catch (e) { $("spLogCopy").textContent = "Ging nicht"; } setTimeout(() => { if ($("spLogCopy")) $("spLogCopy").textContent = "Kopieren"; }, 2000); };
     // Aufgeklappt: die neuen Einstellungen direkt ins Bild holen
