@@ -477,7 +477,7 @@ img.emini{background:#fff}
 .egm svg{width:16px;height:16px}
 /* Menge in der Zeile */
 .eedit{flex:none;display:flex;align-items:center;gap:4px}
-.eedit input{width:56px;min-height:34px;border-radius:8px;border:1px solid var(--accent);background:var(--bg);text-align:center;font-family:var(--f-display);font-size:.9rem;padding:0 4px;-moz-appearance:textfield}
+.eedit input{width:56px;min-height:34px;border-radius:8px;border:1px solid var(--accent);background:var(--bg);text-align:center;font-family:var(--f-display);font-size:1rem;padding:0 4px;-moz-appearance:textfield}
 .eedit input::-webkit-outer-spin-button,.eedit input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .eedit .eu{font-family:var(--f-display);font-size:.72rem;color:var(--muted);min-width:18px}
 .est{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--accent);font-size:1.05rem;cursor:pointer;touch-action:manipulation;padding:0}
@@ -488,7 +488,10 @@ img.emini{background:#fff}
 .echips{display:flex;flex-wrap:wrap;gap:6px}
 .echip{border:1px dashed color-mix(in srgb,var(--accent) 50%,var(--line));background:none;color:var(--accent);border-radius:999px;min-height:38px;padding:0 12px;font-family:var(--f-display);font-size:.78rem;cursor:pointer}
 .esbar{display:flex;gap:8px;position:sticky;top:0;z-index:3;background:var(--card);padding:6px 0}
-.esbar .pksearch{position:static;margin:0;flex:1;font-size:.95rem;min-height:46px}
+/* 16px ist die Untergrenze für alles, was eine Tastatur auslöst (23.10.2026, am iPhone gemeldet):
+   iOS Safari zoomt beim Antippen in jedes kleinere Eingabefeld und zoomt danach NICHT zurück –
+   der Zoom der ganzen App bleibt verstellt. .95rem waren 15,2px. Beim Ändern hier aufpassen. */
+.esbar .pksearch{position:static;margin:0;flex:1;font-size:1rem;min-height:46px}
 .esbar .ic{width:46px;height:46px;color:var(--accent)}
 #eRes{display:flex;flex-direction:column;gap:10px}
 #eRes .btn.ghost{min-height:42px;font-size:.8rem;font-weight:500}

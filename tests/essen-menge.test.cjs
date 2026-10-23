@@ -114,14 +114,30 @@ test("Enter ohne fertig-Rückruf: blurrt wie vorher", () => {
   assert.equal(f.blurs, 1);
 });
 
-test("blur meldet kein fertig: Tipp auf eine andere Zeile darf nichts wegziehen", () => {
+/* Geändert am 23.10.2026: blur meldet jetzt AUCH fertig. Auf dem iPhone feuert die
+   „Fertig“-Taste kein Enter, sie schliesst nur die Tastatur – ohne diesen Weg blieb die Zeile
+   halb offen und musste nochmal angetippt werden (am Gerät gemeldet). Den Wettlauf beim Tippen
+   auf eine andere Zeile fängt nicht mehr bindAmt ab, sondern der Aufrufer: verzögert und nur,
+   wenn inzwischen keine andere Zeile übernommen hat. */
+test("blur: übernimmt den Wert und meldet fertig (iPhone-Fertig-Taste)", () => {
   const h = loadApp({}, OPT), en = eintrag(h, 100), f = feld("100");
   let fertig = 0;
   h.ctx.__essen.bindAmtObj(f, en, () => {}, () => { fertig++; });
   tippe(f, "300");
   f.fire("blur");
-  assert.equal(en.amt, 300, "Wert ist trotzdem übernommen");
-  assert.equal(fertig, 0, "aber kein Zuklappen aus dem blur heraus");
+  assert.equal(en.amt, 300);
+  assert.equal(fertig, 1, "fertig auch aus dem blur heraus");
+});
+
+test("fertig kommt genau einmal, auch wenn Enter und blur beide feuern", () => {
+  const h = loadApp({}, OPT), en = eintrag(h, 100), f = feld("100");
+  let fertig = 0;
+  h.ctx.__essen.bindAmtObj(f, en, () => {}, () => { fertig++; });
+  tippe(f, "250");
+  f.fire("keydown", { key: "Enter", preventDefault() {} });
+  f.fire("blur");
+  assert.equal(en.amt, 250);
+  assert.equal(fertig, 1, "kein doppelter Neuaufbau");
 });
 
 test("Enter mit ungültiger Eingabe: alter Wert bleibt, Feld zeigt ihn wieder, trotzdem fertig", () => {

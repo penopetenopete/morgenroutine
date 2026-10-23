@@ -221,8 +221,16 @@ function bindAmt(inp,get,set,done){
   if(!inp)return;
   const take=()=>{const v=parseAmt(inp.value);if(v===null)return false;if(v!==get())set(v);return true};
   const leave=()=>{take();inp.value=amtShow(get())};
-  inp.addEventListener("input",take);inp.addEventListener("change",leave);inp.addEventListener("blur",leave);
-  inp.addEventListener("keydown",e=>{if(e.key!=="Enter")return;e.preventDefault();leave();if(done)done();else inp.blur()});
+  /* Zuklappen auch beim Verlassen (23.10.2026): auf dem iPhone feuert die „Fertig“-Taste kein
+     Enter, sie schliesst nur die Tastatur – die Zeile blieb halb offen und musste nochmal
+     angetippt werden. `done` kommt jetzt aus beiden Wegen, aber nur einmal. Den Wettlauf beim
+     Tippen auf eine ANDERE Zeile fängt der Aufrufer ab: er klappt verzögert zu und nur dann,
+     wenn inzwischen keine andere Zeile übernommen hat. */
+  let fertig=false;
+  const schluss=()=>{if(fertig)return;fertig=true;if(done)done()};
+  inp.addEventListener("input",take);inp.addEventListener("change",leave);
+  inp.addEventListener("blur",()=>{leave();schluss()});
+  inp.addEventListener("keydown",e=>{if(e.key!=="Enter")return;e.preventDefault();leave();if(done)schluss();else inp.blur()});
   /* Fokus SOFORT, nicht im setTimeout (23.10.2026): iOS öffnet die Tastatur nur, wenn der Fokus
      im selben Tipp-Vorgang passiert. Über setTimeout war die Kette unterbrochen, am iPhone kam
      deshalb kein Zahlenfeld hoch (am Gerät gemeldet). `bindAmt` läuft synchron aus dem Tipp-Handler
@@ -263,7 +271,7 @@ function bindSlots(){
   if(ai){const en=d.e.find(x=>x.id===editId),f=E.foods[en.food],pcs=(f&&f.base==="stk")||en.u==="stk",row=S2.querySelector(`[data-e="${editId}"]`);
     bindAmtObj(ai,en,()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
       const sec=row.closest("[data-slothead]");if(!sec)return;const sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"},
-      ()=>{editId=null;renderEssen()});
+      ()=>{const mein=editId;setTimeout(()=>{if(editId===mein&&mein!=null){editId=null;renderEssen()}},120)});
   }
   renderSelBar();
 }
@@ -411,7 +419,7 @@ function mealSheet(c){
     body.querySelectorAll("[data-mx]").forEach(b=>b.onclick=()=>delIt(items[+b.dataset.mx]));
     const ai=body.querySelector(".eamt");
     if(ai){const it=items[mEd],f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",row=body.querySelector(`[data-mi="${mEd}"]`);
-      bindAmtObj(ai,it,()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))},()=>{mEd=-1;draw(true)})}
+      bindAmtObj(ai,it,()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))},()=>{const mein=mEd;setTimeout(()=>{if(mEd===mein&&mein>=0){mEd=-1;draw(true)}},120)})}
     $("mAdd").onclick=c.add;
     if(c.bind)c.bind(body,draw);
   };
@@ -541,7 +549,7 @@ function drawRes(stay){
     edKey=direkt?k:null;if(direkt)amtGo=true;drawRes(true)});
   box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;if(edKey)amtGo=true;drawRes(true)});
   box.querySelectorAll(".eadded[data-key]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-ek]"))return;const k=r.dataset.key;removeAdded(added[k],ctx);delete added[k];addedN--;if(edKey===k)edKey=null;drawRes(true)});
-  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";bindAmtObj(r.nextElementSibling.querySelector(".eamt"),a,()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")},()=>{edKey=null;drawRes(true)})});
+  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";bindAmtObj(r.nextElementSibling.querySelector(".eamt"),a,()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")},()=>{const mein=edKey;setTimeout(()=>{if(edKey===mein&&mein){edKey=null;drawRes(true)}},120)})});
   box.querySelectorAll("[data-tpl]").forEach(b=>gesture(b,{
     tap:()=>{const k="t:"+b.dataset.tpl;if(added[k]){unTpl(added[k]);delete added[k];addedN--;drawRes(true);return}if(!E.meals[b.dataset.tpl].items.length){tplSheet(b.dataset.tpl,snapSearch());return}added[k]=insertTpl(b.dataset.tpl,curDay,ctx.slot,true);addedN++;drawRes(true)},
     long:()=>{buzz();tplSheet(b.dataset.tpl,snapSearch())}}));

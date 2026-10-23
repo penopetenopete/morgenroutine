@@ -181,18 +181,20 @@
     } else {
       S.mode = null; const ep = await podcastEpisode();
       const ppos = S.pod && S.pod.episode === ep ? Math.max(0, (S.pod.pos || 0) - S.rewind * 1000) : 0;
-      await play({ uris: [ep], position_ms: ppos });
-      log("Podcast direkt gestartet", "");
-      // Spotify meldet Erfolg, spielt aber nicht immer (am iPhone gemessen). Dann einreihen –
-      // dieser Weg läuft nachweislich. Scheitert auch der, bleibt die Meldung im Protokoll.
-      if (!(await laeuft(ep))) {
-        log("Podcast lief nicht an · zweiter Versuch über die Warteschlange", "w");
-        try {
-          await api("POST", "/me/player/queue?uri=" + encodeURIComponent(ep) + dq("&"));
-          await api("POST", "/me/player/next" + dq("?"));
-          await seekTo(ppos, ep);
-          log(await laeuft(ep) ? "Podcast läuft jetzt" : "Podcast startet auch so nicht", "w");
-        } catch (e) { log("Einreihen ging nicht: " + explain(e), "e"); }
+      // Erst über die Sendung mit der Folge als Einstieg – der dokumentierte Weg. Das blosse
+      // uris:[Folge] nimmt Spotify zwar an, lädt die Folge aber nicht und würgt dabei die laufende
+      // Wiedergabe ab; Einreihen scheitert danach mit 403, weil nichts mehr spielt (iPhone,
+      // 23.10.2026 gemessen). Deshalb ist uris nur noch der Rückfall.
+      const sh = await podShow(ep);
+      let lief = false;
+      if (sh) {
+        try { await play({ context_uri: sh, offset: { uri: ep }, position_ms: ppos }); log("Podcast über die Sendung gestartet", ""); lief = await laeuft(ep); }
+        catch (e) { log("Über die Sendung ging nicht: " + explain(e), "w"); }
+      } else log("Sendung zur Folge nicht gefunden", "w");
+      if (!lief) {
+        try { await play({ uris: [ep], position_ms: ppos }); log("Zweiter Versuch: Folge einzeln", "w"); lief = await laeuft(ep); }
+        catch (e) { log("Folge einzeln ging nicht: " + explain(e), "e"); }
+        if (!lief) log("Podcast startet nicht · Spotify nimmt den Befehl an, spielt aber nicht", "e");
       }
     }
     S.active = target; save();
@@ -218,6 +220,18 @@
   /* Läuft die gewünschte Folge wirklich? (23.10.2026) Am iPhone nimmt Spotify ein play mit
      uris:[Folge] an, lädt sie aber nicht – gemessen: "Danach läuft: nichts, pausiert". Deshalb
      kurz nachfassen, statt dem Rückgabewert zu glauben. */
+  /* Sendung zur Folge: gemerkt, sonst einmal nachschlagen und merken (23.10.2026). */
+  async function podShow(ep) {
+    if (S.pod && S.pod.episode === ep && S.pod.show) return S.pod.show;
+    const id = String(ep).split(":").pop();
+    try {
+      const j = await api("GET", "/episodes/" + encodeURIComponent(id) + "?market=DE");
+      const u = j && j.show && j.show.uri;
+      if (u && S.pod && S.pod.episode === ep) { S.pod.show = u; save(); }
+      return u || null;
+    } catch (e) { return null; }
+  }
+
   async function laeuft(uri) {
     for (let i = 0; i < 5; i++) {
       await wait(400);
@@ -509,14 +523,18 @@
       const j = await api("GET", "/shows/" + sh.id + "/episodes?market=DE&limit=10"); box.innerHTML = "";
       ((j && j.items) || []).filter(Boolean).forEach(ep => {
         const rp = ep.resume_point || {}, st = rp.fully_played ? "gehört" : rp.resume_position_ms > 0 ? "angefangen bei " + fmt(rp.resume_position_ms) : "neu";
-        box.appendChild(resBtn(ep.name, (ep.release_date || "") + " · " + Math.round((ep.duration_ms || 0) / 60000) + " min · " + st, () => pickEpisode(ep)));
+        box.appendChild(resBtn(ep.name, (ep.release_date || "") + " · " + Math.round((ep.duration_ms || 0) / 60000) + " min · " + st, () => pickEpisode(ep, "spotify:show:" + sh.id)));
       });
       addClose(box, sh.name, "eps");
     } catch (e) { box.innerHTML = `<div class="note">${esc(explain(e))}</div>`; }
   }
-  async function pickEpisode(ep) {
+  async function pickEpisode(ep, show) {
     const rp = ep.resume_point || {};
-    S.pod = { episode: ep.uri, name: ep.name, pos: rp.fully_played ? 0 : (rp.resume_position_ms || 0) }; save();
+    // show = Kennung der Sendung (23.10.2026): eine Folge über uris zu starten nimmt Spotify zwar
+    // an, lädt sie aber nicht (am iPhone gemessen). Mit der Sendung als Zusammenhang und der Folge
+    // als Einstieg ist es der dokumentierte Weg und läuft zuverlässig.
+    S.pod = { episode: ep.uri, name: ep.name, pos: rp.fully_played ? 0 : (rp.resume_position_ms || 0) };
+    if (show) S.pod.show = show; save();
     await pushConfig({ pod: S.pod });
     $("spPRes").innerHTML = "";
     await switchTo("podcast", "Auswahl");
