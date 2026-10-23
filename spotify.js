@@ -86,13 +86,21 @@
 
   // ---------- Umschalten im Browser (in der Android-App macht das der native Teil) ----------
   const resumable = ctx => !!ctx && (ctx.type === "album" || (ctx.type === "playlist" && !/^spotify:playlist:37i9/.test(ctx.uri)));
-  async function snapshot() {
-    const p = await api("GET", "/me/player?additional_types=episode");
-    if (!p || !p.item) return null;
+  // Was gerade in Spotify läuft, immer mitschreiben (23.10.2026): sonst sprang "Musik" zurück auf den
+  // zuerst gewählten Song, wenn man in der Zwischenzeit in Spotify weitergeskippt hatte.
+  function learn(p) {
+    if (!p || !p.item || T) return;
     if (p.device && p.device.id && !S.device) S.device = { id: p.device.id, name: p.device.name };
     if (p.item.type === "track") S.music = { track: p.item.uri, name: p.item.name, pos: p.progress_ms, ctx: p.context ? p.context.uri : null, ctxType: p.context ? p.context.type : null };
     else if (p.item.type === "episode") S.pod = { episode: p.item.uri, name: p.item.name, pos: p.progress_ms };
-    save(); return p;
+    // Anzeige an die Wirklichkeit anpassen: läuft in Spotify Musik, steht die App auch auf Musik
+    if (!busy && p.is_playing && Date.now() - lastSwitch > 5000) { const real = p.item.type === "episode" ? "podcast" : "music"; if (S.active !== real) { S.active = real; S.mode = null; try { render(); } catch (e) {} } }
+    save();
+  }
+  async function snapshot() {
+    const p = await api("GET", "/me/player?additional_types=episode");
+    if (!p || !p.item) return null;
+    learn(p); return p;
   }
   async function play(body) {
     try { await api("PUT", "/me/player/play" + dq("?"), body); }
@@ -142,6 +150,11 @@
     let p = null; try { p = await snapshot(); } catch (e) { if (e.status !== 404) throw e; }
     if (force) { S.music = force; S.mode = null; }
     const item = p && p.item;
+    // Läuft schon das Richtige (z. B. in Spotify selbst umgestellt), nichts neu starten – nur weiterspielen
+    if (!force && item && (target === "music" ? item.type === "track" : item.type === "episode")) {
+      if (!p.is_playing) await play();
+      S.mode = null; S.active = target; save(); log("Läuft schon · nur weitergespielt", ""); return;
+    }
     if (target === "music" && S.mode === "queue" && item && item.type === "episode" && S.music) {
       // Direkt an der Stelle starten statt über die Warteschlange (13.10.2026): ein eingereihter
       // Titel startet bei Spotify immer bei 0, und "next" hebt eine Pause davor wieder auf
@@ -200,7 +213,7 @@
     S.active = target; save();
   }
 
-  let busy = false;
+  let busy = false, lastSwitch = 0;
   /* Nachsehen, was nach dem Umschalten wirklich läuft (23.10.2026). Am iPhone nahm Spotify den
      Befehl an (keine Fehlerzeile), spielte den Podcast aber nicht. Ohne diese Rückschau ist nicht
      zu unterscheiden, ob der Aufruf gar nicht ankam oder ob Spotify ihn still verwirft.
@@ -252,7 +265,7 @@
         await syncNative();
       } else { await webSwitch(target, force); log("→ " + (target === "music" ? "Musik" : "Podcast") + (why ? " · " + why : ""), "o"); }
     } catch (e) { toast(explain(e)); log("Umschalten fehlgeschlagen: " + explain(e), "e"); }
-    busy = false; render(); setTimeout(() => nowPlaying(true), 600);
+    busy = false; lastSwitch = Date.now(); render(); setTimeout(() => nowPlaying(true), 600);
     if (!T) nachsehen(target);
   }
 
@@ -459,7 +472,7 @@
     if (!$("spNow") || !authed()) return;
     if (!force && Date.now() - lastNow < 4000) return; lastNow = Date.now();
     try {
-      const p = await api("GET", "/me/player?additional_types=episode"), it = p && p.item;
+      const p = await api("GET", "/me/player?additional_types=episode"), it = p && p.item; learn(p);
       setDev(p && p.device ? p.device.name : null);
       if (!$("spNow")) return;
       $("spNow").innerHTML = it ? (it.type === "episode" ? "🎙 <b>" + esc(it.name) + "</b>" + (it.show ? " · " + esc(it.show.name) : "") : "♪ <b>" + esc(it.name) + "</b> · " + esc((it.artists || []).map(a => a.name).join(", "))) : "Gerade läuft nichts.";
@@ -481,7 +494,7 @@
   }
   async function checkDev() {
     if (!authed()) return;
-    try { const p = await api("GET", "/me/player"); setDev(p && p.device ? p.device.name : null); } catch (e) { if (e.status === 404 || e.status === 0) setDev(null); }
+    try { const p = await api("GET", "/me/player?additional_types=episode"); learn(p); setDev(p && p.device ? p.device.name : null); } catch (e) { if (e.status === 404 || e.status === 0) setDev(null); }
   }
   async function control(a) {
     try {
