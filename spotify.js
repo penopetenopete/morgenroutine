@@ -92,6 +92,7 @@
     if (!p || !p.item || T) return;
     if (p.device && p.device.id && !S.device) S.device = { id: p.device.id, name: p.device.name };
     if (p.item.type === "track") {
+      S.shuffle = !!p.shuffle_state;
       // Nach dem Direktstart (Titelliste) meldet Spotify keinen Kontext mehr – dann die alte Playlist behalten
       const keep = !p.context && S.music && S.music.ctx && ctxCache[S.music.ctx] && ctxCache[S.music.ctx].list.includes(p.item.uri);
       S.music = { track: p.item.uri, name: p.item.name, pos: p.progress_ms, ctx: p.context ? p.context.uri : keep ? S.music.ctx : null, ctxType: p.context ? p.context.type : keep ? S.music.ctxType : null };
@@ -154,6 +155,7 @@
     let p = null; try { p = await snapshot(); } catch (e) { if (e.status !== 404) throw e; }
     if (force) { S.music = force; S.mode = null; }
     const item = p && p.item;
+    if (target === "podcast" && item && item.type === "track" && S.music) log("Gemerkt: " + (S.music.name || "Titel") + " (" + fmt(S.music.pos) + ")" + (S.shuffle ? " · Zufall an" : ""), "");
     // Läuft schon das Richtige (z. B. in Spotify selbst umgestellt), nichts neu starten – nur weiterspielen
     if (!force && item && (target === "music" ? item.type === "track" : item.type === "episode")) {
       if (!p.is_playing) await play();
@@ -191,6 +193,11 @@
       log("Podcast über die Warteschlange", "");
     } else if (target === "music") {
       S.mode = null; const m = S.music;
+      // Zufallswiedergabe kurz aus (23.10.2026): sonst ignoriert Spotify den gemerkten Song und startet irgendwo.
+      // Danach wieder an – der laufende Song bleibt, nur der Rest wird gemischt.
+      const mix = !!S.shuffle && !!(m && m.track);
+      if (mix) { try { await api("PUT", "/me/player/shuffle?state=false" + dq("&")); } catch (e) {} }
+      try {
       if (m && m.ctx && !m.track) await play({ context_uri: m.ctx });
       else if (m && m.track && m.ctx && await abHier(m)) { /* lief ohne Umweg direkt am richtigen Titel an */ }
       else if (m && m.track && m.ctx) {
@@ -207,6 +214,9 @@
       }
       else if (m && m.track) { log("Musik weiter bei: " + (m.name || "Titel") + " (" + fmt(m.pos) + ")", ""); await play({ uris: [m.track], position_ms: m.pos || 0 }); }
       else throw new Error("Noch keine Musik gemerkt. Im ♫-Menü Musik wählen oder kurz in Spotify Musik anmachen.");
+      } finally {
+        if (mix) { await wait(600); try { await api("PUT", "/me/player/shuffle?state=true" + dq("&")); log("Zufallswiedergabe wieder an", ""); } catch (e) {} }
+      }
     } else {
       S.mode = null; const ep = await podcastEpisode();
       const ppos = S.pod && S.pod.episode === ep ? Math.max(0, (S.pod.pos || 0) - S.rewind * 1000) : 0;
