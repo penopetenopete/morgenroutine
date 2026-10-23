@@ -99,7 +99,7 @@
     }
     else if (p.item.type === "episode") S.pod = Object.assign({ episode: p.item.uri, name: p.item.name, pos: p.progress_ms }, S.pod && S.pod.episode === p.item.uri && S.pod.show ? { show: S.pod.show } : {});
     // Anzeige an die Wirklichkeit anpassen: läuft in Spotify Musik, steht die App auch auf Musik
-    if (!busy && p.is_playing && Date.now() - lastSwitch > 5000) { const real = p.item.type === "episode" ? "podcast" : "music"; if (S.active !== real) { S.active = real; S.mode = null; try { render(); } catch (e) {} } }
+    if (!busy && !zeigt && p.is_playing && Date.now() - lastSwitch > 5000) { const real = p.item.type === "episode" ? "podcast" : "music"; if (S.active !== real) { S.active = real; S.mode = null; try { render(); } catch (e) {} } }
     save();
   }
   async function snapshot() {
@@ -346,8 +346,12 @@
     }
     if (!zuletzt || !zuletzt.playing) { log("Notlösung: Playlist von vorn", "e"); try { await play({ context_uri: m.ctx }); } catch (e) { log("Auch das ging nicht: " + explain(e), "e"); } }
   }
+  // Schnelles Hin und Her (24.10.2026): der Schalter springt sofort um; läuft noch ein Wechsel, wird der
+  // letzte Wunsch gemerkt und direkt danach ausgeführt, statt das Tippen zu verschlucken.
+  let wunsch = null, zeigt = null;
   async function switchTo(target, why, force) {
-    if (busy) return; busy = true; render(target);
+    if (busy) { if (!force) { wunsch = { target, why }; zeigt = target; render(target); } return; }
+    busy = true; zeigt = target; render(target);
     try {
       if (T) {
         const r = force ? await T.playMusic({ music: JSON.stringify(force) }) : await T.switchTo({ target });
@@ -355,7 +359,9 @@
         await syncNative();
       } else { await webSwitch(target, force); log("→ " + (target === "music" ? "Musik" : "Podcast") + (why ? " · " + why : ""), "o"); }
     } catch (e) { toast(explain(e)); log("Umschalten fehlgeschlagen: " + explain(e), "e"); }
-    busy = false; lastSwitch = Date.now(); render(); setTimeout(() => nowPlaying(true), 600);
+    busy = false; lastSwitch = Date.now();
+    if (wunsch) { const w = wunsch; wunsch = null; if (w.target !== target) return switchTo(w.target, w.why); }
+    zeigt = null; render(); setTimeout(() => nowPlaying(true), 600);
     if (!T) nachsehen(target);
   }
 
@@ -415,7 +421,7 @@
     st.textContent = `
 #spotBar .spb{min-width:0}
 #spotMenu{border:1px solid var(--line);border-radius:999px;padding:0 9px;font-size:.9rem}
-#spotBar.busy{opacity:.6}
+#spotBar.busy{opacity:1}
 .sp-now{font-size:.88rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sp-now b{color:var(--fg);font-weight:600}
 .sp-ctrl{display:flex;justify-content:center;align-items:center;gap:22px;padding:4px 0}
@@ -467,8 +473,10 @@
   }
   function render(pending) {
     const bar = $("spotBar"); if (!bar) return;
-    bar.classList.toggle("busy", !!pending);
-    bar.querySelectorAll(".spotseg .spb").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.src === "podcast" ? "podcast" : "music") === (pending || S.active))));
+    const on = pending || zeigt || S.active;
+    bar.classList.toggle("busy", !!(pending || zeigt));
+    const seg = bar.querySelector(".spotseg"); if (seg) seg.dataset.on = on === "podcast" ? "podcast" : "music";
+    bar.querySelectorAll(".spotseg .spb").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.src === "podcast" ? "podcast" : "music") === on)));
     const sm = $("spotSmart"); if (sm) sm.setAttribute("aria-pressed", String(!!S.smart));
     if (sheetOpen()) fillState();
   }
@@ -547,7 +555,7 @@
   }
   function fillState() {
     const box = $("spSheet"); if (!box || !$("spSmart")) return;
-    box.querySelectorAll(".sp-seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.src === S.active)));
+    box.querySelectorAll(".sp-seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.src === (zeigt || S.active))));
     $("spSmart").checked = !!S.smart;
     $("spSmartNote").textContent = S.smart ? "An · von Hand umschalten gilt bis zur nächsten Phase" : "Musik im Satz · Podcast in der Pause";
     const pod = S.active === "podcast";

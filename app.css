@@ -801,3 +801,11 @@ html[data-theme="hell"] .tlsw[aria-checked="true"] .tlswk::after{background:#fff
 #plBox{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 #plBox .plscroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
 .shbody:has(> #plBox) > #plOk{flex:none}
+
+/* Musik | Podcast im Workout: gleitender Knopf, springt beim Tippen sofort um (Spotify zieht danach nach) */
+.spotseg{position:relative;isolation:isolate;border:0;padding:2px;background:color-mix(in srgb,var(--fg) 8%,transparent);display:grid;grid-template-columns:1fr 1fr}
+.spotseg::before{content:"";position:absolute;z-index:0;top:2px;bottom:2px;left:2px;width:calc(50% - 2px);border-radius:999px;background:color-mix(in srgb,var(--accent) 16%,var(--card));box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .28s cubic-bezier(.3,1.25,.5,1)}
+.spotseg[data-on="podcast"]::before{transform:translateX(100%)}
+.spotseg .spb{position:relative;z-index:1;background:none!important;border-radius:999px;transition:color .2s}
+.spot.busy .spotseg::before{animation:spPulse 1s ease-in-out infinite}
+@keyframes spPulse{50%{opacity:.6}}
