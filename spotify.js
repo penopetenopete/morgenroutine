@@ -91,7 +91,11 @@
   function learn(p) {
     if (!p || !p.item || T) return;
     if (p.device && p.device.id && !S.device) S.device = { id: p.device.id, name: p.device.name };
-    if (p.item.type === "track") S.music = { track: p.item.uri, name: p.item.name, pos: p.progress_ms, ctx: p.context ? p.context.uri : null, ctxType: p.context ? p.context.type : null };
+    if (p.item.type === "track") {
+      // Nach dem Direktstart (Titelliste) meldet Spotify keinen Kontext mehr – dann die alte Playlist behalten
+      const keep = !p.context && S.music && S.music.ctx && ctxCache[S.music.ctx] && ctxCache[S.music.ctx].list.includes(p.item.uri);
+      S.music = { track: p.item.uri, name: p.item.name, pos: p.progress_ms, ctx: p.context ? p.context.uri : keep ? S.music.ctx : null, ctxType: p.context ? p.context.type : keep ? S.music.ctxType : null };
+    }
     else if (p.item.type === "episode") S.pod = Object.assign({ episode: p.item.uri, name: p.item.name, pos: p.progress_ms }, S.pod && S.pod.episode === p.item.uri && S.pod.show ? { show: S.pod.show } : {});
     // Anzeige an die Wirklichkeit anpassen: läuft in Spotify Musik, steht die App auch auf Musik
     if (!busy && p.is_playing && Date.now() - lastSwitch > 5000) { const real = p.item.type === "episode" ? "podcast" : "music"; if (S.active !== real) { S.active = real; S.mode = null; try { render(); } catch (e) {} } }
@@ -188,6 +192,7 @@
     } else if (target === "music") {
       S.mode = null; const m = S.music;
       if (m && m.ctx && !m.track) await play({ context_uri: m.ctx });
+      else if (m && m.track && m.ctx && await abHier(m)) { /* lief ohne Umweg direkt am richtigen Titel an */ }
       else if (m && m.track && m.ctx) {
         log("Musik weiter bei: " + (m.name || "Titel") + " (" + fmt(m.pos) + ")", "");
         try { await play({ context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }); } catch (e) { if (e.status === 404 || e.status === 403) throw e; await play({ uris: [m.track], position_ms: m.pos || 0 }); }
@@ -267,6 +272,40 @@
     return false;
   }
 
+  /* Kein Schnipsel vom Playlist-Anfang (23.10.2026, iPhone): "play" mit Kontext + Einstieg spielt nach einem
+     Podcast erst kurz den ersten Titel der Playlist und springt dann. Stattdessen die Titel ab dem gemerkten
+     Song selbst holen und als Liste starten – dann beginnt Spotify sofort am richtigen Song und an der Stelle,
+     und danach läuft die Playlist ganz normal weiter. Klappt das Holen nicht, bleibt es beim alten Weg. */
+  const ctxCache = {};
+  async function titelAb(m) {
+    let base = null, field = x => x && x.track;
+    if (/^spotify:playlist:/.test(m.ctx)) base = "/playlists/" + m.ctx.split(":").pop() + "/tracks?fields=next,items(track(uri,type))&limit=100";
+    else if (/^spotify:album:/.test(m.ctx)) { base = "/albums/" + m.ctx.split(":").pop() + "/tracks?limit=50"; field = x => x; }
+    else if (/:collection$/.test(m.ctx)) base = "/me/tracks?limit=50";
+    if (!base) return null;
+    const c = ctxCache[m.ctx];
+    let all = c && Date.now() - c.t < 10 * 60000 ? c.list : null;
+    if (!all || !all.includes(m.track)) {
+      all = []; let url = base;
+      for (let i = 0; i < 6 && url; i++) {
+        const j = await api("GET", url);
+        (j && j.items || []).forEach(x => { const t = field(x); if (t && t.uri && (!t.type || t.type === "track")) all.push(t.uri); });
+        if (all.includes(m.track) && all.length - all.indexOf(m.track) > 60) break;
+        url = j && j.next ? j.next.replace("https://api.spotify.com/v1", "") : null;
+      }
+      ctxCache[m.ctx] = { t: Date.now(), list: all };
+    }
+    const i = all.indexOf(m.track);
+    return i < 0 ? null : all.slice(i, i + 100);
+  }
+  async function abHier(m) {
+    let uris = null;
+    try { uris = await titelAb(m); } catch (e) { log("Titelliste nicht lesbar: " + explain(e), "w"); }
+    if (!uris || !uris.length) return false;
+    log("Musik weiter bei: " + (m.name || "Titel") + " (" + fmt(m.pos) + ") · direkt", "");
+    try { await play({ uris, position_ms: m.pos || 0 }); } catch (e) { if (e.status === 404 || e.status === 403) throw e; log("Direkt ging nicht: " + explain(e), "w"); return false; }
+    return true;
+  }
   const gleicherTitel = (it, m) => it.uri === m.track || (it.linked_from && it.linked_from.uri === m.track) || (!!m.name && it.name === m.name);
   async function welcherTitel() {
     for (let i = 0; i < 6; i++) {
