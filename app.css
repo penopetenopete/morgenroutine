@@ -187,6 +187,8 @@ h3{font-family:var(--f-display);font-size:.78rem;letter-spacing:.14em;text-trans
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;display:flex;align-items:flex-end;justify-content:center}
 .sheet{width:100%;max-width:560px;background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;padding:14px 16px max(20px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;max-height:90vh;max-height:90dvh}
 .shhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.shhead>.shback{flex:none;margin:-4px 0 0 -8px}
+.shhead>.shback+div{flex:1;min-width:0}
 .shbody{display:flex;flex-direction:column;gap:12px;overflow-y:auto;overscroll-behavior:contain;min-height:0;margin-inline:-4px;padding-inline:4px}
 .shbody .list{flex:none}
 .confirm-big{font-family:var(--f-display);font-size:2.4rem;font-weight:700;text-align:center;line-height:1.1}
@@ -774,3 +776,8 @@ html[data-theme="hell"] .edprev canvas{background:radial-gradient(circle at 50% 
 html[data-theme="hell"] .tlswk{background:#DDD3C3}
 html[data-theme="hell"] .tlswk::after{background:#fff;box-shadow:0 1px 3px rgba(60,40,20,.25)}
 html[data-theme="hell"] .tlsw[aria-checked="true"] .tlswk::after{background:#fff}
+
+/* iOS: Eingabefelder unter 16px lösen beim Antippen Auto-Zoom aus → überall mind. 16px */
+@supports (-webkit-touch-callout:none){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),textarea,select{font-size:16px!important}
+}

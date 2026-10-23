@@ -320,9 +320,9 @@ function renderSelBar(){
   });
 }
 function selCount(){const g=new Set();let n=0;dayGet(curDay).e.forEach(x=>{if(!sel.has(x.id))return;if(x.g){if(!g.has(x.g.id)){g.add(x.g.id);n++}}else n++});return n}
-function moveTo(list,k){
-  const dd=day(curDay);copyEntries(list,k);dd.e=dd.e.filter(x=>!list.includes(x));tidyDay(curDay);esave();renderEssen();
-  toast(`Verschoben → ${dayLab(k)}`);
+function moveTo(list,k){ /* Pfeile kopieren nur – am aktuellen Tag bleibt alles stehen */
+  copyEntries(list,k);esave();renderEssen();
+  toast(`Kopiert → ${dayLab(k)}`);
 }
 /* schlanker Kalender ohne abgedunkelten Hintergrund */
 function calPop(onPick){

@@ -315,8 +315,13 @@
 #spotBar.busy{opacity:.6}
 .sp-now{font-size:.88rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sp-now b{color:var(--fg);font-weight:600}
-.sp-ctrl{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:8px}
-.sp-ctrl .btn{font-size:1.25rem}
+.sp-ctrl{display:flex;justify-content:center;align-items:center;gap:22px;padding:4px 0}
+.spc{width:52px;height:52px;border-radius:50%;border:0;background:color-mix(in srgb,var(--fg) 7%,transparent);color:var(--fg);display:grid;place-items:center;cursor:pointer;padding:0;transition:transform .12s,background .15s;-webkit-tap-highlight-color:transparent}
+.spc svg{width:24px;height:24px;display:block}
+.spc.play{width:68px;height:68px;background:var(--accent);color:#001318;box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 35%,transparent)}
+.spc.play svg{width:30px;height:30px}
+.spc:active{transform:scale(.92)}
+.spc:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .sp-seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .sp-seg button{min-height:48px;border:0;background:none;font-family:var(--f-display);font-weight:600;font-size:1rem;color:var(--muted);cursor:pointer}
 .sp-seg button[aria-pressed="true"]{background:var(--accent);color:#001318}
@@ -332,6 +337,7 @@
 .sp-dev>i{flex:none;width:10px;height:10px;border-radius:50%;background:var(--muted)}
 .sp-dev>span{flex:1;min-width:0}.sp-dev small{display:block;color:var(--muted);font-size:.8rem}
 .sp-dev .btn{flex:none;width:auto;margin:0;min-height:40px;padding:0 12px;font-size:.9rem}
+.sp-dev{flex-wrap:wrap}.sp-dev .sp-open{background:#1DB954;border-color:#1DB954;color:#04170A}
 .sp-dev.on>i{background:var(--ok)}
 .sp-dev.off{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent)}.sp-dev.off>i{background:var(--bad)}
 #spotMenu.off{border-color:var(--bad);color:var(--bad)}
@@ -372,6 +378,14 @@
     else { fallback = document.createElement("div"); fallback.className = "sp-fallback"; fallback.innerHTML = "<div>" + html + '<button class="btn" id="spFbClose">Schließen</button></div>'; document.body.appendChild(fallback); $("spFbClose").onclick = () => { fallback.remove(); fallback = null; }; fallback.onclick = e => { if (e.target === fallback) { fallback.remove(); fallback = null; } }; }
     fillSheet();
   }
+  const IC = {
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8c0 .8.9 1.3 1.6.9l10-6.4c.6-.4.6-1.3 0-1.7l-10-6.4C8.9 4.3 8 4.8 8 5.6z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1.3"/><rect x="13.5" y="5" width="4" height="14" rx="1.3"/></svg>',
+    prev: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5.5" width="2.4" height="13" rx="1.2"/><path d="M19 6.7v10.6c0 .8-.9 1.2-1.5.8l-8.3-5.3c-.6-.4-.6-1.2 0-1.6l8.3-5.3c.6-.4 1.5 0 1.5.8z"/></svg>',
+    next: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="16.6" y="5.5" width="2.4" height="13" rx="1.2"/><path d="M5 6.7v10.6c0 .8.9 1.2 1.5.8l8.3-5.3c.6-.4.6-1.2 0-1.6L6.5 5.9C5.9 5.5 5 5.9 5 6.7z"/></svg>',
+    back15: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4v3.5H8"/><text x="12.4" y="15.2" text-anchor="middle" font-size="7.4" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system,sans-serif">15</text></svg>',
+    fwd30: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4v3.5H16"/><text x="11.6" y="15.2" text-anchor="middle" font-size="7.4" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system,sans-serif">30</text></svg>'
+  };
   async function fillSheet() {
     const box = $("spSheet"); if (!box) return;
     await syncNative();
@@ -380,11 +394,11 @@
       $("spLogin").onclick = login; return;
     }
     box.innerHTML = `
-      <div class="sp-dev" id="spDevStat"><i></i><span id="spDevTxt">Prüfe Gerät …</span><button class="btn" id="spDevFind">Gerät suchen</button></div>
+      <div class="sp-dev" id="spDevStat"><i></i><span id="spDevTxt">Prüfe Gerät …</span><button class="btn" id="spDevFind">Gerät suchen</button><button class="btn sp-open" id="spOpenApp">Spotify öffnen</button></div>
       <div class="sp-res" id="spDevTop"></div>
       <div class="sp-seg"><button data-src="music">Musik</button><button data-src="podcast">Podcast</button></div>
       <div class="sp-now" id="spNow">–</div>
-      <div class="sp-ctrl"><button class="btn" id="spPrev">⏮</button><button class="btn" id="spToggle">⏯</button><button class="btn" id="spNext">⏭</button></div>
+      <div class="sp-ctrl"><button class="spc" id="spPrev" aria-label="Zurück"></button><button class="spc play" id="spToggle" aria-label="Abspielen"></button><button class="spc" id="spNext" aria-label="Weiter"></button></div>
       <h3>Musik wählen</h3>
       <div class="sp-in"><input id="spMQ" placeholder="Song oder Playlist suchen" enterkeyhint="search"><button class="btn" id="spMGo">Suchen</button></div>
       <button class="btn" id="spMyPl">Meine Playlists</button>
@@ -416,6 +430,7 @@
     $("spShort").onchange = () => { S.short = Math.max(0, +$("spShort").value || 0); save(); if (T) T.setSmart({ on: !!S.smart, short: S.short }).catch(() => {}); };
     $("spDev").onclick = () => findDevices("spDevList");
     $("spDevFind").onclick = () => findDevices("spDevTop");
+    $("spOpenApp").onclick = openSpotifyApp;
     devUI();
     $("spOut").onclick = async () => { delete S.tok; save(); if (T) await T.logout(); await syncNative(); fillSheet(); render(); };
     fillState(); nowPlaying(true);
@@ -426,8 +441,9 @@
     $("spSmart").checked = !!S.smart;
     $("spSmartNote").textContent = S.smart ? "An · von Hand umschalten gilt bis zur nächsten Phase" : "Musik im Satz · Podcast in der Pause";
     const pod = S.active === "podcast";
-    $("spPrev").textContent = pod ? "↺15" : "⏮"; $("spPrev").dataset.a = pod ? "back15" : "prev";
-    $("spNext").textContent = pod ? "30↻" : "⏭"; $("spNext").dataset.a = pod ? "fwd30" : "next";
+    $("spPrev").innerHTML = pod ? IC.back15 : IC.prev; $("spPrev").dataset.a = pod ? "back15" : "prev"; $("spPrev").setAttribute("aria-label", pod ? "15 s zurück" : "Vorheriger Titel");
+    $("spNext").innerHTML = pod ? IC.fwd30 : IC.next; $("spNext").dataset.a = pod ? "fwd30" : "next"; $("spNext").setAttribute("aria-label", pod ? "30 s vor" : "Nächster Titel");
+    if (!$("spToggle").firstChild) $("spToggle").innerHTML = IC.play;
     const src = { playlist: "Playlist", album: "Album", artist: "Künstler", collection: "Lieblingssongs" };
     const m = S.music ? `<b>${esc(S.music.name)}</b>${S.music.ctxType ? " · aus " + (src[S.music.ctxType] || S.music.ctxType) : ""}` : "noch nichts";
     const p = S.pod ? `<b>${esc(S.pod.name)}</b> bei ${fmt(S.pod.pos)}` : "noch nichts";
@@ -444,7 +460,7 @@
       setDev(p && p.device ? p.device.name : null);
       if (!$("spNow")) return;
       $("spNow").innerHTML = it ? (it.type === "episode" ? "🎙 <b>" + esc(it.name) + "</b>" + (it.show ? " · " + esc(it.show.name) : "") : "♪ <b>" + esc(it.name) + "</b> · " + esc((it.artists || []).map(a => a.name).join(", "))) : "Gerade läuft nichts.";
-      $("spToggle").textContent = p && p.is_playing ? "⏸" : "▶";
+      { const on = !!(p && p.is_playing); $("spToggle").innerHTML = on ? IC.pause : IC.play; $("spToggle").setAttribute("aria-label", on ? "Pause" : "Abspielen"); }
     } catch (e) { if ($("spNow")) $("spNow").textContent = explain(e); if (e.status === 404) setDev(null); }
   }
   // ---------- Gerät verbunden? (sofort sichtbar: Menü, Leiste im Player, Hauptmenü) ----------
@@ -455,7 +471,7 @@
     if (st) {
       st.className = "sp-dev " + (!known ? "" : devName ? "on" : "off");
       $("spDevTxt").innerHTML = !known ? "Prüfe Gerät …" : devName ? "Verbunden mit <b>" + esc(devName) + "</b>" : "<b>Kein Gerät verbunden</b><small>Spotify am Handy öffnen und kurz Play drücken – oder Gerät suchen</small>";
-      $("spDevFind").hidden = !!devName;
+      $("spDevFind").hidden = !!devName; if ($("spOpenApp")) $("spOpenApp").hidden = !known || !!devName;
     }
     const m = $("spotMenu"); if (m) m.classList.toggle("off", known && !devName && authed());
     try { if (typeof window.musMeta === "function") window.musMeta(); } catch (e) {}
@@ -539,11 +555,18 @@
     $("spPRes").innerHTML = "";
     await switchTo("podcast", "Auswahl");
   }
+  // Spotify-App direkt öffnen (dort Play drücken), beim Zurückkommen wird das Gerät automatisch erkannt
+  function openSpotifyApp() {
+    log("Spotify-App geöffnet");
+    if (NATIVE && CAP.Plugins.AppLauncher) { CAP.Plugins.AppLauncher.openUrl({ url: "spotify:" }).catch(() => { location.href = "spotify:"; }); return; }
+    location.href = "spotify:";
+  }
   async function findDevices(id) {
     id = id || "spDevList";
     const box = busyBox(id, "Suche Geräte …");
     try {
-      const j = await api("GET", "/me/player/devices"), d = (j && j.devices) || []; box.innerHTML = d.length ? "" : '<div class="note">Kein Gerät gefunden. Spotify am Handy öffnen und kurz abspielen.</div>';
+      const j = await api("GET", "/me/player/devices"), d = (j && j.devices) || []; box.innerHTML = d.length ? "" : '<div class="note">Kein Gerät gefunden. Öffne Spotify, drück kurz Play und komm dann hierher zurück.</div><button class="btn primary" data-spopen>Spotify öffnen</button>';
+      { const ob = box.querySelector("[data-spopen]"); if (ob) ob.onclick = openSpotifyApp; }
       d.forEach(x => box.appendChild(resBtn((S.device && S.device.id === x.id ? "✓ " : "") + x.name, x.type + (x.is_active ? " · aktiv" : ""), async () => {
         S.device = { id: x.id, name: x.name }; save(); pushConfig();
         try { await api("PUT", "/me/player", { device_ids: [x.id], play: false }); } catch (e) {}
@@ -584,7 +607,7 @@
       if ((pl && !pl.hidden) || sheetOpen()) { if (T) await syncNative(); render(); if (!sheetOpen() && Date.now() - devAt > 15000) checkDev(); }
       if (sheetOpen()) nowPlaying();
     }, 3000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) syncNative().then(() => render()); });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) syncNative().then(() => { render(); if (authed()) { checkDev(); if (sheetOpen()) nowPlaying(true); } }); });
   }
   window.TrainingSpotify = { openMenu, switchTo, setSmart, checkDev, state: () => S, device: () => ({ known: devAt > 0, name: devName }) };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();

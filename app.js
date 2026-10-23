@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="43"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="44"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -216,14 +216,25 @@ const thumbOf=it=>{try{return F.thumb(EXB[it.ex],it.o)}catch(_){return ""}};
 let sheetClose=null,sheetLocked=false,lastEditorRender=null; // lastEditorRender: Testhaken, reicht keine Nutzer-Funktion durch
 function stopPreview(){if(F.previewStop()&&!$("player").hidden&&W){shownKey="";stepUI();size()}}
 window.openSheet=(...a)=>openSheet(...a);window.closeSheet=()=>closeSheet();
-function openSheet(eyebrow,title,html,{onClose,locked}={}){
+let sheetBack=null;
+function openSheet(eyebrow,title,html,{onClose,locked,back}={}){
   stopPreview();
+  /* Einstellungs-Panel retten, bevor der Inhalt ersetzt wird – sonst ist es weg und das Zahnrad tut nichts mehr */
+  const sp=$("shBody").querySelector("#setPanel");if(sp)$("setHold").appendChild(sp);
   $("shEyebrow").textContent=eyebrow||"";$("shTitle").textContent=title||"";$("shBody").innerHTML=html;
-  sheetClose=onClose||null;sheetLocked=!!locked;$("shClose").hidden=!!locked;
+  sheetClose=onClose||null;sheetLocked=!!locked;$("shClose").hidden=!!locked;setSheetBack(back||null);
   $("scrim").hidden=false;$("shBody").scrollTop=0;
   return $("shBody");
 }
-function closeSheet(){if($("scrim").hidden)return;stopPreview();$("scrim").hidden=true;const f=sheetClose;sheetClose=null;if(f)f()}
+function setSheetBack(fn){
+  sheetBack=fn;let b=$("shBack");
+  if(!b){b=document.createElement("button");b.className="ic shback";b.id="shBack";b.setAttribute("aria-label","Zurück");
+    b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>';
+    b.onclick=()=>{const f=sheetBack;if(f)f()};$("shClose").parentElement.insertBefore(b,$("shClose").parentElement.firstChild)}
+  b.hidden=!fn;
+}
+window.setSheetBack=setSheetBack;
+function closeSheet(){if($("scrim").hidden)return;stopPreview();$("scrim").hidden=true;sheetBack=null;const f=sheetClose;sheetClose=null;if(f)f()}
 $("shClose").onclick=closeSheet;
 $("scrim").addEventListener("click",e=>{if(e.target===$("scrim")&&!sheetLocked)closeSheet()});
 
@@ -324,6 +335,20 @@ window.addEventListener("popstate",e=>{
   if(!$("player").hidden||!$("done").hidden){history.pushState({s:screen},"");return}
   show((e.state&&e.state.s)||"home",false);
 });
+
+/* Vom linken Bildschirmrand nach rechts wischen = zurück (wie in iOS-Apps) */
+(function(){
+  let x0=0,y0=0,on=false;
+  document.addEventListener("touchstart",e=>{const t=e.touches[0];on=e.touches.length===1&&t.clientX<28;x0=t.clientX;y0=t.clientY},{passive:true});
+  document.addEventListener("touchmove",e=>{if(!on)return;const t=e.touches[0];if(Math.abs(t.clientY-y0)>40)on=false},{passive:true});
+  document.addEventListener("touchend",e=>{
+    if(!on)return;on=false;const t=e.changedTouches[0],dx=t.clientX-x0,dy=Math.abs(t.clientY-y0);
+    if(dx<80||dy>dx*.6)return;
+    if(!$("player").hidden||!$("done").hidden)return;
+    if(!$("scrim").hidden){if(sheetBack)sheetBack();else if(!sheetLocked)closeSheet();return}
+    if(screen!=="home")history.back();
+  },{passive:true});
+})();
 
 /* =================== HAUPTMENÜ =================== */
 function routineMeta(R){
@@ -456,7 +481,7 @@ function musMeta(){const el=$("musMeta");if(!el)return;try{const T=window.Traini
   el.textContent=[st.music&&st.music.name?"♫ "+st.music.name:"",st.pod&&st.pod.name?"🎙 "+st.pod.name:""].filter(Boolean).join(" · ")||"Verbunden – Musik und Podcast wählen";
 }catch(_){el.textContent="Spotify"}}
 window.musMeta=musMeta;
-$("openMusic").onclick=()=>{if(window.TrainingSpotify)window.TrainingSpotify.openMenu();else toast("Spotify lädt noch …")};
+$("openMusic").onclick=()=>{if(window.TrainingSpotify){window.TrainingSpotify.openMenu();setSheetBack(()=>$("openSet").click())}else toast("Spotify lädt noch …")};
 setTimeout(()=>{musMeta();try{window.TrainingSpotify&&window.TrainingSpotify.checkDev()}catch(_){}},800);
 document.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{stTab=b.dataset.st;renderStats()});
 function exStats(){
