@@ -92,7 +92,7 @@
     if (!p || !p.item || T) return;
     if (p.device && p.device.id && !S.device) S.device = { id: p.device.id, name: p.device.name };
     if (p.item.type === "track") S.music = { track: p.item.uri, name: p.item.name, pos: p.progress_ms, ctx: p.context ? p.context.uri : null, ctxType: p.context ? p.context.type : null };
-    else if (p.item.type === "episode") S.pod = { episode: p.item.uri, name: p.item.name, pos: p.progress_ms };
+    else if (p.item.type === "episode") S.pod = Object.assign({ episode: p.item.uri, name: p.item.name, pos: p.progress_ms }, S.pod && S.pod.episode === p.item.uri && S.pod.show ? { show: S.pod.show } : {});
     // Anzeige an die Wirklichkeit anpassen: läuft in Spotify Musik, steht die App auch auf Musik
     if (!busy && p.is_playing && Date.now() - lastSwitch > 5000) { const real = p.item.type === "episode" ? "podcast" : "music"; if (S.active !== real) { S.active = real; S.mode = null; try { render(); } catch (e) {} } }
     save();
@@ -188,8 +188,19 @@
     } else if (target === "music") {
       S.mode = null; const m = S.music;
       if (m && m.ctx && !m.track) await play({ context_uri: m.ctx });
-      else if (m && m.track && m.ctx) { try { await play({ context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }); } catch (e) { if (e.status === 404 || e.status === 403) throw e; await play({ uris: [m.track], position_ms: m.pos || 0 }); } }
-      else if (m && m.track) await play({ uris: [m.track], position_ms: m.pos || 0 });
+      else if (m && m.track && m.ctx) {
+        log("Musik weiter bei: " + (m.name || "Titel") + " (" + fmt(m.pos) + ")", "");
+        try { await play({ context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }); } catch (e) { if (e.status === 404 || e.status === 403) throw e; await play({ uris: [m.track], position_ms: m.pos || 0 }); }
+        // Nachsehen, ob wirklich dieser Titel läuft – nach einem Podcast springt Spotify sonst gern an den Anfang der Playlist
+        let ist = await welcherTitel();
+        if (ist && !gleicherTitel(ist, m)) {
+          log("Falscher Titel (" + (ist.name || "?") + "), zweiter Versuch", "w");
+          try { await play({ context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }); } catch (e) {}
+          ist = await welcherTitel();
+          if (ist && !gleicherTitel(ist, m)) { log("Immer noch falsch – starte den Titel einzeln", "w"); await play({ uris: [m.track], position_ms: m.pos || 0 }); }
+        }
+      }
+      else if (m && m.track) { log("Musik weiter bei: " + (m.name || "Titel") + " (" + fmt(m.pos) + ")", ""); await play({ uris: [m.track], position_ms: m.pos || 0 }); }
       else throw new Error("Noch keine Musik gemerkt. Im ♫-Menü Musik wählen oder kurz in Spotify Musik anmachen.");
     } else {
       S.mode = null; const ep = await podcastEpisode();
@@ -256,6 +267,14 @@
     return false;
   }
 
+  const gleicherTitel = (it, m) => it.uri === m.track || (it.linked_from && it.linked_from.uri === m.track) || (!!m.name && it.name === m.name);
+  async function welcherTitel() {
+    for (let i = 0; i < 6; i++) {
+      await wait(450);
+      try { const p = await api("GET", "/me/player"); if (p && p.item && p.item.type === "track") return p.item; } catch (e) { return null; }
+    }
+    return null;
+  }
   async function switchTo(target, why, force) {
     if (busy) return; busy = true; render(target);
     try {
