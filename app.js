@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="53"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="54"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -579,8 +579,9 @@ function renderRoutine(){
         if(!moveSetIn(arr,su,sr,tu,tr,dup,ids,x=>x)){toast("Gleiche Übung – nichts zu verschieben");return}
         if(B&&q<n&&arr.some(x=>x.uid===ids.b2)){remapSplit(raw.pauses,tu,q,ids.b2);remapSplit(raw.audio,tu,q,ids.b2)}
         const mg=findMerges(arr);applyMerges(arr,mg,[raw.pauses,raw.audio]);
-        if(mg.length)tlFocus=null;
-        save();renderRoutine();toast(mg.length?"Satz verschoben – zusammengeführt":dup?"Satz kopiert":"Satz verschoben")},
+        const fd=foldRounds(arr,[raw.pauses,raw.audio],skipT[skipKey()],FOLD_LOSE); // gemischte Runden (A,B,A,B) wieder als Supersatz, 24.10.2026
+        if(mg.length||fd)tlFocus=null;
+        save();renderRoutine();toast(mg.length||fd?"Satz verschoben – zusammengeführt":dup?"Satz kopiert":"Satz verschoben")},
       onReorder:(uid,from,to)=>{const it=rawItems(R.id,rDay).find(x=>x.uid===uid);if(it){reorderSets(it,from,to);save();renderRoutine();toast("Satz "+from+" ist jetzt Satz "+to)}},
       onEdit:(it,set)=>editR(it,set)});
   }
@@ -1046,6 +1047,51 @@ function applyMerges(arr,pairs,maps){
       else if(p[0]==="w"&&p[1]===bu){p[1]=au;p[2]=String(+p[2]+n);map[p.join("|")]=map[k];delete map[k]}
       else if(p[0]===bu){delete map[k]}})});
   });
+}
+/* Gemischte Sätze, die zusammen eine regelmäßige Abfolge bilden (A,B,A,B / A,B,C,A,B,C / A,B,A,B,A,B), wieder als EIN Supersatz
+   mit mehreren Sätzen schreiben (24.10.2026). Es soll sich nur die Darstellung ändern, nicht das Training: gleiche Arbeitsschritte in
+   gleicher Reihenfolge, gleiche Werte je Satz, gleiche Pausenzeiten; eingestellte Pausen/Musik wandern über maps mit (wie bei applyMerges).
+   Im Zweifel wird NICHT zusammengefasst – das türkise Zeichen ist hässlich, ein veränderter Ablauf ein Fehler.
+   Streng (Standard): nur eine durchgehend verknüpfte Kette mit mindestens einem „gemischt“-Eintrag. Dann bleibt der Ablauf gleich; nur die
+   Pause zwischen den Runden heißt „Satzpause“ statt „Pause · gleich …“ (gleiche Zeit).
+   loose: auch unverknüpfte „gemischt“-Einträge. Das ändert den Ablauf (statt „Nächste Übung“ per Knopf laufen die Supersatz-Pausen)
+   und ist deshalb aus, bis der Nutzer es abnimmt (FOLD_LOSE). skip = uids, die heute übersprungen sind (nie anfassen). Gibt die Zahl der Gruppen zurück. */
+const FOLD_LOSE=false;
+function foldRounds(arr,maps,skip,loose){
+  skip=skip||[];const N=arr.length,segs=[];let done=0;
+  const ok=it=>it&&it.o&&!it.pair&&!it.sf&&!it.deleted&&!it.off&&it.cut==null&&it.status!=="removed"&&!skip.includes(it.uid)&&(it.o.sets||1)===1;
+  const same=(a,b)=>Object.keys(Object.assign({},a,b)).every(k=>k==="sets"||a[k]===b[k]);
+  if(!loose){for(let i=0;i<N;){let j=i;while(j<N-1&&arr[j].link)j++;if(j-i>=3&&arr.slice(i,j+1).every(ok)&&arr.slice(i,j+1).some(x=>x.mix))segs.push([i,j]);i=j+1}}
+  else{const m=k=>ok(arr[k])&&arr[k].mix&&!arr[k].link&&!(k>0&&arr[k-1].link);
+    for(let i=0;i<N;){if(!m(i)){i++;continue}let j=i;while(j<N-1&&m(j+1))j++;if(j-i>=3)segs.push([i,j]);i=j+1}}
+  segs.reverse().forEach(([s,e])=>{
+    const g=arr.slice(s,e+1),m=g.length,exs=g.map(x=>x.ex),U=g.map(x=>x.uid);
+    let L=0;for(let l=2;l<=m/2&&!L;l++)if(m%l===0&&exs.every((x,i)=>x===exs[i%l])&&new Set(exs.slice(0,l)).size===l)L=l;
+    if(!L||new Set(U).size!==m)return;
+    const R=m/L,plan=[];let good=true;
+    for(let j=0;j<L;j++){ // je Übung: Werte von Runde 1 bleiben, Abweichungen späterer Runden werden so[r]; danach prüfen, dass jeder Satz exakt dieselben Werte hat wie vorher
+      const f=g[j],o1=Object.assign({},f.o,{sets:R}),so={};if(f.so&&f.so[1])so[1]=clone(f.so[1]);
+      for(let r=2;r<=R;r++){const d=diff(setOpt(g[(r-1)*L+j],1),Object.assign({},f.o,{sets:undefined}));delete d.sets;if(Object.keys(d).length)so[r]=d}
+      for(let r=1;r<=R;r++)if(!same(setOpt(g[(r-1)*L+j],1),Object.assign({},o1,so[r]||{})))good=false;
+      plan.push({o:o1,so});
+    }
+    if(!good)return;
+    (maps||[]).forEach(map=>{if(!map)return;const del=[],add={};
+      Object.keys(map).forEach(k=>{const p=k.split("|"),w=p[0]==="w",t=U.indexOf(w?p[1]:p[0]);if(t<0)return;
+        const r=Math.floor(t/L)+1,j=t%L,f=U[j],kd=w?"w":p[1];
+        if(!(w||kd==="side"||kd==="link"||kd==="set")){if(t>=L)del.push(k);return}
+        del.push(k);let nk=null;
+        if(p[2]==="1"){
+          if(w)nk=["w",f,r].concat(p.slice(3)).join("|");
+          else if(kd==="side"&&p.length===3)nk=f+"|side|"+r;
+          else if(kd==="link"&&!loose)nk=j>0?f+"|link|"+r:r>1?f+"|set|"+r:null; // Pause vor Eintrag 1 jeder Folgerunde = Satzpause
+        }
+        if(nk)add[nk]=map[k]});
+      del.forEach(k=>delete map[k]);Object.assign(map,add)});
+    g.slice(0,L).forEach((f,j)=>{f.o=plan[j].o;if(Object.keys(plan[j].so).length)f.so=plan[j].so;else delete f.so;f.link=j<L-1?true:!!g[m-1].link;delete f.mix});
+    arr.splice(s+L,m-L);done++;
+  });
+  return done;
 }
 /* eigene Pausen/Musik-Schlüssel beim Teilen mitnehmen (B Satz r>q → B2 Satz r-q) */
 function remapSplit(map,b,q,b2){
@@ -2103,5 +2149,5 @@ checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken,saveW};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()}};
 })();
