@@ -223,7 +223,11 @@ function bindAmt(inp,get,set,done){
   const leave=()=>{take();inp.value=amtShow(get())};
   inp.addEventListener("input",take);inp.addEventListener("change",leave);inp.addEventListener("blur",leave);
   inp.addEventListener("keydown",e=>{if(e.key!=="Enter")return;e.preventDefault();leave();if(done)done();else inp.blur()});
-  if(amtGo){amtGo=false;setTimeout(()=>{inp.focus({preventScroll:true});inp.select();amtSicht(inp)},0)}
+  /* Fokus SOFORT, nicht im setTimeout (23.10.2026): iOS öffnet die Tastatur nur, wenn der Fokus
+     im selben Tipp-Vorgang passiert. Über setTimeout war die Kette unterbrochen, am iPhone kam
+     deshalb kein Zahlenfeld hoch (am Gerät gemeldet). `bindAmt` läuft synchron aus dem Tipp-Handler
+     heraus, der Fokus liegt damit noch im Vorgang. Das Scrollen darf danach kommen. */
+  if(amtGo){amtGo=false;try{inp.focus({preventScroll:true});inp.select()}catch(_){}amtSicht(inp)}
 }
 const bindAmtObj=(inp,obj,onChange,done)=>bindAmt(inp,()=>obj.amt,v=>{obj.amt=v;esave();onChange()},done);
 const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';

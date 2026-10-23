@@ -180,8 +180,20 @@
       else throw new Error("Noch keine Musik gemerkt. Im ♫-Menü Musik wählen oder kurz in Spotify Musik anmachen.");
     } else {
       S.mode = null; const ep = await podcastEpisode();
-      await play({ uris: [ep], position_ms: S.pod && S.pod.episode === ep ? Math.max(0, (S.pod.pos || 0) - S.rewind * 1000) : 0 });
+      const ppos = S.pod && S.pod.episode === ep ? Math.max(0, (S.pod.pos || 0) - S.rewind * 1000) : 0;
+      await play({ uris: [ep], position_ms: ppos });
       log("Podcast direkt gestartet", "");
+      // Spotify meldet Erfolg, spielt aber nicht immer (am iPhone gemessen). Dann einreihen –
+      // dieser Weg läuft nachweislich. Scheitert auch der, bleibt die Meldung im Protokoll.
+      if (!(await laeuft(ep))) {
+        log("Podcast lief nicht an · zweiter Versuch über die Warteschlange", "w");
+        try {
+          await api("POST", "/me/player/queue?uri=" + encodeURIComponent(ep) + dq("&"));
+          await api("POST", "/me/player/next" + dq("?"));
+          await seekTo(ppos, ep);
+          log(await laeuft(ep) ? "Podcast läuft jetzt" : "Podcast startet auch so nicht", "w");
+        } catch (e) { log("Einreihen ging nicht: " + explain(e), "e"); }
+      }
     }
     S.active = target; save();
   }
@@ -201,6 +213,20 @@
       const passt = (target === "podcast" && art === "Podcast") || (target === "music" && art === "Musik");
       log("Danach läuft: " + art + ", " + (p.is_playing ? "spielt" : "pausiert") + ", " + dev + (passt ? "" : " · NICHT das Gewünschte"), passt ? "" : "w");
     } catch (e) { log("Nachsehen ging nicht: " + explain(e), "w"); }
+  }
+
+  /* Läuft die gewünschte Folge wirklich? (23.10.2026) Am iPhone nimmt Spotify ein play mit
+     uris:[Folge] an, lädt sie aber nicht – gemessen: "Danach läuft: nichts, pausiert". Deshalb
+     kurz nachfassen, statt dem Rückgabewert zu glauben. */
+  async function laeuft(uri) {
+    for (let i = 0; i < 5; i++) {
+      await wait(400);
+      try {
+        const p = await api("GET", "/me/player?additional_types=episode");
+        if (p && p.item && p.item.uri === uri && p.is_playing) return true;
+      } catch (e) { return false; }
+    }
+    return false;
   }
 
   async function switchTo(target, why, force) {
