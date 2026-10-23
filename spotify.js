@@ -199,19 +199,7 @@
       if (mix) { try { await api("PUT", "/me/player/shuffle?state=false" + dq("&")); } catch (e) {} }
       try {
       if (m && m.ctx && !m.track) await play({ context_uri: m.ctx });
-      else if (m && m.track && m.ctx && await abHier(m)) { /* lief ohne Umweg direkt am richtigen Titel an */ }
-      else if (m && m.track && m.ctx) {
-        log("Musik weiter bei: " + (m.name || "Titel") + " (" + fmt(m.pos) + ")", "");
-        try { await play({ context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }); } catch (e) { if (e.status === 404 || e.status === 403) throw e; await play({ uris: [m.track], position_ms: m.pos || 0 }); }
-        // Nachsehen, ob wirklich dieser Titel läuft – nach einem Podcast springt Spotify sonst gern an den Anfang der Playlist
-        let ist = await welcherTitel();
-        if (ist && !gleicherTitel(ist, m)) {
-          log("Falscher Titel (" + (ist.name || "?") + "), zweiter Versuch", "w");
-          try { await play({ context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }); } catch (e) {}
-          ist = await welcherTitel();
-          if (ist && !gleicherTitel(ist, m)) { log("Immer noch falsch – starte den Titel einzeln", "w"); await play({ uris: [m.track], position_ms: m.pos || 0 }); }
-        }
-      }
+      else if (m && m.track && m.ctx) await musikZurueck(m);
       else if (m && m.track) { log("Musik weiter bei: " + (m.name || "Titel") + " (" + fmt(m.pos) + ")", ""); await play({ uris: [m.track], position_ms: m.pos || 0 }); }
       else throw new Error("Noch keine Musik gemerkt. Im ♫-Menü Musik wählen oder kurz in Spotify Musik anmachen.");
       } finally {
@@ -308,21 +296,37 @@
     const i = all.indexOf(m.track);
     return i < 0 ? null : all.slice(i, i + 100);
   }
-  async function abHier(m) {
-    let uris = null;
-    try { uris = await titelAb(m); } catch (e) { log("Titelliste nicht lesbar: " + explain(e), "w"); }
-    if (!uris || !uris.length) return false;
-    log("Musik weiter bei: " + (m.name || "Titel") + " (" + fmt(m.pos) + ") · direkt", "");
-    try { await play({ uris, position_ms: m.pos || 0 }); } catch (e) { if (e.status === 404 || e.status === 403) throw e; log("Direkt ging nicht: " + explain(e), "w"); return false; }
-    return true;
-  }
   const gleicherTitel = (it, m) => it.uri === m.track || (it.linked_from && it.linked_from.uri === m.track) || (!!m.name && it.name === m.name);
   async function welcherTitel() {
     for (let i = 0; i < 6; i++) {
       await wait(450);
-      try { const p = await api("GET", "/me/player"); if (p && p.item && p.item.type === "track") return p.item; } catch (e) { return null; }
+      try { const p = await api("GET", "/me/player"); if (p && p.item && p.item.type === "track") return Object.assign({ playing: !!p.is_playing }, p.item); } catch (e) { return null; }
     }
     return null;
+  }
+  /* Zurück zur Musik (23.10.2026, iPhone): mehrere Wege nacheinander, nach jedem nachsehen, was wirklich läuft.
+     Nie mit Stille enden – lieber die Playlist ohne gemerkte Stelle als gar nichts. */
+  async function musikZurueck(m) {
+    const soll = (m.name || "Titel") + " (" + fmt(m.pos) + ")";
+    log("Musik weiter bei: " + soll, "");
+    const wege = [
+      ["Titelliste ab dem Song", async () => { const u = await titelAb(m).catch(e => { log("Titelliste nicht lesbar: " + explain(e), "w"); return null; }); if (!u || !u.length) return false; await play({ uris: u, position_ms: m.pos || 0 }); return true; }],
+      ["Playlist ab dem Song", async () => { await play({ context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }); return true; }],
+      ["Playlist ab dem Song, 2. Versuch", async () => { await wait(500); await play({ context_uri: m.ctx, offset: { uri: m.track }, position_ms: m.pos || 0 }); return true; }]
+    ];
+    let zuletzt = null;
+    for (const [name, fn] of wege) {
+      let gesendet = false;
+      try { gesendet = await fn(); } catch (e) { if (e.status === 404 || e.status === 403) throw e; log(name + " ging nicht: " + explain(e), "w"); }
+      if (!gesendet) continue;
+      const ist = await welcherTitel(); zuletzt = ist;
+      if (ist && gleicherTitel(ist, m)) {
+        if (!ist.playing) { try { await play(); } catch (e) {} }
+        log("Läuft richtig · " + name, "o"); return;
+      }
+      log(name + ": läuft " + (ist ? "„" + ist.name + "“" : "nichts") + " statt „" + (m.name || "?") + "“", "w");
+    }
+    if (!zuletzt || !zuletzt.playing) { log("Notlösung: Playlist von vorn", "e"); try { await play({ context_uri: m.ctx }); } catch (e) { log("Auch das ging nicht: " + explain(e), "e"); } }
   }
   async function switchTo(target, why, force) {
     if (busy) return; busy = true; render(target);
@@ -428,6 +432,7 @@
 .sp-res button small{display:block;color:var(--muted);font-size:.78rem}
 .sp-set{display:grid;grid-template-columns:1fr 90px;gap:8px;align-items:center;font-size:.88rem;color:var(--muted)}
 .sp-log{font:12px/1.5 ui-monospace,monospace;max-height:220px;overflow:auto;white-space:pre-wrap;color:var(--muted)}
+.sp-loghead{display:flex;justify-content:space-between;align-items:center;margin-top:10px}.sp-loghead .btn{width:auto;min-height:36px;padding:0 12px;font-size:.85rem;margin:0}
 .sp-log .e{color:var(--bad)}.sp-log .o{color:var(--ok)}.sp-log .w{color:var(--rest)}
 .sp-fallback{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:flex-end}
 .sp-fallback>div{background:var(--card);width:100%;max-height:88vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px;display:flex;flex-direction:column;gap:12px}`;
@@ -496,7 +501,7 @@
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" id="spDev">Gerät suchen</button><button class="btn" id="spOut">Abmelden</button></div>
         <div class="sp-res" id="spDevList" style="margin-top:8px"></div>
-        <div class="small" style="margin-top:10px">Protokoll</div><div class="sp-log" id="spLog"></div>
+        <div class="sp-loghead"><span class="small">Protokoll</span><button class="btn" id="spLogCopy">Kopieren</button></div><div class="sp-log" id="spLog"></div>
       </details>`;
     box.querySelectorAll(".sp-seg button").forEach(b => b.onclick = () => switchTo(b.dataset.src));
     $("spSmart").onchange = e => setSmart(e.target.checked);
@@ -512,6 +517,8 @@
     $("spDev").onclick = () => findDevices("spDevList");
     $("spDevFind").onclick = () => findDevices("spDevTop");
     $("spOpenApp").onclick = openSpotifyApp;
+    $("spLogCopy").onclick = async () => { const L = T ? (S.nlog || []) : S.log; const txt = L.slice(0, 80).map(e => new Date(e.t).toLocaleTimeString("de-DE", { hour12: false }) + "  " + e.text).join("\n");
+      try { await navigator.clipboard.writeText(txt); $("spLogCopy").textContent = "Kopiert ✓"; } catch (e) { $("spLogCopy").textContent = "Ging nicht"; } setTimeout(() => { if ($("spLogCopy")) $("spLogCopy").textContent = "Kopieren"; }, 2000); };
     // Aufgeklappt: die neuen Einstellungen direkt ins Bild holen
     $("spMore").ontoggle = () => { const d = $("spMore"); if (!d.open) return; const sb = d.closest(".shbody") || document.scrollingElement;
       requestAnimationFrame(() => { const top = sb.scrollTop + d.getBoundingClientRect().top - (sb.getBoundingClientRect ? sb.getBoundingClientRect().top : 0) - 8; try { sb.scrollTo({ top, behavior: "smooth" }); } catch (e) { sb.scrollTop = top; } }); };
