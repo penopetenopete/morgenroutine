@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="54"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="55"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -1054,9 +1054,10 @@ function applyMerges(arr,pairs,maps){
    Im Zweifel wird NICHT zusammengefasst – das türkise Zeichen ist hässlich, ein veränderter Ablauf ein Fehler.
    Streng (Standard): nur eine durchgehend verknüpfte Kette mit mindestens einem „gemischt“-Eintrag. Dann bleibt der Ablauf gleich; nur die
    Pause zwischen den Runden heißt „Satzpause“ statt „Pause · gleich …“ (gleiche Zeit).
-   loose: auch unverknüpfte „gemischt“-Einträge. Das ändert den Ablauf (statt „Nächste Übung“ per Knopf laufen die Supersatz-Pausen)
-   und ist deshalb aus, bis der Nutzer es abnimmt (FOLD_LOSE). skip = uids, die heute übersprungen sind (nie anfassen). Gibt die Zahl der Gruppen zurück. */
-const FOLD_LOSE=false;
+   loose: auch unverknüpfte „gemischt“-Einträge. Das ändert den Ablauf (statt „Nächste Übung“ per Knopf laufen die Supersatz-Pausen).
+   Vom Nutzer am 24.10.2026 ausdrücklich so gewollt und abgenommen: wer in der Timeline zu A,B,A,B verschiebt, meint einen Supersatz
+   und will die Pausen dazu. skip = uids, die heute übersprungen sind (nie anfassen). Gibt die Zahl der Gruppen zurück. */
+const FOLD_LOSE=true;
 function foldRounds(arr,maps,skip,loose){
   skip=skip||[];const N=arr.length,segs=[];let done=0;
   const ok=it=>it&&it.o&&!it.pair&&!it.sf&&!it.deleted&&!it.off&&it.cut==null&&it.status!=="removed"&&!skip.includes(it.uid)&&(it.o.sets||1)===1;
