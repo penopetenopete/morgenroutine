@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="55"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="56"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -173,6 +173,8 @@ function setRoutineSetting(rid,k,v){const r=rawRoutine(rid);if(!r)return;r.setti
 const isUni=(e,o)=>!!(e.uni&&e.uni(o));
 const fmt=s=>{s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=String(s%60).padStart(2,"0");return h?h+":"+String(m).padStart(2,"0")+":"+x:m+":"+x};
 const fmtSecs=v=>v<60?v+" s":(v%60===0?(v/60)+" min":Math.floor(v/60)+":"+String(v%60).padStart(2,"0")+" min");
+const PAUSE_BTN=-1; // Pause ohne Zeit: weiter per Knopf (24.10.2026)
+const isBtnPause=v=>v!=null&&v<0;
 const kgNum=v=>String(v).replace(".",",");
 function valText(e,o){
   const per=(isUni(e,o)||e.perSide)?" pro Seite":"";
@@ -243,14 +245,18 @@ const ITEM=44;
 function wheelValues(e,k){
   if(k==="secs"||k==="secs2"){const a=[];for(let v=5;v<=600;v+=5)a.push(v);for(let v=660;v<=3600;v+=60)a.push(v);return a}
   if(k==="reps"){const a=[];for(let v=1;v<=60;v++)a.push(v);return a}
-  if(k==="rest"||k==="sw"){const a=[];for(let v=0;v<=300;v+=5)a.push(v);for(let v=360;v<=900;v+=60)a.push(v);return a}
+  /* PAUSE_BTN ganz unten im Rad (24.10.2026): keine Zeit, sondern weiter per Knopf – wie zwischen
+     zwei Übungen. Im Ablauf ist das dur===null, das gibt es dort längst; neu ist nur, dass man es
+     für eine einzelne Pause einstellen kann. "sw" (Seitenwechsel) bleibt ohne, dort ergibt es keinen Sinn. */
+  if(k==="rest"){const a=[PAUSE_BTN];for(let v=0;v<=300;v+=5)a.push(v);for(let v=360;v<=900;v+=60)a.push(v);return a}
+  if(k==="sw"){const a=[];for(let v=0;v<=300;v+=5)a.push(v);for(let v=360;v<=900;v+=60)a.push(v);return a}
   if(k==="actual"){const a=[];for(let v=0;v<=100;v++)a.push(v);return a}
   if(k==="step")return e.steps;
   if(k==="sets")return [1,2,3,4,5,6,7,8,9,10];
   return F.STEPS[e.weight];
 }
 const stepText=v=>v?v+" cm":"keine";
-function wheelLabel(e,k,v){return (k==="secs"||k==="secs2"||k==="rest"||k==="sw")?fmtSecs(v):(k==="reps"||k==="sets"||k==="actual")?String(v):k==="step"?stepText(v):F.kgText(e.weight,v)}
+function wheelLabel(e,k,v){if(k==="rest"&&isBtnPause(v))return "Weiter per Knopf";return (k==="secs"||k==="secs2"||k==="rest"||k==="sw")?fmtSecs(v):(k==="reps"||k==="sets"||k==="actual")?String(v):k==="step"?stepText(v):F.kgText(e.weight,v)}
 function wheelHTML(e,k,v){const t=wheelLabel(e,k,v),m=t.match(/^(.*?)\s(s|min|kg|cm)$/);return m?`<b>${m[1]}</b><small>${m[2]}</small>`:`<b>${t}</b>`}
 function platesVis(kg){const ps=F.plateSet(kg);return `<span class="plates" aria-label="Scheiben">${ps.map(p=>`<i style="height:${Math.round(F.PLATE[p][0]*52)}px"></i>`).join("")}<b>${ps.map(kgNum).join(" + ")} kg</b></span>`}
 /* Eine Zeile mit Drehrad. get(): aktueller Wert, set(v): speichern, std: Standardwert (oder null) */
@@ -718,7 +724,7 @@ document.querySelectorAll("#rView [data-v]").forEach(b=>b.onclick=()=>{rView=b.d
 const TL_COL=["#00E5FF","#FFB547","#5BE38C","#B18CFF","#FF7AB6","#F2E863","#6FA8FF","#FF8F6B","#4FD1C5","#E879F9","#A3E635","#F87171"];
 /* feste Farbe pro Übung (nach Katalog-Reihenfolge) – bleibt beim Verschieben gleich, gleiche Übung = gleiche Farbe */
 const exColor=ex=>{const i=Math.max(0,(F.EX||[]).findIndex(e=>e.id===ex));return TL_COL[(i*5)%TL_COL.length]};
-function pauseText(v){return v===0?"0 s":fmtSecs(v)}
+function pauseText(v){return isBtnPause(v)?"weiter per Knopf":v===0?"0 s":fmtSecs(v)}
 /* Musik/Podcast pro Stelle: Schlüssel wie bei den Pausen; ohne eigenen Wert gilt Smart (Satz = Musik, Pause ab X s = Podcast) */
 const audKey=s=>s.type==="work"?"w|"+[s.uid,s.set||1,s.side||0,s.part||0].join("|"):(s.pk||s.uid+"|"+(s.kind||"next"));
 const smartShort=()=>{try{const v=window.TrainingSpotify&&window.TrainingSpotify.state().short;return v==null?20:+v}catch(_){return 20}};
@@ -1238,7 +1244,7 @@ function blockRange(items,i){let a=i,b=i;while(a>0&&items[a-1].link&&items[a-1].
 function buildSteps(Wk){
   const st=Wk.settings,out=[],PZ=Wk.pauses||{};
   /* jede Pause hat einen festen Schlüssel (pk); eigene Werte aus der Timeline/dem Training gehen vor */
-  const T=(uid,label,dur,kind,x)=>{x=x||{};if(x.pk&&PZ[x.pk]!=null){dur=PZ[x.pk];x.custom=true}out.push(Object.assign({type:"trans",uid,label,dur,kind},x))};
+  const T=(uid,label,dur,kind,x)=>{x=x||{};if(x.pk&&PZ[x.pk]!=null){dur=isBtnPause(PZ[x.pk])?null:PZ[x.pk];x.custom=true}out.push(Object.assign({type:"trans",uid,label,dur,kind},x))};
   blocksOf(Wk.items).forEach((bl,bi)=>{
     const first=bl[0];
     T(first.uid,bi===0?"Mach dich bereit":"Nächste Übung",null,"next",{big:true,hub:bi>0}); // ohne Zeit: weiter per Knopf
@@ -2150,5 +2156,5 @@ checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken,saveW};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()}};
 })();

@@ -528,3 +528,36 @@ test("Unverknüpft gemischt (der Fall aus der Liste): streng bleibt es, loose fa
   assert.deepStrictEqual(ohneSeite(x.fold), ["next", "link", "set", "link"]);
   assert.equal(h.A.foldRounds(x.arr, [], [], true), 0);
 });
+
+/* Pause ohne Zeit (24.10.2026): im Rad ganz unten, unter 0 Sekunden, steht „Weiter per Knopf".
+   Gespeichert wird -1; im Ablauf wird daraus dur===null, also derselbe Schritt wie zwischen zwei
+   Übungen – man tippt sich weiter, es läuft keine Uhr. */
+const sitzung = (items, pauses) => ({ settings: { confirm: false }, pauses: pauses || {}, items });
+const satzPause = w => h.A.buildSteps(w).find(s => s.type === "trans" && s.kind === "set");
+
+test("Pause ohne Zeit: gespeicherte -1 wird im Ablauf zu „weiter per Knopf“", () => {
+  const items = [item("a", "pigeon", { sets: 2, reps: 10 })];
+  const vorher = satzPause(sitzung(items));
+  assert.ok(vorher && vorher.dur > 0, "ohne eigene Einstellung läuft eine Uhr");
+
+  const nachher = satzPause(sitzung(items, { [vorher.pk]: -1 }));
+  assert.equal(nachher.dur, null, "keine Zeit mehr");
+  assert.equal(nachher.custom, true, "zählt als eigene Einstellung");
+  assert.equal(nachher.pk, vorher.pk, "gleicher Schlüssel");
+});
+
+test("Pause ohne Zeit: 0 Sekunden bleibt 0 und wird NICHT zum Knopf", () => {
+  const items = [item("a", "pigeon", { sets: 2, reps: 10 })];
+  const pk = satzPause(sitzung(items)).pk;
+  assert.equal(satzPause(sitzung(items, { [pk]: 0 })).dur, 0, "0 ist eine echte Pause, kein Knopf");
+});
+
+test("Pause ohne Zeit: das Rad bietet den Eintrag an, der Seitenwechsel nicht", () => {
+  const A = h.A;
+  const rest = A.wheelValues(h.F.EXB.balance, "rest");
+  assert.equal(rest[0], -1, "ganz unten im Rad");
+  assert.equal(rest[1], 0, "danach kommt 0 s");
+  assert.ok(!A.wheelValues(h.F.EXB.balance, "sw").some(v => v < 0), "beim Seitenwechsel gibt es das nicht");
+  assert.equal(A.wheelLabel(h.F.EXB.balance, "rest", -1), "Weiter per Knopf");
+  assert.equal(A.pauseText(-1), "weiter per Knopf");
+});
