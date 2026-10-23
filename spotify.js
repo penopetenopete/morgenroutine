@@ -171,6 +171,7 @@
       await api("POST", "/me/player/queue?uri=" + encodeURIComponent(ep) + dq("&"));
       await api("POST", "/me/player/queue?uri=" + encodeURIComponent(item.uri) + dq("&"));
       await api("POST", "/me/player/next" + dq("?")); await seekTo(pos, ep); S.mode = "queue";
+      log("Podcast über die Warteschlange", "");
     } else if (target === "music") {
       S.mode = null; const m = S.music;
       if (m && m.ctx && !m.track) await play({ context_uri: m.ctx });
@@ -180,11 +181,28 @@
     } else {
       S.mode = null; const ep = await podcastEpisode();
       await play({ uris: [ep], position_ms: S.pod && S.pod.episode === ep ? Math.max(0, (S.pod.pos || 0) - S.rewind * 1000) : 0 });
+      log("Podcast direkt gestartet", "");
     }
     S.active = target; save();
   }
 
   let busy = false;
+  /* Nachsehen, was nach dem Umschalten wirklich läuft (23.10.2026). Am iPhone nahm Spotify den
+     Befehl an (keine Fehlerzeile), spielte den Podcast aber nicht. Ohne diese Rückschau ist nicht
+     zu unterscheiden, ob der Aufruf gar nicht ankam oder ob Spotify ihn still verwirft.
+     Nur Art, Spiel-Zustand und Gerät – kein Titel, keine Adresse, keine Zugangsdaten (P-07). */
+  async function nachsehen(target) {
+    await wait(1500);
+    try {
+      const p = await api("GET", "/me/player?additional_types=episode");
+      if (!p) { log("Danach: Spotify meldet nichts (kein aktives Gerät)", "w"); return; }
+      const art = p.item ? (p.item.type === "episode" ? "Podcast" : "Musik") : "nichts";
+      const dev = p.device ? p.device.type || "Gerät" : "kein Gerät";
+      const passt = (target === "podcast" && art === "Podcast") || (target === "music" && art === "Musik");
+      log("Danach läuft: " + art + ", " + (p.is_playing ? "spielt" : "pausiert") + ", " + dev + (passt ? "" : " · NICHT das Gewünschte"), passt ? "" : "w");
+    } catch (e) { log("Nachsehen ging nicht: " + explain(e), "w"); }
+  }
+
   async function switchTo(target, why, force) {
     if (busy) return; busy = true; render(target);
     try {
@@ -195,6 +213,7 @@
       } else { await webSwitch(target, force); log("→ " + (target === "music" ? "Musik" : "Podcast") + (why ? " · " + why : ""), "o"); }
     } catch (e) { toast(explain(e)); log("Umschalten fehlgeschlagen: " + explain(e), "e"); }
     busy = false; render(); setTimeout(() => nowPlaying(true), 600);
+    if (!T) nachsehen(target);
   }
 
   // ---------- Abgleich mit dem nativen Teil ----------
