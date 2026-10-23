@@ -203,7 +203,7 @@ let amtGo=false; // true = beim nächsten Binden Feld fokussieren und markieren 
    Reiner Anzeige-Zweck, ohne Zuhörer die bleiben: beides wird wieder abgemeldet. */
 function amtSicht(inp){
   if(!inp||typeof inp.closest!=="function")return;
-  const row=inp.closest(".eamtrow")||inp;
+  const row=inp.closest(".eamtrow")||inp.closest(".esbar")||inp;
   if(!row||typeof row.scrollIntoView!=="function")return;
   const hol=()=>{try{row.scrollIntoView({block:"center",behavior:"smooth"})}catch(_){try{row.scrollIntoView(false)}catch(__){}}};
   const vv=window.visualViewport;
@@ -480,6 +480,9 @@ function openSearch(ctx,keep){
   const q=$("eQ");let t=null;if(keep&&keep.q)q.value=keep.q;
   q.addEventListener("input",()=>{clearTimeout(t);offRes=[];t=setTimeout(drawRes,120)});
   q.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();q.blur();if(q.value.trim().length>=2)searchOFF(q.value.trim())}});
+  // Beim Tippen muss man sehen, was man tippt (23.10.2026, am iPhone gemeldet): dieselbe
+  // Behandlung wie beim Mengenfeld – erst wenn die Tastatur oben ist, die Leiste ins Bild holen.
+  q.addEventListener("focus",()=>amtSicht(q));
   $("eScan").onclick=()=>scanSheet();
   $("eDone").onclick=closeSheet;
   drawRes();loadBLS().then(()=>{if(searchCtx===ctx&&$("eQ"))drawRes()}).catch(()=>{});
