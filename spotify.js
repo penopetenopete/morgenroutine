@@ -187,7 +187,12 @@
         log("Musik zurück über die Warteschlange: " + (m.name || "Titel") + " (" + fmt(m.pos) + ")", "");
         let pausiert = false;
         try { await api("PUT", "/me/player/pause" + dq("?")); pausiert = true; } catch (e) {}
-        await api("POST", "/me/player/next" + dq("?")); await seekTo(m.pos || 0, m.track || null);
+        await api("POST", "/me/player/next" + dq("?"));
+        // Sofort spulen, ohne erst zu warten (24.10.2026): "next" hebt am iPhone die Pause auf, jede
+        // Wartezeit davor war als Liedanfang zu hören (gemessen ~0,8 s). Spotify arbeitet die Befehle
+        // der Reihe nach ab, das Spulen trifft also schon den neuen Song. seekTo prüft danach nach.
+        if ((m.pos || 0) > 2000) { try { await api("PUT", "/me/player/seek?position_ms=" + Math.round(m.pos) + dq("&")); } catch (e) {} }
+        await seekTo(m.pos || 0, m.track || null);
         if (pausiert) { try { await play(); } catch (e) {} }
       }
       S.mode = null;
