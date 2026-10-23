@@ -287,3 +287,244 @@ test("Schalter ohne Wirkung: beidseitige Übung im Block (S4) und sf an der zwei
   assert.equal(s6.length, 8);
   assert.equal(kinds(s6).includes("umbau"), false);
 });
+
+
+/* ================= foldRounds: gemischte Runden wieder als Supersatz (24.10.2026) =================
+   Prüfstein: Der Ablauf vor und nach dem Zusammenfassen muss derselbe sein. Wörtlich identisch kann er nicht sein
+   (die Einträge der Folgerunden haben eigene uids, und die Pause zwischen den Runden ist beim Supersatz eine
+   „Satzpause“ statt „Pause · gleich …“). Deshalb prüft sameWorkout Schritt für Schritt – und lässt AUSSCHLIESSLICH
+   diese Unterschiede zu: Folgerunden-uid → uid der ersten Runde, Satznummer = Runde, kind link → set an der Rundengrenze
+   mit dem dazugehörigen Pausen-Schlüssel (pk). Alles andere (Typ, Seite, Modus, Stufe, Dauer, eigene Pause, beide Seiten) muss gleich sein. */
+const plain = x => JSON.parse(JSON.stringify(x === undefined ? null : x));
+const durOf = s => (s.dur == null ? null : s.dur);
+
+function sameWorkout(unf, fold, order, L) {
+  const idx = {};
+  order.forEach((u, i) => { idx[u] = i; });
+  assert.equal(fold.length, unf.length, "gleiche Zahl an Schritten");
+  Array.from(unf).forEach((u, n) => {
+    const f = fold[n], i = idx[u.uid], fu = order[i % L], r = Math.floor(i / L) + 1;
+    assert.equal(f.type, u.type, "Schritt " + n + ": type");
+    assert.equal(f.uid, fu, "Schritt " + n + ": uid");
+    assert.equal(durOf(f), durOf(u), "Schritt " + n + ": Dauer");
+    if (u.type === "work") {
+      assert.equal(f.ex, u.ex, "Schritt " + n + ": Übung");
+      assert.equal(f.side, u.side, "Schritt " + n + ": Seite");
+      assert.equal(f.mode, u.mode, "Schritt " + n + ": Modus");
+      assert.equal(f.stage, u.stage, "Schritt " + n + ": Stufe");
+      assert.equal(!!f.both, !!u.both, "Schritt " + n + ": beide Seiten");
+      assert.equal(f.set, r, "Schritt " + n + ": Satz = Runde");
+      assert.equal(f.o.secs, u.o.secs, "Schritt " + n + ": Sekunden");
+      assert.equal(f.o.reps, u.o.reps, "Schritt " + n + ": Wiederholungen");
+    } else {
+      assert.equal(!!f.custom, !!u.custom, "Schritt " + n + ": eigene Pause");
+      if (u.kind === "link") {
+        const grenze = i % L === 0;
+        assert.equal(f.kind, grenze ? "set" : "link", "Schritt " + n + ": Rundengrenze");
+        assert.equal(f.pk, fu + (grenze ? "|set|" : "|link|") + r, "Schritt " + n + ": pk");
+        assert.equal(u.pk, u.uid + "|link|1");
+      } else {
+        assert.equal(f.kind, u.kind, "Schritt " + n + ": kind");
+        assert.equal(f.pk, u.pk === undefined ? undefined : fu + "|" + u.pk.split("|")[1] + "|" + r, "Schritt " + n + ": pk");
+      }
+    }
+  });
+}
+
+/* baut beide Fassungen: Schritte vor dem Zusammenfassen, dann zusammenfassen, dann Schritte danach */
+function fold(mk, o) {
+  o = o || {};
+  const pz = plain(o.pauses || {}), au = plain(o.audio || {}), ex = { settings: { confirm: !!o.confirm } };
+  const unf = build(mk(), Object.assign({ pauses: plain(o.pauses || {}) }, ex));
+  const arr = mk();
+  const n = h.A.foldRounds(arr, [pz, au], o.skip, o.loose);
+  return { n, unf, arr, pz, au, items: plain(arr), fold: build(arr, Object.assign({ pauses: pz }, ex)) };
+}
+/* Gegenprobe: nichts darf sich ändern – weder Einträge noch Pausen-/Musik-Tabellen */
+function bleibt(mk, o) {
+  o = o || {};
+  const pz = plain(o.pauses || {}), au = plain(o.audio || {}), arr = mk(), vorher = JSON.stringify([plain(arr), pz, au]);
+  const n = h.A.foldRounds(arr, [pz, au], o.skip, o.loose);
+  assert.equal(n, 0);
+  assert.equal(JSON.stringify([plain(arr), pz, au]), vorher);
+}
+
+const ohneSeite = steps => Array.from(steps, s => s.kind).filter(k => k && k !== "side");
+const GH = { sets: 1, secs: 30 }, NF = { sets: 1, reps: 10 }, HS = { sets: 1 };
+const kette4 = () => [
+  item("a1", "grasshopper", GH, { link: true, mix: true }), item("b1", "nervefloss", NF, { link: true, mix: true }),
+  item("a2", "grasshopper", GH, { link: true, mix: true }), item("b2", "nervefloss", NF, { mix: true }),
+];
+
+test("Zusammenfassen: der gemeldete Fall A,B,A,B (je 1 Satz) wird 2 Einträge mit je 2 Sätzen, Ablauf gleich", () => {
+  const x = fold(kette4);
+  assert.equal(x.n, 1);
+  assert.equal(x.unf.length, 12);
+  assert.deepStrictEqual(x.items.map(i => [i.uid, i.o.sets, !!i.link, !!i.mix]), [["a1", 2, true, false], ["b1", 2, false, false]]);
+  sameWorkout(x.unf, x.fold, ["a1", "b1", "a2", "b2"], 2);
+  assert.deepStrictEqual(ohneSeite(x.unf), ["next", "link", "link", "link"]);
+  assert.deepStrictEqual(ohneSeite(x.fold), ["next", "link", "set", "link"]);
+  assert.deepStrictEqual(works(x.fold).map(s => s.uid), ["a1", "a1", "b1", "a1", "a1", "b1"]);
+});
+
+test("Zusammenfassen: Ablauf bleibt auch mit Bestätigung (Seitenwechsel, einseitige Übungen mit Wiederholungen) gleich", () => {
+  const mk = () => [
+    item("a1", "pigeon", { sets: 1, reps: 10 }, { link: true, mix: true }), item("b1", "grasshopper", GH, { link: true, mix: true }),
+    item("a2", "pigeon", { sets: 1, reps: 10 }, { link: true, mix: true }), item("b2", "grasshopper", GH, { mix: true }),
+  ];
+  [true, false].forEach(confirm => {
+    const x = fold(mk, { confirm });
+    assert.equal(x.n, 1);
+    sameWorkout(x.unf, x.fold, ["a1", "b1", "a2", "b2"], 2);
+  });
+});
+
+test("Zusammenfassen: Dreier-Runde A,B,C,A,B,C wird 3 Einträge mit je 2 Sätzen", () => {
+  const mk = () => [
+    item("a1", "grasshopper", GH, { link: true, mix: true }), item("b1", "nervefloss", NF, { link: true, mix: true }), item("c1", "heelsit", HS, { link: true, mix: true }),
+    item("a2", "grasshopper", GH, { link: true, mix: true }), item("b2", "nervefloss", NF, { link: true, mix: true }), item("c2", "heelsit", HS, { mix: true }),
+  ];
+  const x = fold(mk);
+  assert.equal(x.n, 1);
+  assert.deepStrictEqual(x.items.map(i => [i.uid, i.o.sets, !!i.link, !!i.mix]), [["a1", 2, true, false], ["b1", 2, true, false], ["c1", 2, false, false]]);
+  sameWorkout(x.unf, x.fold, ["a1", "b1", "c1", "a2", "b2", "c2"], 3);
+});
+
+test("Zusammenfassen: drei Runden A,B,A,B,A,B werden 2 Einträge mit je 3 Sätzen", () => {
+  const mk = () => ["a1", "b1", "a2", "b2", "a3", "b3"].map((u, i) => item(u, i % 2 ? "nervefloss" : "grasshopper", i % 2 ? NF : GH, { link: i < 5, mix: true }));
+  const x = fold(mk, { confirm: true });
+  assert.equal(x.n, 1);
+  assert.deepStrictEqual(x.items.map(i => [i.uid, i.o.sets, !!i.link, !!i.mix]), [["a1", 3, true, false], ["b1", 3, false, false]]);
+  sameWorkout(x.unf, x.fold, ["a1", "b1", "a2", "b2", "a3", "b3"], 2);
+  assert.equal(h.A.foldRounds(x.arr, [], [], false), 0, "ein zweites Mal ändert nichts mehr");
+});
+
+test("Zusammenfassen: abweichende Werte in Runde 2 landen als so[2], jeder Satz behält seine Werte", () => {
+  const mk = () => {
+    const l = kette4();
+    l[2].o.secs = 45; // Runde 2: anderes Halten
+    l[3].o.reps = 12; // Runde 2: andere Wiederholungen
+    return l;
+  };
+  const x = fold(mk);
+  assert.equal(x.n, 1);
+  assert.deepStrictEqual(x.items.map(i => i.so), [{ 2: { secs: 45 } }, { 2: { reps: 12 } }]);
+  assert.deepStrictEqual([x.items[0].o.secs, x.items[1].o.reps], [30, 10]);
+  const w = works(x.fold);
+  assert.deepStrictEqual(w.map(s => durOf(s)), works(x.unf).map(s => durOf(s)));
+  assert.equal(works(x.unf).find(s => s.uid === "a2" && s.side === 0).dur, 45);
+  sameWorkout(x.unf, x.fold, ["a1", "b1", "a2", "b2"], 2);
+});
+
+test("Zusammenfassen: eigener Wert am Satz 1 (so[1]) bleibt, ein veralteter so-Eintrag wird nicht lebendig", () => {
+  const mk = () => {
+    const l = kette4();
+    l[0].so = { 1: { secs: 20 }, 2: { secs: 99 } }; // 99 gehört zu einem Satz, den es nicht mehr gibt
+    return l;
+  };
+  const x = fold(mk);
+  assert.equal(x.n, 1);
+  assert.deepStrictEqual(x.items[0].so, { 1: { secs: 20 } });
+  assert.equal(works(x.fold).find(s => s.uid === "a1" && s.set === 2 && s.side === 0).dur, 30);
+  sameWorkout(x.unf, x.fold, ["a1", "b1", "a2", "b2"], 2);
+});
+
+test("Zusammenfassen: eingestellte Pausen und Musik überleben und wandern an den neuen Schlüssel", () => {
+  const pauses = {
+    "a2|link|1": 45, "b2|link|1": 15, "a2|side|1": 3, "a1|side|1": 4, // lebendig (Pause vor a2 = Rundengrenze)
+    "a1|set|2": 77, "b1|link|2": 88, "w|ignored|1": 5, // vor dem Zusammenfassen wirkungslos, danach würden sie wirken → müssen weg
+  };
+  const audio = { "a2|link|1": "music", "w|a2|1|0|0": "podcast", "w|b2|1|1|0": "podcast", "w|a1|1|0|0": "podcast", "w|a1|2|0|0": "music", "b2|next": "music" };
+  const x = fold(kette4, { pauses, audio, confirm: true });
+  assert.equal(x.n, 1);
+  assert.deepStrictEqual(x.pz, { "a1|set|2": 45, "b1|link|2": 15, "a1|side|2": 3, "a1|side|1": 4, "w|ignored|1": 5 });
+  assert.deepStrictEqual(x.au, { "a1|set|2": "music", "w|a1|2|0|0": "podcast", "w|b1|2|1|0": "podcast", "w|a1|1|0|0": "podcast" });
+  sameWorkout(x.unf, x.fold, ["a1", "b1", "a2", "b2"], 2);
+  // die eingestellten Zeiten kommen im Ablauf an, mit Markierung „eigene Pause“
+  const sp = x.fold.find(s => s.kind === "set");
+  assert.deepStrictEqual([sp.dur, sp.custom], [45, true]);
+  assert.deepStrictEqual(plain(Array.from(x.fold).filter(s => s.kind === "link").map(s => [s.pk, s.dur, !!s.custom])), [["b1|link|1", 120, false], ["b1|link|2", 15, true]]);
+});
+
+test("Gegenprobe: unregelmäßige Anordnung A,B,B,A bleibt unverändert (türkisches Zeichen bleibt)", () => {
+  bleibt(() => [
+    item("a1", "grasshopper", GH, { link: true, mix: true }), item("b1", "nervefloss", NF, { link: true, mix: true }),
+    item("b2", "nervefloss", NF, { link: true, mix: true }), item("a2", "grasshopper", GH, { mix: true }),
+  ]);
+  bleibt(() => ["a", "b", "c", "b", "a", "c"].map((e, i) => item("u" + i, { a: "grasshopper", b: "nervefloss", c: "heelsit" }[e], { sets: 1 }, { link: i < 5, mix: true })), { pauses: { "u1|link|1": 9 } });
+});
+
+test("Gegenprobe: A,B,A ohne vollständige zweite Runde und A,B,A,B,A bleiben unverändert", () => {
+  bleibt(() => [
+    item("a1", "grasshopper", GH, { link: true, mix: true }), item("b1", "nervefloss", NF, { link: true, mix: true }), item("a2", "grasshopper", GH, { mix: true }),
+  ]);
+  bleibt(() => ["a1", "b1", "a2", "b2", "a3"].map((u, i) => item(u, i % 2 ? "nervefloss" : "grasshopper", { sets: 1 }, { link: i < 4, mix: true })));
+});
+
+test("Gegenprobe: eine übersprungene Übung in der Folge – Eintrag oder Heute-Liste – lässt alles unverändert", () => {
+  bleibt(() => { const l = kette4(); l[2].status = "removed"; return l; });
+  bleibt(kette4, { skip: ["b2"] });
+  const x = fold(kette4, { skip: ["zzz"] });
+  assert.equal(x.n, 1, "eine fremde uid in der Heute-Liste stört nicht");
+});
+
+test("Gegenprobe: pair, cut, Seite für Seite (sf), gelöscht, mehrere Sätze je Eintrag verhindern das Zusammenfassen", () => {
+  bleibt(() => { const l = kette4(); l[1].pair = { ex2: "hfstretch", o2: {}, umbau: "x", name: "P" }; return l; });
+  bleibt(() => { const l = kette4(); l[1].cut = 1; return l; });
+  bleibt(() => { const l = kette4(); l[0].sf = true; return l; });
+  bleibt(() => { const l = kette4(); l[3].deleted = true; return l; });
+  bleibt(() => { const l = kette4(); l[2].o.sets = 2; return l; });
+  bleibt(() => { const l = kette4(); l[1].off = true; return l; });
+});
+
+test("Gegenprobe: ohne durchgehende Verknüpfung oder ohne „gemischt“-Zeichen bleibt es, wie es ist", () => {
+  // zwei getrennte Zweier-Blöcke (a1+b1, a2+b2): zwei Supersätze hintereinander, kein Muster zum Falten
+  bleibt(() => { const l = kette4(); l[1].link = false; return l; });
+  // eine gewöhnliche verknüpfte Kette, die der Nutzer selbst so gebaut hat (nichts verschoben, kein mix)
+  bleibt(() => kette4().map(i => { delete i.mix; return i; }));
+  // gleiche Übung zweimal in einer Runde
+  bleibt(() => ["a", "a", "b", "a", "a", "b"].map((e, i) => item("u" + i, e === "a" ? "grasshopper" : "nervefloss", { sets: 1 }, { link: i < 5, mix: true })));
+});
+
+test("Gegenprobe: fehlt in einem späteren Satz ein Wert, den die erste Runde hat, wird nicht zusammengefasst", () => {
+  bleibt(() => { const l = kette4(); l[0].o.kg = 20; return l; });
+});
+
+test("Zusammenfassen: mehrere Gruppen in einer Liste, Einträge davor, dazwischen und danach bleiben unberührt", () => {
+  const mk = () => [
+    item("x", "heelsit", HS),
+    ...kette4(),
+    item("y", "heelsit", HS),
+    item("c1", "heelsit", HS, { link: true, mix: true }), item("d1", "camel", { sets: 1, reps: 6 }, { link: true, mix: true }),
+    item("c2", "heelsit", HS, { link: true, mix: true }), item("d2", "camel", { sets: 1, reps: 6 }, { mix: true }),
+    item("z", "heelsit", HS),
+  ];
+  const x = fold(mk);
+  assert.equal(x.n, 2);
+  assert.deepStrictEqual(x.items.map(i => [i.uid, i.o.sets || 1]), [["x", 1], ["a1", 2], ["b1", 2], ["y", 1], ["c1", 2], ["d1", 2], ["z", 1]]);
+  const m = { a2: "a1", b2: "b1", c2: "c1", d2: "d1" };
+  assert.deepStrictEqual(works(x.unf).map(s => m[s.uid] || s.uid), works(x.fold).map(s => s.uid));
+  assert.deepStrictEqual(works(x.unf).map(durOf), works(x.fold).map(durOf));
+  assert.deepStrictEqual(works(x.unf).map(s => s.side), works(x.fold).map(s => s.side));
+});
+
+test("Unverknüpft gemischt (der Fall aus der Liste): streng bleibt es, loose fasst zusammen – aber der Ablauf ändert sich dabei", () => {
+  const mk = () => [
+    item("a", "heelsit", HS, { mix: true }), item("b", "grasshopper", GH, { mix: true }),
+    item("c", "heelsit", HS, { mix: true }), item("b2", "grasshopper", GH, { mix: true }),
+  ];
+  bleibt(mk); // Standard: nicht anfassen
+  bleibt(() => mk().map(i => { delete i.mix; return i; }), { loose: true }); // ohne „gemischt“ nie
+  bleibt(() => { const l = mk(); l[0].link = true; return l; }, { loose: true }); // verknüpft ist nicht „unverknüpft gemischt“
+  const x = fold(mk, { loose: true });
+  assert.equal(x.n, 1);
+  assert.deepStrictEqual(x.items.map(i => [i.uid, i.o.sets, !!i.link, !!i.mix]), [["a", 2, true, false], ["b", 2, false, false]]);
+  // gleich: die Arbeitsschritte (Reihenfolge, Seite, Modus, Dauer)
+  assert.deepStrictEqual(works(x.unf).map(s => ({ a: "a", b: "b", c: "a", b2: "b" })[s.uid]), works(x.fold).map(s => s.uid));
+  assert.deepStrictEqual(works(x.unf).map(durOf), works(x.fold).map(durOf));
+  assert.deepStrictEqual(works(x.unf).map(s => s.side), works(x.fold).map(s => s.side));
+  // anders – und genau das ist der Grund, warum loose aus ist: Knopf „Nächste Übung“ wird zur Supersatz-Pause
+  assert.deepStrictEqual(ohneSeite(x.unf), ["next", "next", "next", "next"]);
+  assert.deepStrictEqual(ohneSeite(x.fold), ["next", "link", "set", "link"]);
+  assert.equal(h.A.foldRounds(x.arr, [], [], true), 0);
+});
