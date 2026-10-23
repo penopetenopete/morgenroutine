@@ -781,3 +781,23 @@ html[data-theme="hell"] .tlsw[aria-checked="true"] .tlswk::after{background:#fff
 @supports (-webkit-touch-callout:none){
   input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),textarea,select{font-size:16px!important}
 }
+
+/* Ansicht Liste | Timeline: großer Schalter im Apple-Stil, der Knopf gleitet mit (auch beim Wischen) */
+.seg.vtog{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:0;padding:3px;border-radius:13px;background:color-mix(in srgb,var(--fg) 8%,transparent);isolation:isolate;flex:none}
+.seg.vtog::before{content:"";position:absolute;z-index:0;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:10px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.25),0 3px 10px rgba(0,0,0,.18),inset 0 0 0 1px color-mix(in srgb,var(--fg) 7%,transparent);
+  transform:translateX(calc(var(--pos,0) * 100% + var(--pull,0px)));transition:transform .32s cubic-bezier(.3,1.25,.5,1)}
+.seg.vtog[data-on="tl"]{--pos:1}
+.seg.vtog.drag::before{transition:none}
+.seg.vtog .sbtn{position:relative;z-index:1;min-height:40px;border:0!important;background:none!important;border-radius:10px;color:var(--muted);font-size:.92rem;letter-spacing:.02em;transition:color .2s}
+.seg.vtog .sbtn[aria-pressed="true"]{color:var(--fg)}
+.seg.vtog .sbtn:focus-visible{outline-offset:-2px}
+/* Rahmen in Listen nicht abschneiden (overflow:hidden) + iOS-Rundungsfehler beim Gleiten vermeiden */
+.list{isolation:isolate}
+.list .row:focus-visible{outline-offset:-2px}
+/* Wischen vom Rand: Fläche folgt dem Finger */
+.edgeswipe{box-shadow:-12px 0 28px rgba(0,0,0,.35)}
+/* Übersicht im Workout: der Schalter Liste | Timeline bleibt oben stehen, nur die Liste darunter scrollt */
+.shbody:has(> #plBox){overflow:hidden}
+#plBox{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+#plBox .plscroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:4px}
+.shbody:has(> #plBox) > #plOk{flex:none}

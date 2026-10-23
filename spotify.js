@@ -337,7 +337,7 @@
 .sp-dev>i{flex:none;width:10px;height:10px;border-radius:50%;background:var(--muted)}
 .sp-dev>span{flex:1;min-width:0}.sp-dev small{display:block;color:var(--muted);font-size:.8rem}
 .sp-dev .btn{flex:none;width:auto;margin:0;min-height:40px;padding:0 12px;font-size:.9rem}
-.sp-dev{flex-wrap:wrap}.sp-dev .sp-open{background:#1DB954;border-color:#1DB954;color:#04170A}
+.sp-dev{flex-wrap:wrap}.sp-devb{flex-basis:100%;display:flex;gap:8px}.sp-devb .btn{flex:1 1 0;min-height:44px}.sp-devb:not(:has(.btn:not([hidden]))){display:none}.sp-dev .sp-open{background:#1DB954;border-color:#1DB954;color:#04170A}
 .sp-dev.on>i{background:var(--ok)}
 .sp-dev.off{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent)}.sp-dev.off>i{background:var(--bad)}
 #spotMenu.off{border-color:var(--bad);color:var(--bad)}
@@ -394,7 +394,7 @@
       $("spLogin").onclick = login; return;
     }
     box.innerHTML = `
-      <div class="sp-dev" id="spDevStat"><i></i><span id="spDevTxt">Prüfe Gerät …</span><button class="btn" id="spDevFind">Gerät suchen</button><button class="btn sp-open" id="spOpenApp">Spotify öffnen</button></div>
+      <div class="sp-dev" id="spDevStat"><i></i><span id="spDevTxt">Prüfe Gerät …</span><div class="sp-devb"><button class="btn sp-open" id="spOpenApp">Spotify öffnen</button><button class="btn" id="spDevFind">Gerät suchen</button></div></div>
       <div class="sp-res" id="spDevTop"></div>
       <div class="sp-seg"><button data-src="music">Musik</button><button data-src="podcast">Podcast</button></div>
       <div class="sp-now" id="spNow">–</div>
@@ -407,7 +407,7 @@
       <div class="sp-in"><input id="spPQ" placeholder="z. B. Hotel Matze" enterkeyhint="search"><button class="btn" id="spPGo">Suchen</button></div>
       <div class="sp-res" id="spPRes"></div>
       <div class="note" id="spSaved"></div>
-      <details><summary class="small">Weitere Einstellungen</summary>
+      <details id="spMore"><summary class="small">Weitere Einstellungen</summary>
         <label class="sp-row" style="margin-top:10px"><span><b>Smart</b><small id="spSmartNote">Musik im Satz · Podcast in der Pause</small></span><span class="sp-sw"><input type="checkbox" id="spSmart"><i></i></span></label>
         <div class="sp-set" style="margin-top:10px">
           <span>Podcast zurückspulen (s)</span><input id="spRew" type="number" min="0" max="30">
@@ -431,6 +431,9 @@
     $("spDev").onclick = () => findDevices("spDevList");
     $("spDevFind").onclick = () => findDevices("spDevTop");
     $("spOpenApp").onclick = openSpotifyApp;
+    // Aufgeklappt: die neuen Einstellungen direkt ins Bild holen
+    $("spMore").ontoggle = () => { const d = $("spMore"); if (!d.open) return; const sb = d.closest(".shbody") || document.scrollingElement;
+      requestAnimationFrame(() => { const top = sb.scrollTop + d.getBoundingClientRect().top - (sb.getBoundingClientRect ? sb.getBoundingClientRect().top : 0) - 8; try { sb.scrollTo({ top, behavior: "smooth" }); } catch (e) { sb.scrollTop = top; } }); };
     devUI();
     $("spOut").onclick = async () => { delete S.tok; save(); if (T) await T.logout(); await syncNative(); fillSheet(); render(); };
     fillState(); nowPlaying(true);

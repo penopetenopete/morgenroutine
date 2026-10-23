@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="44"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="45"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -336,18 +336,33 @@ window.addEventListener("popstate",e=>{
   show((e.state&&e.state.s)||"home",false);
 });
 
-/* Vom linken Bildschirmrand nach rechts wischen = zurück (wie in iOS-Apps) */
+/* Vom linken Bildschirmrand nach rechts wischen = zurück (wie in iOS-Apps): die Fläche folgt dem Finger.
+   Im laufenden Workout bewusst aus – da soll man nicht aus Versehen rausfliegen. */
 (function(){
-  let x0=0,y0=0,on=false;
-  document.addEventListener("touchstart",e=>{const t=e.touches[0];on=e.touches.length===1&&t.clientX<28;x0=t.clientX;y0=t.clientY},{passive:true});
-  document.addEventListener("touchmove",e=>{if(!on)return;const t=e.touches[0];if(Math.abs(t.clientY-y0)>40)on=false},{passive:true});
-  document.addEventListener("touchend",e=>{
-    if(!on)return;on=false;const t=e.changedTouches[0],dx=t.clientX-x0,dy=Math.abs(t.clientY-y0);
-    if(dx<80||dy>dx*.6)return;
-    if(!$("player").hidden||!$("done").hidden)return;
-    if(!$("scrim").hidden){if(sheetBack)sheetBack();else if(!sheetLocked)closeSheet();return}
-    if(screen!=="home")history.back();
-  },{passive:true});
+  let x0=0,y0=0,t0=0,on=false,lock=false,el=null,dx=0;
+  const target=()=>{
+    if(!$("player").hidden||!$("done").hidden)return null;
+    if(!$("scrim").hidden)return sheetBack||!sheetLocked?document.querySelector("#scrim .sheet"):null;
+    return screen!=="home"?$(screen):null;
+  };
+  document.addEventListener("touchstart",e=>{const t=e.touches[0];on=e.touches.length===1&&t.clientX<24;lock=false;dx=0;el=null;if(!on)return;x0=t.clientX;y0=t.clientY;t0=Date.now()},{passive:true});
+  document.addEventListener("touchmove",e=>{
+    if(!on)return;const t=e.touches[0];dx=t.clientX-x0;const dy=t.clientY-y0;
+    if(!lock){if(Math.abs(dx)<8&&Math.abs(dy)<8)return;if(dx>Math.abs(dy)*1.2&&(el=target())){lock=true;el.classList.add("edgeswipe")}else{on=false;return}}
+    e.preventDefault();el.style.transition="none";el.style.transform=`translateX(${Math.max(0,dx)}px)`;
+  },{passive:false});
+  const finish=cancel=>{
+    if(!on)return;on=false;if(!lock||!el)return;const e2=el;
+    const v=dx/Math.max(1,Date.now()-t0),go=!cancel&&(dx>innerWidth*.33||(dx>40&&v>.45));
+    e2.style.transition="transform .22s cubic-bezier(.2,.8,.3,1)";e2.style.transform=go?`translateX(${innerWidth}px)`:"";
+    setTimeout(()=>{
+      if(go){if(!$("scrim").hidden){if(sheetBack)sheetBack();else closeSheet()}else history.back()}
+      e2.style.transition="none";e2.style.transform="";e2.classList.remove("edgeswipe");
+      requestAnimationFrame(()=>{e2.style.transition=""});
+    },go?210:230);
+  };
+  document.addEventListener("touchend",()=>finish(false),{passive:true});
+  document.addEventListener("touchcancel",()=>finish(true),{passive:true});
 })();
 
 /* =================== HAUPTMENÜ =================== */
@@ -549,7 +564,7 @@ function renderRoutine(){
   $("rDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{rDay=+b.dataset.d;renderRoutine()});
   $("rSum").textContent=`${R.days.length>1?"Tag "+(rDay+1)+" von "+R.days.length+" · ":""}${act.length} ${act.length===1?"Übung":"Übungen"} · ca. ${Math.round(estimate(act,R.settings,R.pauses)/60)} min`;
   $("rStart").disabled=!act.length;
-  $("rView").querySelectorAll("[data-v]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===rView));
+  $("rView").querySelectorAll("[data-v]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===rView));$("rView").dataset.on=rView;
   $("rList").hidden=rView!=="list";$("rTl").hidden=rView!=="tl";$("rAdd").hidden=rView==="tl";
   if(rView==="tl"){
     renderTimeline($("rTl"),{items,settings:R.settings,pauses:R.pauses,audio:R.audio},{
@@ -654,21 +669,50 @@ function rememberValues(it){S.exLast=S.exLast||{};S.exLast[it.ex]=Object.assign(
 /* =================== TIMELINE: jeder Satz ein Kästchen, Pausen als Linien =================== */
 let rView="list";
 /* Wischen über den Bildschirm (links/rechts) – Liste ↔ Timeline, Tage in der Ernährung. fn(+1) = nach links gewischt (weiter), fn(-1) = zurück */
-function hSwipe(el,fn,inSheet){
-  let x0=0,y0=0,t0=0,ok=false;
+function hSwipe(el,fn,inSheet,getT){
+  /* Wischen zwischen Liste und Timeline: Inhalt und Schalter folgen dem Finger, loslassen = umschalten oder zurückfedern */
+  let x0=0,y0=0,t0=0,ok=false,lock=null,tg=null,tog=null,dx=0;
+  const reset=anim=>{if(tg){tg.style.transition=anim?"transform .24s cubic-bezier(.2,.8,.3,1),opacity .24s":"none";tg.style.transform="";tg.style.opacity="";
+      if(anim){const t=tg;setTimeout(()=>{t.style.transition=""},260)}}
+    if(tog){tog.classList.remove("drag");tog.style.removeProperty("--pull")}};
   el.addEventListener("touchstart",e=>{
-    ok=false;if(e.touches.length!==1)return;const t=e.touches[0];x0=t.clientX;y0=t.clientY;t0=Date.now();
+    ok=false;lock=null;tg=null;tog=null;dx=0;if(e.touches.length!==1)return;const t=e.touches[0];x0=t.clientX;y0=t.clientY;t0=Date.now();
     if(x0<24||x0>innerWidth-24)return; // Zurück-Geste vom Rand nicht abfangen
     if(e.target.closest(".days,.wheel,.wheelwrap,.eswipe,.edock,.ecal,input,textarea,select,.tlghost,.hdl"))return;
-    ok=true},{passive:true});
-  el.addEventListener("touchend",e=>{
-    if(!ok||tlDrag)return;ok=false;
     if(!inSheet&&!$("scrim").hidden)return;
-    const t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0;
-    if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.8&&Date.now()-t0<800)fn(dx<0?1:-1)},{passive:true});
+    ok=true},{passive:true});
+  el.addEventListener("touchmove",e=>{
+    if(!ok||tlDrag)return;const t=e.touches[0];dx=t.clientX-x0;const dy=t.clientY-y0;
+    if(!lock){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;
+      if(Math.abs(dx)>Math.abs(dy)*1.4){lock="h";tg=getT?getT():null;tog=el.querySelector(".vtog")}else{ok=false;return}}
+    e.preventDefault();
+    const cur=tog?tog.dataset.on:null,can=!cur||(dx<0?cur!=="tl":cur!=="list"),f=can?.6:.18;
+    if(tg){tg.style.transition="none";tg.style.transform=`translateX(${dx*f}px)`;tg.style.opacity=String(1-Math.min(.45,Math.abs(dx)*f/500))}
+    if(tog&&can){tog.classList.add("drag");const w=tog.offsetWidth/2-3;tog.style.setProperty("--pull",Math.max(-w,Math.min(w,-dx*.45))+"px")}
+  },{passive:false});
+  el.addEventListener("touchend",()=>{
+    if(!ok)return;ok=false;
+    if(lock!=="h"){reset(false);return}
+    const v=Math.abs(dx)/Math.max(1,Date.now()-t0),go=Math.abs(dx)>70||(Math.abs(dx)>30&&v>.5);
+    if(go){reset(false);fn(dx<0?1:-1)}else reset(true);
+  },{passive:true});
+  el.addEventListener("touchcancel",()=>{if(ok){ok=false;reset(true)}},{passive:true});
+}
+/* Nur den nächsten scrollenden Kasten bewegen – scrollIntoView hat sonst auch die Seite/den Player verschoben,
+   und der Schalter Liste | Timeline war weg */
+function scrollOwn(el,blk){
+  let c=el.parentElement;
+  while(c&&c!==document.body){const oy=getComputedStyle(c).overflowY;if((oy==="auto"||oy==="scroll")&&c.scrollHeight>c.clientHeight+1)break;c=c.parentElement}
+  const win=!c||c===document.body,cr=win?{top:0,bottom:innerHeight}:c.getBoundingClientRect(),er=el.getBoundingClientRect();
+  let off=0;if(!win){const hd=c.querySelector(".tlhead");if(hd&&getComputedStyle(hd).position==="sticky")off=hd.offsetHeight}
+  let d=0;
+  if(blk==="start")d=er.top-cr.top-off-6;
+  else if(er.top<cr.top+off)d=er.top-cr.top-off-6;else if(er.bottom>cr.bottom)d=Math.min(er.bottom-cr.bottom+6,er.top-cr.top-off-6);
+  if(Math.abs(d)<1)return;
+  if(win)window.scrollBy(0,d);else c.scrollTop+=d;
 }
 function slideIn(el,d){if(el&&el.animate)el.animate([{transform:`translateX(${d*48}px)`,opacity:.35},{transform:"none",opacity:1}],{duration:220,easing:"cubic-bezier(.2,.8,.3,1)"})}
-hSwipe($("routine"),d=>{const nv=d>0?"tl":"list";if(nv===rView)return;rView=nv;tlCopy=null;tlMove=null;renderRoutine();slideIn($(nv==="tl"?"rTl":"rList"),d)});
+hSwipe($("routine"),d=>{const nv=d>0?"tl":"list";if(nv===rView)return;rView=nv;tlCopy=null;tlMove=null;renderRoutine();slideIn($(nv==="tl"?"rTl":"rList"),d)},false,()=>$(rView==="tl"?"rTl":"rList"));
 document.querySelectorAll("#rView [data-v]").forEach(b=>b.onclick=()=>{rView=b.dataset.v;tlCopy=null;tlMove=null;renderRoutine()});
 const TL_COL=["#00E5FF","#FFB547","#5BE38C","#B18CFF","#FF7AB6","#F2E863","#6FA8FF","#FF8F6B","#4FD1C5","#E879F9","#A3E635","#F87171"];
 /* feste Farbe pro Übung (nach Katalog-Reihenfolge) – bleibt beim Verschieben gleich, gleiche Übung = gleiche Farbe */
@@ -875,7 +919,7 @@ function renderTimeline(box,Wk,h){
     let el=null,blk="nearest"; // nur scrollen, wenn die Stelle sonst nicht zu sehen wäre
     if(h.curKey&&h.curKey!==tlAutoKey){tlAutoKey=h.curKey;tlFocus=null;el=box.querySelector(".tlb.now,.tlb.next");blk="start"} // neue Stelle im Workout: aktuelle Übung nach oben
     else if(tlFocus){el=box.querySelector(`[data-k="${CSS.escape(tlFocus)}"]`);tlFocus=null}
-    if(el)try{el.scrollIntoView({block:blk})}catch(_){}
+    if(el)scrollOwn(el,blk);
   });
   /* ---- Satz ziehen: lange drücken, Satz hängt am Finger, die anderen rücken nach, loslassen = ablegen ---- */
   function startDrag(el,s,ev){
@@ -1556,7 +1600,7 @@ function renderPlan(box,{hub,rerender}){
   const free=j=>j>=firstFree&&W.items[j]&&W.items[j].status!=="removed"&&!W.items[j].pair;
   const linkedIn=i=>i>0&&W.items[i-1].link&&W.items[i-1].status!=="removed";
   const sc=box.querySelector(".plscroll"),top=sc?sc.scrollTop:0,keep=planView==="tl"&&W.cur!==tlAutoKey?()=>{}:holdScroll(box);
-  let h=`<div class="seg plview" role="group" aria-label="Ansicht"><button class="sbtn" data-v="list" aria-pressed="${planView==="list"}">Liste</button><button class="sbtn" data-v="tl" aria-pressed="${planView==="tl"}">Timeline</button></div><div class="plscroll">`;
+  let h=`<div class="seg plview vtog" role="group" aria-label="Ansicht" data-on="${box._pv||planView}"><button class="sbtn" data-v="list" aria-pressed="${planView==="list"}">Liste</button><button class="sbtn" data-v="tl" aria-pressed="${planView==="tl"}">Timeline</button></div><div class="plscroll">`;
   if(planView==="tl")h+=`<div class="pltl"></div>`;
   const MXW=mixRanges(W.items);
   if(planView!=="tl")h+=`<div class="list pllist">`+W.items.map((it,i)=>{
@@ -1576,8 +1620,9 @@ function renderPlan(box,{hub,rerender}){
   h+=`<button class="btn ghost" data-pladd${planView==="tl"?" hidden":""}>＋ Übung hinzufügen</button></div>`;
   box.innerHTML=h;
   const sc2=box.querySelector(".plscroll");sc2.scrollTop=top;keep();
+  {const tg=box.querySelector(".plview");if(box._pv!==planView)requestAnimationFrame(()=>requestAnimationFrame(()=>{tg.dataset.on=planView}));box._pv=planView}
   box.querySelectorAll(".plview [data-v]").forEach(b=>b.onclick=()=>{planView=b.dataset.v;tlCopy=null;tlMove=null;tlAutoKey=null;rerender()});
-  box._rr=rerender;if(!box._sw){box._sw=1;hSwipe(box,d=>{const nv=d>0?"tl":"list";if(nv===planView||!box._rr)return;planView=nv;tlCopy=null;tlMove=null;tlAutoKey=null;box._rr();slideIn(box.querySelector(nv==="tl"?".pltl":".pllist"),d)},true)}
+  box._rr=rerender;if(!box._sw){box._sw=1;hSwipe(box,d=>{const nv=d>0?"tl":"list";if(nv===planView||!box._rr)return;planView=nv;tlCopy=null;tlMove=null;tlAutoKey=null;box._rr();slideIn(box.querySelector(nv==="tl"?".pltl":".pllist"),d)},true,()=>box.querySelector(".pltl,.pllist"))}
   const after=()=>{rebuildKeep();saveW();rerender()};
   if(planView==="tl"){
     const tl=box.querySelector(".pltl");
