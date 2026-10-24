@@ -154,3 +154,170 @@ test("onPill: nur ein Treffer auf [data-pill] zählt; ohne Ereignis oder Ziel ke
   assert.equal(K.onPill({}), false);
   assert.equal(K.onPill({ target: {} }), false);
 });
+
+/* ---------- Eigene Einheiten am Lebensmittel ---------- */
+const eigen = (K, extra) => { const f = Object.assign({ id: "own:t1", name: "Testbrot", brand: "", base: "g", src: "own", kcal: 250, p: 8, c: 45, f: 2, fib: 4 }, extra || {}); K.E().foods[f.id] = f; return f; };
+const json = x => JSON.stringify(x);
+
+test("units anlegen: Gramm Pflicht, Text optional, Komma erlaubt, Reihenfolge = Anlegereihenfolge, im Speicher", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K);
+  assert.equal(f.units, undefined, "ohne Anlegen gibt es das Feld nicht");
+  for (const schlecht of ["", " ", "abc", "0", "-5", "1e9", null, undefined]) assert.equal(K.unitAdd(f, "Scheibe", schlecht), null, "abgelehnt: " + String(schlecht));
+  assert.equal(f.units, undefined, "abgelehnte Eingaben hinterlassen nichts");
+  assert.equal(json(K.unitAdd(f, "  Scheibe ", "30")), json({ t: "Scheibe", g: 30 }));
+  assert.equal(json(K.unitAdd(f, "", "50")), json({ g: 50 }), "ohne Text: kein t-Schlüssel");
+  assert.equal(json(K.unitAdd(f, null, "12,5")), json({ g: 12.5 }));
+  assert.equal(json(f.units), json([{ t: "Scheibe", g: 30 }, { g: 50 }, { g: 12.5 }]));
+  assert.equal(json(gespeichert(h).foods["own:t1"].units), json(f.units), "steht in essen_v1");
+  assert.equal(K.unitAdd(f, "x".repeat(40), "10").t.length, 14, "Text gekürzt");
+});
+
+test("units: höchstens 12", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K);
+  for (let i = 1; i <= 12; i++) assert.ok(K.unitAdd(f, "", String(i * 10)), "Nr. " + i);
+  assert.equal(K.unitAdd(f, "", "5"), null, "13. wird abgelehnt");
+  assert.equal(f.units.length, 12);
+  assert.equal(K.unitsUsable(f, { amt: 1 }), true);
+  assert.ok(!K.unH(f, { amt: 1 }).includes("data-uadd"), "bei 12 kein ＋ mehr");
+});
+
+test("units löschen: ein Eintrag weg, der letzte nimmt das Feld ganz mit (fehlt = keine); Rückgängig stellt her", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K);
+  K.unitAdd(f, "a", "10"); K.unitAdd(f, "b", "20");
+  const war = f.units.slice();
+  assert.equal(json(K.unitDel(f, 0)), json({ t: "a", g: 10 }));
+  assert.equal(json(f.units), json([{ t: "b", g: 20 }]));
+  K.unitDel(f, 0);
+  assert.ok(!("units" in f), "Feld ganz weg");
+  assert.ok(!("units" in gespeichert(h).foods["own:t1"]));
+  assert.equal(K.unitDel(f, 0), null, "nichts zu löschen → null, kein Wurf");
+  K.unitSet(f, war);
+  assert.equal(json(gespeichert(h).foods["own:t1"].units), json(war));
+});
+
+test("Gegenprobe: ohne units nur das ＋, Lebensmittel bleibt unverändert", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K), vorher = json(f);
+  const html = K.unH(f, { amt: 100 });
+  assert.ok(html.includes("data-uadd"));
+  assert.ok(!html.includes("data-ui="), "keine Einträge");
+  assert.equal(json(f), vorher);
+  assert.equal(json(h.ctx.__essen.E().foods.hafer), json(loadApp({}, OPT).ctx.__essen.E().foods.hafer), "Startdaten unberührt");
+});
+
+test("unitAmt: Gramm-Menge → Grammzahl; Stück-Menge → über Gramm pro Stück; ohne stkG keine Leiste", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E();
+  assert.equal(K.unitAmt(E.foods.hafer, { amt: 80 }, 30), 30);
+  assert.equal(K.unitAmt(E.foods.hafer, { amt: 80 }, "12,5"), 12.5);
+  assert.equal(K.unitAmt(E.foods.ei, { amt: 2, u: "stk" }, 30), 0.5, "Ei: 30 g bei 60 g pro Stück");
+  assert.equal(K.unitAmt(E.foods.roggen, { amt: 1 }, 30), null, "Stück ohne Gramm pro Stück");
+  assert.equal(K.unitsUsable(E.foods.roggen, { amt: 1 }), false);
+  assert.equal(K.unH(E.foods.roggen, { amt: 1 }), "", "dort gar keine Leiste");
+  assert.equal(K.unitsUsable(E.foods.ei, { amt: 2, u: "stk" }), true);
+  for (const schlecht of ["", "abc", 0, -3, NaN, undefined]) assert.equal(K.unitAmt(E.foods.hafer, { amt: 80 }, schlecht), null);
+  assert.equal(K.unitAmt(undefined, { amt: 1 }, 30), null);
+});
+
+/* Antippen einer Einheit durch den echten bindUnits-Weg (Ersatz-Zeile/-Leiste/-Feld, wie bei der Tagesliste) */
+function leiste(K, f, en, onChange) {
+  const doc = {};
+  K.h.ctx.document.addEventListener = (t, fn) => { doc[t] = fn; };
+  K.h.ctx.document.removeEventListener = () => {};
+  const chips = [], bar = { listeners: {}, addEventListener(t, fn) { (this.listeners[t] = this.listeners[t] || []).push(fn); },
+    querySelectorAll: s => s === "[data-ui]" ? chips : [], querySelector: () => null };
+  (f.units || []).forEach((u, i) => chips.push({ dataset: { ui: String(i) }, l: {}, addEventListener(t, fn) { this.l[t] = fn; } }));
+  const inp = { value: String(en.amt), closest: s => s === ".eamtrow" ? { querySelector: q => q === "[data-un]" ? bar : null } : null };
+  K.K.bindUnits(inp, f, en, onChange);  const tippe = i => { chips[i].l.pointerdown({ button: 0, clientX: 0, clientY: 0, target: { closest: () => null } }); doc.pointerup({ target: { closest: () => null } }); };
+  return { inp, bar, tippe };
+}
+
+test("Tipp auf eine Einheit setzt entry.amt auf die Grammzahl; Feld zieht nach; Speicher sonst unverändert", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K);
+  K.unitAdd(f, "Scheibe", "30"); K.unitAdd(f, "", "50");
+  const en = { id: "x1", slot: "fr", food: "own:t1", amt: 80 };
+  K.E().days["2026-01-01"] = { e: [en] };
+  let rufe = 0;
+  const l = leiste({ K, h }, f, en, () => { rufe++; });
+  l.tippe(0);
+  assert.strictEqual(en.amt, 30);
+  assert.equal(l.inp.value, "30", "Zahlenfeld zieht nach");
+  assert.equal(rufe, 1);
+  l.tippe(1);
+  assert.strictEqual(en.amt, 50);
+  const g = gespeichert(h);
+  assert.deepEqual(Object.keys(g.days["2026-01-01"].e[0]).sort(), ["amt", "food", "id", "slot"], "Eintrag behält seine Form");
+  assert.equal(g.days["2026-01-01"].e[0].amt, 50);
+  assert.ok(!JSON.stringify(g).includes("NaN"));
+});
+
+test("Tipp auf eine Einheit bei Stück-Menge (Ei, u:stk) rechnet über Gramm pro Stück; ohne Umrechnung bleibt die Menge", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, ei = K.E().foods.ei;
+  K.unitAdd(ei, "Hälfte", "30");
+  const en = { id: "x1", slot: "fr", food: "ei", amt: 2, u: "stk" };
+  const l = leiste({ K, h }, ei, en, () => {});
+  l.tippe(0);
+  assert.strictEqual(en.amt, 0.5);
+  const ro = K.E().foods.roggen; ro.units = [{ g: 30 }];
+  const en2 = { id: "x2", slot: "fr", food: "roggen", amt: 1 };
+  const l2 = leiste({ K, h }, ro, en2, () => {});
+  l2.tippe(0);
+  assert.strictEqual(en2.amt, 1, "keine Umrechnung möglich → nichts geändert, kein NaN");
+});
+
+test("Export → Import (Teilen per Link): units überleben den Rundlauf; ohne units kein Feld im Link", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K);
+  K.unitAdd(f, "Scheibe", "30"); K.unitAdd(f, "", "50");
+  eigen(K, { id: "own:t2", name: "Ohne Einheiten" });
+  let text = "";
+  h.ctx.navigator.share = async o => { text = o.text; };
+  await K.shareEssen();
+  assert.ok(/#e=/.test(text), "Link entstanden: " + text.slice(0, 80));
+  const p = await K.readE(text);
+  const aus = p.foods.find(x => x.name === "Testbrot"), ohne = p.foods.find(x => x.name === "Ohne Einheiten");
+  assert.equal(json(aus.units), json([{ t: "Scheibe", g: 30 }, { g: 50 }]), "Export trägt units");
+  assert.ok(!("units" in ohne), "Export ohne units: kein Feld");
+  /* anderes Gerät: frische App kennt „Testbrot“ nicht */
+  const h2 = loadApp({}, OPT), K2 = h2.ctx.__essen;
+  const c = await K2.prepImport(JSON.parse(JSON.stringify(p)));
+  const neu = Object.values(c.extra).find(x => x.name === "Testbrot");
+  assert.equal(json(neu.units), json([{ t: "Scheibe", g: 30 }, { g: 50 }]), "Import liest units");
+  const neu2 = Object.values(c.extra).find(x => x.name === "Ohne Einheiten");
+  assert.ok(!("units" in neu2));
+  K2.applyImport(c);
+  const id = Object.keys(K2.E().foods).find(k => K2.E().foods[k].name === "Testbrot");
+  assert.equal(json(gespeichert(h2).foods[id].units), json([{ t: "Scheibe", g: 30 }, { g: 50 }]), "nach Übernehmen im Speicher");
+});
+
+test("Import: bestehendes Lebensmittel mit upd:true bekommt units; ohne units im Link bleiben vorhandene stehen", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K);
+  K.unitAdd(f, "alt", "10");
+  const c1 = await K.prepImport({ v: 1, foods: [{ name: "Testbrot", kcal: 250, p: 8, c: 45, f: 2, upd: true }] });
+  K.applyImport(c1);
+  assert.equal(json(K.E().foods["own:t1"].units), json([{ t: "alt", g: 10 }]), "Link ohne units lässt units stehen");
+  const c2 = await K.prepImport({ v: 1, foods: [{ name: "Testbrot", kcal: 250, p: 8, c: 45, f: 2, upd: true, units: [{ t: "neu", g: 25 }] }] });
+  K.applyImport(c2);
+  assert.equal(json(K.E().foods["own:t1"].units), json([{ t: "neu", g: 25 }]));
+});
+
+test("Import: kaputte units werden bereinigt, nicht übernommen (kein NaN, höchstens 12)", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const viele = Array.from({ length: 20 }, (_, i) => ({ g: i + 1 }));
+  const c = await K.prepImport({ v: 1, foods: [
+    { name: "A", kcal: 1, p: 0, c: 0, f: 0, units: [{ g: -1 }, { g: "x" }, { t: 5, g: 20 }, null, { t: "ok", g: "7,5" }] },
+    { name: "B", kcal: 1, p: 0, c: 0, f: 0, units: viele },
+    { name: "C", kcal: 1, p: 0, c: 0, f: 0, units: "kaputt" },
+    { name: "D", kcal: 1, p: 0, c: 0, f: 0, units: [{ g: 0 }] }] });
+  const nach = n => Object.values(c.extra).find(x => x.name === n);
+  assert.equal(json(nach("A").units), json([{ g: 20 }, { t: "ok", g: 7.5 }]));
+  assert.equal(nach("B").units.length, 12);
+  assert.ok(!("units" in nach("C")) && !("units" in nach("D")), "nichts Brauchbares → kein Feld");
+  assert.ok(!json(c.extra).includes("NaN"));
+});
+
+test("units anlegen berührt keine anderen Felder des Lebensmittels", () => {
+  /* Das Bearbeiten-Formular (foodForm) kopiert das Lebensmittel per Object.assign und nimmt units damit mit – am Gerät gegenzuprüfen. */
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K, { stkG: 40, def: 100 });
+  const vorher = json(Object.assign({}, f));
+  K.unitAdd(f, "x", "5");
+  const nachher = Object.assign({}, f); delete nachher.units;
+  assert.equal(json(nachher), vorher, "alle anderen Felder unverändert, gleiche Reihenfolge");
+});

@@ -1,7 +1,8 @@
 /* =================== ERNÄHRUNG (07.10.2026) ===================
    Speicher localStorage "essen_v1":
      {goals:{kcal,p,f,c}, kg, burnIn, foods:{id:food}, meals:{id:tpl}, days:{"JJJJ-MM-TT":{e:[entry],acts:[{name,kcal}]}}}
-   food:  {id,name,brand?,base:"g"|"stk",kcal,p,c,f,fib,stkG?,def?,src:"own"|"bls"|"off",code?}  Werte pro 100 g bzw. pro Stück
+   food:  {id,name,brand?,base:"g"|"stk",kcal,p,c,f,fib,stkG?,def?,units?:[{t?,g}],src:"own"|"bls"|"off",code?}  Werte pro 100 g bzw. pro Stück
+          units = eigene Einheiten (24.10.2026): Text optional, Gramm Pflicht, höchstens 12; fehlt das Feld, gibt es keine
    entry: {id,slot,food,amt,u?:"stk",g?:{id,name,tpl?}}   g = eingefügte Mahlzeit (Kopie, Vorlage bleibt unverändert)
    tpl:   {id,name,slot?,items:[{food,amt,u?}]}
    Unlesbare Daten: Rohwert bleibt unter "essen_defekt_v1" erhalten (12.10.2026, nie exportiert, ohne Bedienelement).
@@ -203,7 +204,7 @@ function renderMacro(){
 const AMAX=99999;
 function parseAmt(raw){const v=Math.round(Number(String(raw).trim().replace(",","."))*100)/100;return v>0&&v<=AMAX?v:null}
 const amtShow=v=>String(Math.round((+v||0)*100)/100);
-function amtH(pcs,amt,inl){return `<div class="eamtrow${inl?" in":""}"><input class="eamt" type="number" inputmode="decimal" step="${pcs?0.5:1}" min="0" value="${amtShow(amt)}" aria-label="Menge"><span class="eau">${pcs?"Stk":"g"}</span></div>`}
+function amtH(pcs,amt,inl,un){return `<div class="eamtrow${inl?" in":""}"><input class="eamt" type="number" inputmode="decimal" step="${pcs?0.5:1}" min="0" value="${amtShow(amt)}" aria-label="Menge"><span class="eau">${pcs?"Stk":"g"}</span>${un||""}</div>`}
 let amtGo=false; // true = beim nächsten Binden Feld fokussieren und markieren (Eintippen ersetzt den Wert), ohne die Seite zu scrollen
 /* Zeile über die Tastatur holen (18.10.2026): `preventScroll` beim Fokus verhindert den ruckartigen
    Sprung des Browsers, lässt die Zeile aber hinter der Tastatur liegen – man sah nicht, was man
@@ -248,6 +249,70 @@ function bindAmt(inp,get,set,done){
   if(amtGo){amtGo=false;try{inp.focus({preventScroll:true});inp.select()}catch(_){}amtSicht(inp)}
 }
 const bindAmtObj=(inp,obj,onChange,done)=>bindAmt(inp,()=>obj.amt,v=>{obj.amt=v;esave();onChange()},done);
+/* ---------- Eigene Einheiten am Lebensmittel (24.10.2026) ----------
+   food.units=[{t?,g}]: Text optional, Gramm Pflicht, höchstens 12, Reihenfolge = Anlegereihenfolge. Die Leiste steht im
+   geöffneten Mengenfeld neben der Zahl; Antippen setzt die Menge. Rein additiv: fehlt das Feld, gibt es keine Einheiten,
+   keine Migration (wie sf an der Routine). Beim Teilen per Link wird es mitgenommen (shareEssen/prepImport) – bei neuen
+   Feldern dort zuerst nachsehen, sonst gehen sie dort still verloren (Befund sf/cleanRoutine, T-02-03). */
+const UMAX=12,UTXT=14;
+function cleanUnits(a){
+  const out=[];if(!Array.isArray(a))return out;
+  a.forEach(x=>{if(!x||out.length>=UMAX)return;const g=parseAmt(x.g);if(g===null)return;
+    const o={},t=typeof x.t==="string"?x.t.trim().slice(0,UTXT):"";if(t)o.t=t;o.g=g;out.push(o)});
+  return out;
+}
+const unitsOf=f=>f&&Array.isArray(f.units)?f.units:[];
+function unitSet(f,arr){if(!f)return;if(arr&&arr.length)f.units=arr;else delete f.units;esave()}
+/* Gibt die neue Einheit zurück; null = abgelehnt (Gramm fehlen/ungültig, schon 12 da). Text ist optional. */
+function unitAdd(f,t,g){
+  const v=parseAmt(g);if(!f||v===null||unitsOf(f).length>=UMAX)return null;
+  const u={},tx=String(t==null?"":t).trim().slice(0,UTXT);if(tx)u.t=tx;u.g=v;
+  unitSet(f,unitsOf(f).concat([u]));return u;
+}
+function unitDel(f,i){const us=unitsOf(f);if(!us[i])return null;const u=us[i];unitSet(f,us.filter((_,j)=>j!==i));return u}
+/* Menge, die ein Tipp auf die Einheit einträgt: bei Gramm-Mengen die Grammzahl selbst, bei Stück-Mengen
+   (pro Stück oder u:"stk") umgerechnet über Gramm pro Stück; ohne stkG gibt es dort keine Umrechnung → null. */
+function unitAmt(f,en,g){
+  const v=parseAmt(g);if(!f||!en||v===null)return null;
+  if(!(f.base==="stk"||en.u==="stk"))return v;
+  return f.stkG>0?parseAmt(v/f.stkG):null;
+}
+const unitsUsable=(f,en)=>!!f&&!!en&&(!(f.base==="stk"||en.u==="stk")||f.stkG>0);
+const unLabel=u=>(u.t?esc(u.t)+" ":"")+nf(u.g,1)+" g";
+const unInner=f=>unitsOf(f).map((u,i)=>`<button type="button" class="eunit" data-ui="${i}">${unLabel(u)}</button>`).join("")+(unitsOf(f).length<UMAX?`<button type="button" class="eunadd" data-uadd aria-label="Einheit anlegen">${PLUS}</button>`:"");
+const unH=(f,en)=>unitsUsable(f,en)?`<div class="eun" data-un>${unInner(f)}</div>`:"";
+/* Solange man in der Leiste arbeitet, darf das Mengenfeld nicht von selbst zuklappen: ein Tipp in die Leiste oder in das
+   Anlege-Formular nimmt dem Zahlenfeld den Fokus, und dessen blur klappt die Zeile sonst zu (Neuaufbau → Leiste weg). */
+let unForm=false,unTouch=0;
+const unHold=()=>unForm||Date.now()-unTouch<900;
+function bindUnits(inp,f,obj,onChange){
+  const row=inp&&typeof inp.closest==="function"?inp.closest(".eamtrow"):null,bar=row&&row.querySelector("[data-un]");
+  if(!bar||!f)return;
+  unForm=false;
+  ["pointerdown","pointerup","pointercancel"].forEach(t=>bar.addEventListener(t,()=>{unTouch=Date.now()},true)); // auch beim Loslassen: auf dem Handy wechselt der Fokus erst nach dem Tipp-Ende
+  const redraw=()=>{unForm=false;bar.innerHTML=unInner(f);wire()};
+  const pick=i=>{const u=unitsOf(f)[i];if(!u)return;const a=unitAmt(f,obj,u.g);if(a===null)return;obj.amt=a;esave();inp.value=amtShow(a);onChange()};
+  const form=add=>{
+    unForm=true;
+    add.insertAdjacentHTML("afterend",`<span class="eunf"><input class="eunt" type="text" maxlength="${UTXT}" placeholder="Name" aria-label="Name" enterkeyhint="next" autocomplete="off"><input class="eung" type="text" inputmode="decimal" placeholder="g" aria-label="Gramm" enterkeyhint="done" autocomplete="off"><button type="button" class="eunok" aria-label="Einheit speichern">✓</button></span>`);
+    add.remove();
+    const tI=bar.querySelector(".eunt"),gI=bar.querySelector(".eung"),ok=bar.querySelector(".eunok");
+    const save=()=>{if(unitAdd(f,tI.value,gI.value)){redraw();return}toast(unitsOf(f).length>=UMAX?"Höchstens "+UMAX:"Gramm fehlen")};
+    tI.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();gI.focus({preventScroll:true})}if(e.key==="Escape")redraw()});
+    gI.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();save()}if(e.key==="Escape")redraw()});
+    ok.onclick=save;
+    bar.scrollLeft=bar.scrollWidth; // nur die Leiste waagerecht ans Ende, die Seite bleibt stehen
+    try{tI.focus({preventScroll:true})}catch(_){}amtSicht(tI); // Fokus im Tipp-Vorgang (iPhone), Sichtbarmachen wie beim Mengenfeld
+  };
+  function wire(){
+    bar.querySelectorAll("[data-ui]").forEach(b=>{const i=+b.dataset.ui;
+      gesture(b,{tap:()=>pick(i),
+        long:()=>{buzz();const was=unitsOf(f).slice(),u=unitDel(f,i);if(!u)return;redraw();
+          undoBar((u.t||nf(u.g,1)+" g")+" gelöscht",()=>{unitSet(f,was);if(bar.isConnected)redraw()})}})});
+    const add=bar.querySelector("[data-uadd]");if(add)add.onclick=()=>form(add);
+  }
+  wire();
+}
 const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
 const PLUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const CAM='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/><path d="M8 9v6M11 9v6M14 9v6M16.5 9v6"/></svg>';
@@ -256,7 +321,7 @@ const BIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wid
 let sel=new Set();
 function rowH(en,sub){
   const f=E.foods[en.food],n=nut(f,en.amt,en.u),pcs=(f&&f.base==="stk")||en.u==="stk",unit=pcs?"Stk":"g",ed=editId===en.id;
-  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}${sel.has(en.id)?" sel":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}" data-pill="${en.id}">${nf(en.amt,1)} ${unit}</span><span class="ev">${nf(n.kcal)}</span></div></div>${ed?amtH(pcs,en.amt,true):""}${nutId===en.id?nutH(f,en):""}`;
+  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}${sel.has(en.id)?" sel":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}" data-pill="${en.id}">${nf(en.amt,1)} ${unit}</span><span class="ev">${nf(n.kcal)}</span></div></div>${ed?amtH(pcs,en.amt,true,unH(f,en)):""}${nutId===en.id?nutH(f,en):""}`;
 }
 /* Nährwerte unter der Zeile (24.10.2026), aufgeklappt wie das Mengenfeld, kein eigenes Fenster:
    oben die Werte für die eingetragene Menge, darunter kleiner der Bezugswert und die Herkunft. */
@@ -290,9 +355,10 @@ function bindSlots(){
   });
   const ai=S2.querySelector(".eamt");
   if(ai){const en=d.e.find(x=>x.id===editId),f=E.foods[en.food],pcs=(f&&f.base==="stk")||en.u==="stk",row=S2.querySelector(`[data-e="${editId}"]`);
-    bindAmtObj(ai,en,()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
-      const sec=row.closest("[data-slothead]");if(!sec)return;const sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"},
-      ()=>{const mein=editId;setTimeout(()=>{if(editId===mein&&mein!=null){editId=null;renderEssen()}},120)});
+    const chg=()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
+      const sec=row.closest("[data-slothead]");if(!sec)return;const sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"};
+    bindAmtObj(ai,en,chg,()=>{const mein=editId;setTimeout(()=>{if(editId===mein&&mein!=null&&!unHold()){editId=null;renderEssen()}},120)});
+    bindUnits(ai,f,en,chg);
   }
   renderSelBar();
 }
@@ -428,7 +494,7 @@ function mealSheet(c){
     const y=keep?$("shBody").scrollTop:0;
     const body=openSheet(c.eyebrow,c.title(),`<div class="emnut" id="mNut">${nutHead(sumE(items))}</div>${c.top?c.top():""}
       <div class="elist emlist">${items.map((it,i)=>{const f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",ed=i===mEd;
-        return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${ed?" editing":""}" data-mi="${i}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}">${nf(it.amt,1)} ${pcs?"Stk":"g"}</span><span class="ev">${nf(nut(f,it.amt,it.u).kcal)}</span>${ed?`<button class="ermv" data-mx="${i}" aria-label="Zutat entfernen">×</button>`:""}</div></div>${ed?amtH(pcs,it.amt,true):""}`}).join("")}
+        return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${ed?" editing":""}" data-mi="${i}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}">${nf(it.amt,1)} ${pcs?"Stk":"g"}</span><span class="ev">${nf(nut(f,it.amt,it.u).kcal)}</span>${ed?`<button class="ermv" data-mx="${i}" aria-label="Zutat entfernen">×</button>`:""}</div></div>${ed?amtH(pcs,it.amt,true,unH(f,it)):""}`}).join("")}
         <button class="eaddin emadd" id="mAdd">＋ Zutat</button></div>${c.actions()}`,{onClose:c.onClose});
     body.scrollTop=y;
     /* Zutat entfernen: nach links wischen (wie in der Tagesliste) oder ×; Rückgängig bleibt kurz stehen, auch wenn die Ansicht leer wurde und zuging */
@@ -440,7 +506,9 @@ function mealSheet(c){
     body.querySelectorAll("[data-mx]").forEach(b=>b.onclick=()=>delIt(items[+b.dataset.mx]));
     const ai=body.querySelector(".eamt");
     if(ai){const it=items[mEd],f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",row=body.querySelector(`[data-mi="${mEd}"]`);
-      bindAmtObj(ai,it,()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))},()=>{const mein=mEd;setTimeout(()=>{if(mEd===mein&&mein>=0){mEd=-1;draw(true)}},120)})}
+      const chg=()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))};
+      bindAmtObj(ai,it,chg,()=>{const mein=mEd;setTimeout(()=>{if(mEd===mein&&mein>=0&&!unHold()){mEd=-1;draw(true)}},120)});
+      bindUnits(ai,f,it,chg)}
     $("mAdd").onclick=c.add;
     if(c.bind)c.bind(body,draw);
   };
@@ -533,7 +601,7 @@ function drawRes(stay){
   const hold=(arr,kf)=>{if(prev)arr=arr.map((x,i)=>{const p=prev.indexOf(kf(x));return [x,i,p<0?1e9:p]}).sort((a,b)=>a[2]-b[2]||a[1]-b[1]).map(a=>a[0]);arr.forEach(x=>nord.push(kf(x)));return arr};
   const u=usage(ctx.slot),uAll=usage(null),pick={};
   const foodRow=(f,key)=>{pick[key]=f;const a=added[key];
-    if(a){const pcs=f.base==="stk"||a.u==="stk",ed=edKey===key;return `<div class="erow eadded${ed?" editing":""}" data-key="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}</span><span class="epill on" data-ek="${esc(key)}">${nf(a.amt,1)} ${pcs?"Stk":"g"}</span><span class="echeck">✓</span></div>${ed?amtH(pcs,a.amt,true):""}`}
+    if(a){const pcs=f.base==="stk"||a.u==="stk",ed=edKey===key;return `<div class="erow eadded${ed?" editing":""}" data-key="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}</span><span class="epill on" data-ek="${esc(key)}">${nf(a.amt,1)} ${pcs?"Stk":"g"}</span><span class="echeck">✓</span></div>${ed?amtH(pcs,a.amt,true,unH(E.foods[f.id]||f,a)):""}`}
     return `<button class="erow" data-pick="${esc(key)}">${iconOf(f)}<span class="enm">${esc(f.name)}${f.brand?` <small>${esc(f.brand)}</small>`:""}</span><span class="ev">${nf(f.kcal)}</span><span class="eplus">${PLUS}</span></button>`};
   const tplRow2=m=>{const k="t:"+m.id,s=sumE(m.items),strip=m.items.slice(0,7).map(x=>iconOf(E.foods[x.food]).replace('class="eic"','class="emini"')).join("")+(m.items.length>7?`<span class="emore">+${m.items.length-7}</span>`:"");
     return `<div class="erow emrow2${added[k]?" eadded":""}" data-tpl="${m.id}"><span class="emeal"><span class="enm">${esc(m.name)}</span><span class="estrip">${strip}</span></span><span class="ev">${nf(s.kcal)}</span>${added[k]?`<span class="echeck">✓</span>`:`<span class="eplus">${PLUS}</span>`}</div>`};
@@ -573,7 +641,7 @@ function drawRes(stay){
     edKey=direkt?k:null;if(direkt)amtGo=true;drawRes(true)});
   box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;if(edKey)amtGo=true;drawRes(true)});
   box.querySelectorAll(".eadded[data-key]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-ek]"))return;const k=r.dataset.key;removeAdded(added[k],ctx);delete added[k];addedN--;if(edKey===k)edKey=null;drawRes(true)});
-  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";bindAmtObj(r.nextElementSibling.querySelector(".eamt"),a,()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")},()=>{const mein=edKey;setTimeout(()=>{if(edKey===mein&&mein){edKey=null;drawRes(true)}},120)})});
+  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";const ai=r.nextElementSibling.querySelector(".eamt"),chg=()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")};bindAmtObj(ai,a,chg,()=>{const mein=edKey;setTimeout(()=>{if(edKey===mein&&mein&&!unHold()){edKey=null;drawRes(true)}},120)});bindUnits(ai,E.foods[f.id]||f,a,chg)});
   box.querySelectorAll("[data-tpl]").forEach(b=>gesture(b,{
     tap:()=>{const k="t:"+b.dataset.tpl;if(added[k]){unTpl(added[k]);delete added[k];addedN--;drawRes(true);return}if(!E.meals[b.dataset.tpl].items.length){tplSheet(b.dataset.tpl,snapSearch());return}added[k]=insertTpl(b.dataset.tpl,curDay,ctx.slot,true);addedN++;drawRes(true)},
     long:()=>{buzz();tplSheet(b.dataset.tpl,snapSearch())}}));
@@ -717,7 +785,7 @@ function moreSheet(){
 /* ---------- Andockstelle für Claude ----------
    Link: <App-URL>#e=<base64url(deflate-raw(JSON))>
    JSON {v:1,
-     foods:[{name,brand?,base?:"g"|"stk",kcal,p,c,f,fib?,stkG?,def?,upd?}],      neue Lebensmittel (Name+Marke = Schlüssel; upd:true überschreibt Werte)
+     foods:[{name,brand?,base?:"g"|"stk",kcal,p,c,f,fib?,stkG?,def?,units?:[{t?,g}],upd?}],     neue Lebensmittel (Name+Marke = Schlüssel; upd:true überschreibt Werte)
      meals:[{name,slot?,items:[{food,amt,u?}]}],                                  Vorlagen anlegen/ersetzen (gleicher Name = ersetzen)
      add:[{date?,slot,meal?|items?,name?}],                                       ins Tagebuch: meal = Vorlagen-Name, items = einzelne (name = als Mahlzeit-Gruppe)
      acts:[{date?,name,kcal}]}                                                    Aktivitäten ohne App (z. B. Tennis)
@@ -734,6 +802,7 @@ async function prepImport(p){
     if(!x||!x.name)return;const ex=findFood(x.name+" | "+(x.brand||""))||(!x.brand&&findFood(x.name));
     const f={name:String(x.name).slice(0,60),brand:String(x.brand||"").slice(0,40),base:x.base==="stk"?"stk":"g",kcal:+x.kcal||0,p:+x.p||0,c:+x.c||0,f:+x.f||0,fib:+x.fib||0,src:"own"};
     if(x.stkG>0)f.stkG=+x.stkG;if(x.def>0)f.def=+x.def;
+    const un=cleanUnits(x.units);if(un.length)f.units=un; // 24.10.2026: eigene Einheiten kommen mit (fehlt das Feld, bleibt ein bestehendes Lebensmittel bei upd unverändert)
     if(ex){if(x.upd)upd.push([ex,f]);newF[norm(x.name)]=ex;return}
     f.id="own:"+nid();newF[f.id]=f;
   });
@@ -801,7 +870,7 @@ async function shareEssen(){
   try{
     const used=new Set();Object.values(E.meals).forEach(m=>m.items.forEach(i=>used.add(i.food)));
     const d=dayGet(curDay);d.e.forEach(x=>used.add(x.food));
-    const foods=Object.values(E.foods).filter(f=>f.src==="own"||used.has(f.id)).map(f=>{const x={id:f.id,name:f.name,base:f.base,kcal:f.kcal,p:f.p,c:f.c,f:f.f};if(f.brand)x.brand=f.brand;if(f.fib)x.fib=f.fib;if(f.stkG)x.stkG=f.stkG;if(f.def)x.def=f.def;return x});
+    const foods=Object.values(E.foods).filter(f=>f.src==="own"||used.has(f.id)).map(f=>{const x={id:f.id,name:f.name,base:f.base,kcal:f.kcal,p:f.p,c:f.c,f:f.f};if(f.brand)x.brand=f.brand;if(f.fib)x.fib=f.fib;if(f.stkG)x.stkG=f.stkG;if(f.def)x.def=f.def;if(unitsOf(f).length)x.units=cleanUnits(f.units);return x});
     const p={v:1,export:true,date:curDay,goals:E.goals,kg:E.kg,foods,meals:Object.values(E.meals).map(m=>({name:m.name,slot:m.slot,items:m.items})),
       day:d.e.map(x=>{const o={slot:x.slot,food:x.food,amt:x.amt};if(x.u)o.u=x.u;if(x.g)o.meal=x.g.name;return o})};
     const link=APP_URL+"#e="+b64u.enc(await zip(JSON.stringify(p))),txt="Meine Ernährung (Lebensmittel, Vorlagen, "+(curDay===today()?"heute":curDay)+"):\n"+link;
@@ -830,5 +899,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,setDay:k=>{curDay=k;renderEssen()}};
 })();

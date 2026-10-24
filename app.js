@@ -685,7 +685,7 @@ function hSwipe(el,fn,inSheet,getT){
   el.addEventListener("touchstart",e=>{
     ok=false;lock=null;tg=null;tog=null;dx=0;if(e.touches.length!==1)return;const t=e.touches[0];x0=t.clientX;y0=t.clientY;t0=Date.now();
     if(x0<24||x0>innerWidth-24)return; // Zurück-Geste vom Rand nicht abfangen
-    if(e.target.closest(".days,.wheel,.wheelwrap,.eswipe,.edock,.ecal,input,textarea,select,.tlghost,.hdl"))return;
+    if(e.target.closest(".days,.wheel,.wheelwrap,.eswipe,.edock,.ecal,.eun,input,textarea,select,.tlghost,.hdl"))return;
     if(!inSheet&&!$("scrim").hidden)return;
     ok=true},{passive:true});
   el.addEventListener("touchmove",e=>{
