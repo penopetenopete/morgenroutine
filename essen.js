@@ -79,8 +79,15 @@ function nutInfo(f,amt,u){
   const stk=f.base==="stk";
   return {n:nut(f,amt,u),ref:nut(f,stk?1:100,stk?"stk":"g"),lab:stk?"pro Stück":"pro 100 g",src:SRCN[f.src]||""};
 }
-/* Werte-Zeile: Zahl groß, Kürzel klein – dieselben Kürzel wie in den Ringen (KH, Eiweiß, Fett) */
-const nutCells=n=>`<span><b class="num">${nf(n.kcal)}</b> kcal</span><span><b class="num">${nf(n.p,1)}</b> Eiweiß</span><span><b class="num">${nf(n.c,1)}</b> KH</span><span><b class="num">${nf(n.f,1)}</b> Fett</span><span><b class="num">${nf(n.fib,1)}</b> Ballast.</span>`;
+/* Makro-Verteilung (24.10.2026, zweite Runde): welcher Anteil der Kalorien eines Lebensmittels aus Eiweiß, Kohlenhydraten und Fett kommt
+   (4 / 4 / 9 kcal je Gramm). Die Ringe der Startseite zeigen „Prozent vom Tagesziel“ – ein einzelnes Lebensmittel hat kein Ziel, deshalb
+   füllt hier der Anteil an den Kalorien den Ring (Thunfisch fast voll bei Eiweiß, Öl voll bei Fett). Unter 1 kcal aus Makros (z. B. nur
+   kcal eingetragen, Wasser) gibt es keine sinnvolle Verteilung → null, und die Ringe werden weggelassen statt leer gezeigt. */
+function macroSplit(r){
+  if(!r)return null;
+  const p=Math.max(0,+r.p||0)*4,c=Math.max(0,+r.c||0)*4,f=Math.max(0,+r.f||0)*9,t=p+c+f;
+  return t>=1?{p:p/t,c:c/t,f:f/t}:null;
+}
 
 /* ---------- Training: verbrannte Kalorien (grob) ---------- */
 /* Krafttraining/Mobilität netto ≈ 3,5 MET über dem Ruheumsatz → kcal/min = 3,5 × kg / 60 */
@@ -125,6 +132,16 @@ const RC=2*Math.PI*34;
 function ringSvg(v,goal){const p=goal?Math.min(1,v/goal):0;return `<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" class="rbg"/><circle cx="40" cy="40" r="34" class="rfg" stroke-dasharray="${RC.toFixed(1)}" stroke-dashoffset="${(RC*(1-p)).toFixed(1)}"/></svg>`}
 function ring(key,v,goal,sub){
   return `<button class="ering" data-m="${key}" style="--rc:${MET[key].c}"><span class="rwrap">${ringSvg(v,goal)}<span class="rin"><b>${goal?Math.round(v/goal*100):0}%</b><small>${MET[key].s}</small></span></span><span class="rsub">${sub}</span></button>`;
+}
+/* Nährwerte-Block (24.10.2026, zweite Runde; vom Nutzer so gewollt: „zu viele Zahlen“, „immer pro 100“): links die kcal pro 100 g bzw. pro Stück
+   mit Bezug und Herkunft (klein), rechts drei Ringe KH · Eiweiß · Fett in der Bildsprache der Startseite (ringSvg, Farben aus MET).
+   Gefüllt ist der Anteil an den Kalorien (macroSplit), innen steht der absolute Wert in Gramm. Ein EINZIGER Helfer für das Panel unter der
+   Tageszeile und die Karte beim Gedrückthalten in der Suche – nicht nachbauen. Die Werte für die eingetragene Menge entfallen bewusst. */
+function nutBlock(i){
+  if(!i)return "";
+  const r=i.ref,sp=macroSplit(r);
+  const rg=k=>`<span class="erg" style="--rc:${MET[k].c}"><span class="rwrap">${ringSvg(sp[k],1)}<span class="rin"><b class="num">${nf(r[k],1)}<i>g</i></b><small>${MET[k].s}</small></span></span></span>`;
+  return `<div class="enb"><div class="enk"><span class="enkv"><b class="num">${nf(r.kcal)}</b> kcal</span><small>${i.lab}</small>${i.src?`<small class="ensrc">${esc(i.src)}</small>`:""}</div>${sp?`<div class="erings">${rg("c")}${rg("p")}${rg("f")}</div>`:""}</div>`;
 }
 const dayLab=k=>{const t=today();return k===t?"Heute":k===addDays(t,-1)?"Gestern":k===addDays(t,1)?"Morgen":new Date(k+"T12:00").toLocaleDateString("de-DE",{weekday:"short",day:"numeric",month:"numeric"})};
 const gv=(n,m)=>m==="kcal"?nf(n.kcal):nf(n[m],1);
@@ -281,19 +298,23 @@ const unitsUsable=(f,en)=>!!f&&!!en&&(!(f.base==="stk"||en.u==="stk")||f.stkG>0)
 const unLabel=u=>(u.t?esc(u.t)+" ":"")+nf(u.g,1)+" g";
 const unInner=f=>unitsOf(f).map((u,i)=>`<button type="button" class="eunit" data-ui="${i}">${unLabel(u)}</button>`).join("")+(unitsOf(f).length<UMAX?`<button type="button" class="eunadd" data-uadd aria-label="Einheit anlegen">${PLUS}</button>`:"");
 const unH=(f,en)=>unitsUsable(f,en)?`<div class="eun" data-un>${unInner(f)}</div>`:"";
-/* Solange man in der Leiste arbeitet, darf das Mengenfeld nicht von selbst zuklappen: ein Tipp in die Leiste oder in das
-   Anlege-Formular nimmt dem Zahlenfeld den Fokus, und dessen blur klappt die Zeile sonst zu (Neuaufbau → Leiste weg). */
+/* Zuklapp-Schutz (V58, 24.10.2026): solange man im Anlege-Formular tippt oder eine Einheit LANG drückt (löschen), darf das Mengenfeld nicht
+   von selbst zuklappen – der Tipp nimmt dem Zahlenfeld den Fokus, und dessen blur klappt die Zeile sonst zu (Neuaufbau → Leiste weg).
+   Seit V60 (24.10.2026, Nutzer: „wenn ich auf Dose klicke, soll sich alles schließen … kein Zwischenschritt mit dem Haken“) gilt der Schutz
+   NICHT mehr für den kurzen Tipp auf eine Einheit: der setzt die Menge und schließt die Zeile wie Enter (pick → done, setzt unTouch/unForm
+   vorher zurück). Das Formular und das lange Drücken behalten den Schutz unverändert. */
 let unForm=false,unTouch=0;
 const unHold=()=>unForm||Date.now()-unTouch<900;
-function bindUnits(inp,f,obj,onChange){
+function bindUnits(inp,f,obj,onChange,done){
   const row=inp&&typeof inp.closest==="function"?inp.closest(".eamtrow"):null,bar=row&&row.querySelector("[data-un]");
   if(!bar||!f)return;
   unForm=false;
   ["pointerdown","pointerup","pointercancel"].forEach(t=>bar.addEventListener(t,()=>{unTouch=Date.now()},true)); // auch beim Loslassen: auf dem Handy wechselt der Fokus erst nach dem Tipp-Ende
-  const redraw=()=>{unForm=false;bar.innerHTML=unInner(f);wire()};
-  const pick=i=>{const u=unitsOf(f)[i];if(!u)return;const a=unitAmt(f,obj,u.g);if(a===null)return;obj.amt=a;esave();inp.value=amtShow(a);onChange()};
+  const redraw=()=>{unForm=false;bar.classList.remove("eunform");bar.innerHTML=unInner(f);wire()};
+  const pick=i=>{const u=unitsOf(f)[i];if(!u)return;const a=unitAmt(f,obj,u.g);if(a===null)return;obj.amt=a;esave();inp.value=amtShow(a);onChange();
+    unTouch=0;unForm=false;if(done)done()}; // direkt übernehmen und schließen (V60); ohne Umrechnung (a===null) bleibt alles offen
   const form=add=>{
-    unForm=true;
+    unForm=true;bar.classList.add("eunform"); // Chips solange ausblenden: das Formular steht dann vorn in der Leiste und wird links nicht mehr abgeschnitten (V60)
     add.insertAdjacentHTML("afterend",`<span class="eunf"><input class="eunt" type="text" maxlength="${UTXT}" placeholder="Name" aria-label="Name" enterkeyhint="next" autocomplete="off"><input class="eung" type="text" inputmode="decimal" placeholder="g" aria-label="Gramm" enterkeyhint="done" autocomplete="off"><button type="button" class="eunok" aria-label="Einheit speichern">✓</button></span>`);
     add.remove();
     const tI=bar.querySelector(".eunt"),gI=bar.querySelector(".eung"),ok=bar.querySelector(".eunok");
@@ -301,7 +322,7 @@ function bindUnits(inp,f,obj,onChange){
     tI.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();gI.focus({preventScroll:true})}if(e.key==="Escape")redraw()});
     gI.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();save()}if(e.key==="Escape")redraw()});
     ok.onclick=save;
-    bar.scrollLeft=bar.scrollWidth; // nur die Leiste waagerecht ans Ende, die Seite bleibt stehen
+    bar.scrollLeft=0; // V58 scrollte ans Ende – war das Formular breiter als die Leiste, fehlte links das Namensfeld (24.10.2026 am Gerät gemeldet); die Seite bleibt stehen
     try{tI.focus({preventScroll:true})}catch(_){}amtSicht(tI); // Fokus im Tipp-Vorgang (iPhone), Sichtbarmachen wie beim Mengenfeld
   };
   function wire(){
@@ -324,11 +345,12 @@ function rowH(en,sub){
   const f=E.foods[en.food],n=nut(f,en.amt,en.u),pcs=(f&&f.base==="stk")||en.u==="stk",unit=pcs?"Stk":"g",ed=editId===en.id;
   return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}${sel.has(en.id)?" sel":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}" data-pill="${en.id}">${nf(en.amt,1)} ${unit}</span><span class="ev">${nf(n.kcal)}</span></div></div>${ed?amtH(pcs,en.amt,true,unH(f,en)):""}${nutId===en.id?nutH(f,en):""}`;
 }
-/* Nährwerte unter der Zeile (24.10.2026), aufgeklappt wie das Mengenfeld, kein eigenes Fenster:
-   oben die Werte für die eingetragene Menge, darunter kleiner der Bezugswert und die Herkunft. */
+/* Nährwerte unter der Zeile (24.10.2026), aufgeklappt wie das Mengenfeld, kein eigenes Fenster. Zweite Runde: nur noch der Block
+   pro 100 g bzw. pro Stück (nutBlock) – die Werte für die eingetragene Menge entfallen, und die Vielfach-Knöpfe sind am einzelnen
+   Eintrag wieder weg (der Nutzer wollte sie für Mahlzeiten, dort bleiben sie über mulH/scaleEntries). */
 function nutH(f,en){
   const i=nutInfo(f,en.amt,en.u);if(!i)return "";
-  return `<div class="enutrow"><div class="enut">${nutCells(i.n)}</div><div class="enut enref"><span>${i.lab}</span>${nutCells(i.ref)}${i.src?`<span class="ensrc">${esc(i.src)}</span>`:""}</div>${mulH()}</div>`;
+  return `<div class="enutrow">${nutBlock(i)}</div>`;
 }
 /* Vielfaches der Menge (24.10.2026, vom Nutzer so entschieden): ×1,5 / ×2 RECHNEN UM, sie legen NICHT mehrfach an – aus 100 g werden
    150 g in EINEM Eintrag, es entsteht keine zweite Zeile. Eine Mahlzeit rechnet alle Zutaten mit und behält ihre g.id.
@@ -365,14 +387,13 @@ function bindSlots(){
       swipe:r.dataset.e?()=>delWithUndo(d.e.filter(x=>x.id===r.dataset.e)):null
     });
   });
-  S2.querySelectorAll("[data-mul]").forEach(b=>b.onclick=()=>{const en=d.e.find(x=>x.id===nutId);if(!en)return;
-    if(scaleEntries([en],b.dataset.mul))renderEssen();else toast("Zu groß")}); // Panel bleibt offen (nutId), renderEssen hält die Scrollposition
   const ai=S2.querySelector(".eamt");
   if(ai){const en=d.e.find(x=>x.id===editId),f=E.foods[en.food],pcs=(f&&f.base==="stk")||en.u==="stk",row=S2.querySelector(`[data-e="${editId}"]`);
     const chg=()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
       const sec=row.closest("[data-slothead]");if(!sec)return;const sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"};
-    bindAmtObj(ai,en,chg,()=>{const mein=editId;setTimeout(()=>{if(editId===mein&&mein!=null&&!unHold()){editId=null;renderEssen()}},120)});
-    bindUnits(ai,f,en,chg);
+    const zu=()=>{const mein=editId;setTimeout(()=>{if(editId===mein&&mein!=null&&!unHold()){editId=null;renderEssen()}},120)};
+    bindAmtObj(ai,en,chg,zu);
+    bindUnits(ai,f,en,chg,zu); // Tipp auf eine Einheit: übernehmen und zuklappen (V60)
   }
   renderSelBar();
 }
@@ -406,15 +427,16 @@ function gesture(el,{tap,long,swipe,rel}){
     document.addEventListener("pointermove",mv);document.addEventListener("pointerup",up);document.addEventListener("pointercancel",cc);
   });
 }
-/* Auswahl-Leiste unten: Gestern · Kalender · Nochmal · Morgen · Löschen (Nochmal 24.10.2026: dasselbe nochmal in den SELBEN Tag,
-   neben Kalender, weil beides kopiert; Löschen bleibt am rechten Rand). Auf schmalen Handys bricht die Reihe in zwei Zeilen (app.css). */
+/* Auswahl-Leiste unten: Gestern · Kalender · Morgen | Nochmal · Löschen (Nochmal 24.10.2026: dasselbe nochmal in den SELBEN Tag).
+   Reihenfolge seit V60 so, weil das Umbrechen auf schmalen Handys sonst unsymmetrisch war: oben die drei, die mit Tagen zu tun haben,
+   unten die zwei, die etwas am heutigen Tag tun. Über 460 px eine Reihe aus fünf, darunter zwei Zeilen 3 + 2 (app.css). */
 function renderSelBar(){
   let bar=$("eSelBar");const on=!!sel.size&&!$("essen").hidden&&!macro;document.body.classList.toggle("esel",on);
   if(!on){if(bar)bar.hidden=true;return}
   if(!bar){bar=document.createElement("div");bar.id="eSelBar";bar.className="edock";document.body.appendChild(bar)}
   bar.hidden=false;
   bar.innerHTML=`<div class="edhead"><span>${selCount()} ausgewählt</span><button data-sb="x">Fertig</button></div>
-    <div class="edrow"><button class="edz" data-sb="prev"><b>‹</b><span>${dayLab(addDays(curDay,-1))}</span></button><button class="edz" data-sb="cal">${CALI}<span>Kalender</span></button><button class="edz" data-sb="again">${DUP}<span>Nochmal</span></button><button class="edz" data-sb="next"><b>›</b><span>${dayLab(addDays(curDay,1))}</span></button><button class="edz del" data-sb="del">${BIN}<span>Löschen</span></button></div>`;
+    <div class="edrow"><button class="edz" data-sb="prev"><b>‹</b><span>${dayLab(addDays(curDay,-1))}</span></button><button class="edz" data-sb="cal">${CALI}<span>Kalender</span></button><button class="edz" data-sb="next"><b>›</b><span>${dayLab(addDays(curDay,1))}</span></button><button class="edz" data-sb="again">${DUP}<span>Nochmal</span></button><button class="edz del" data-sb="del">${BIN}<span>Löschen</span></button></div>`;
   bar.querySelectorAll("[data-sb]").forEach(b=>b.onclick=()=>{
     const a=b.dataset.sb,list=dayGet(curDay).e.filter(x=>sel.has(x.id));
     if(a==="x"){sel.clear();renderEssen();return}
@@ -536,8 +558,9 @@ function mealSheet(c){
     const ai=body.querySelector(".eamt");
     if(ai){const it=items[mEd],f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",row=body.querySelector(`[data-mi="${mEd}"]`);
       const chg=()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))};
-      bindAmtObj(ai,it,chg,()=>{const mein=mEd;setTimeout(()=>{if(mEd===mein&&mein>=0&&!unHold()){mEd=-1;draw(true)}},120)});
-      bindUnits(ai,f,it,chg)}
+      const zu=()=>{const mein=mEd;setTimeout(()=>{if(mEd===mein&&mein>=0&&!unHold()){mEd=-1;draw(true)}},120)};
+      bindAmtObj(ai,it,chg,zu);
+      bindUnits(ai,f,it,chg,zu)}
     $("mAdd").onclick=c.add;
     if(c.bind)c.bind(body,draw);
   };
@@ -606,11 +629,12 @@ function openSearch(ctx,keep){
   $("eDone").onclick=closeSheet;
   drawRes();loadBLS().then(()=>{if(searchCtx===ctx&&$("eQ"))drawRes()}).catch(()=>{});
 }
-/* Werte-Karte beim Gedrückthalten in der Suche (24.10.2026): kurz – kcal, E / KH / F pro 100 g bzw. pro Stück. Keine Auswahl, kein Fenster. */
+/* Werte-Karte beim Gedrückthalten in der Suche (24.10.2026): kurz – Name und derselbe Block wie unter der Tageszeile (nutBlock: kcal,
+   drei Ringe, pro 100 g bzw. pro Stück). Keine Auswahl, kein Fenster. Der Bezug steht schon im Block, daher in der Kopfzeile nicht nochmal. */
 let pickHold=false;
 function holdH(f){
-  const i=nutInfo(f,0);if(!i)return "";const r=i.ref;
-  return `<div class="eit"><b class="enm">${esc(f.name)}</b><small>${i.lab}</small></div><div class="enut"><span><b class="num">${nf(r.kcal)}</b> kcal</span><span><b class="num">${nf(r.p,1)}</b> E</span><span><b class="num">${nf(r.c,1)}</b> KH</span><span><b class="num">${nf(r.f,1)}</b> F</span></div>`;
+  const i=nutInfo(f,0);if(!i)return "";
+  return `<div class="eit"><b class="enm">${esc(f.name)}</b></div>${nutBlock(i)}`;
 }
 function holdInfo(f){
   let p=$("eInfo");if(!p){p=document.createElement("div");p.id="eInfo";p.className="einfo";document.body.appendChild(p)}
@@ -692,7 +716,7 @@ function drawRes(stay){
   });
   box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;if(edKey)amtGo=true;drawRes(true)});
   box.querySelectorAll(".eadded[data-key]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-ek]"))return;const k=r.dataset.key;removeAdded(added[k],ctx);delete added[k];addedN--;if(edKey===k)edKey=null;drawRes(true)});
-  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";const ai=r.nextElementSibling.querySelector(".eamt"),chg=()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")};bindAmtObj(ai,a,chg,()=>{const mein=edKey;setTimeout(()=>{if(edKey===mein&&mein&&!unHold()){edKey=null;drawRes(true)}},120)});bindUnits(ai,E.foods[f.id]||f,a,chg)});
+  box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";const ai=r.nextElementSibling.querySelector(".eamt"),chg=()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")};const zu=()=>{const mein=edKey;setTimeout(()=>{if(edKey===mein&&mein&&!unHold()){edKey=null;drawRes(true)}},120)};bindAmtObj(ai,a,chg,zu);bindUnits(ai,E.foods[f.id]||f,a,chg,zu)});
   box.querySelectorAll("[data-tpl]").forEach(b=>gesture(b,{
     tap:()=>{const k="t:"+b.dataset.tpl;if(added[k]){unTpl(added[k]);delete added[k];addedN--;drawRes(true);return}if(!E.meals[b.dataset.tpl].items.length){tplSheet(b.dataset.tpl,snapSearch());return}added[k]=insertTpl(b.dataset.tpl,curDay,ctx.slot,true);addedN++;drawRes(true)},
     long:()=>{buzz();tplSheet(b.dataset.tpl,snapSearch())}}));
@@ -950,5 +974,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();

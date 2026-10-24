@@ -45,16 +45,73 @@ test("nutInfo: unbekanntes Lebensmittel → null, nutH → leer, kein Wurf", () 
   assert.equal(K.nutH(undefined, { amt: 5 }), "");
 });
 
-test("nutH: zeigt Werte für die Menge UND den Bezugswert, Herkunft nur wenn bekannt", () => {
+/* V60 (24.10.2026): umgeschrieben. Vorher prüfte der Fall zwei Zahlenzeilen (Menge UND pro 100 g). Der Nutzer will nur noch den
+   Bezugswert („immer pro 100“) und drei Ringe statt vieler Zahlen – die Werte für die eingetragene Menge entfallen bewusst. */
+test("nutH: zeigt NUR die Werte pro 100 g (kcal + drei Ringe), nicht die der eingetragenen Menge; Herkunft nur wenn bekannt", () => {
   const h = loadApp({}, OPT), K = h.ctx.__essen, f = K.E().foods.hafer;
   const html = K.nutH(f, { id: "x", food: "hafer", amt: 80 });
-  assert.ok(html.includes(">298<"), "372 kcal × 0,8 = 297,6 → 298 für 80 g");
-  assert.ok(html.includes(">372<"), "Bezugswert pro 100 g");
+  assert.ok(html.includes(">372<"), "kcal pro 100 g");
+  assert.ok(html.includes(">13,5<") && html.includes(">58,7<") && html.includes(">7<"), "Eiweiß, KH, Fett pro 100 g in den Ringen");
+  assert.equal((html.match(/class="erg"/g) || []).length, 3, "drei Ringe");
   assert.ok(html.includes("pro 100 g"));
   assert.ok(html.includes("eigene Liste"));
+  assert.ok(!html.includes(">298<") && !html.includes(">10,8<"), "keine Werte für die Menge (80 g) mehr");
+  assert.ok(!html.includes("data-mul"), "keine Vielfach-Knöpfe am Einzel-Eintrag");
   const ohne = K.nutH(Object.assign({}, f, { src: undefined }), { id: "x", food: "hafer", amt: 80 });
   assert.ok(!ohne.includes("eigene Liste"));
   assert.ok(ohne.includes("pro 100 g"));
+});
+
+/* ---------- Makro-Verteilung: Anteil der Kalorien aus Eiweiß / KH / Fett (4 / 4 / 9 kcal je g) ---------- */
+
+test("macroSplit: eiweißreiches Lebensmittel (Thunfisch) liegt fast voll bei Eiweiß, Summe der Anteile ist 1", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const s = K.macroSplit({ kcal: 116, p: 26, c: 0, f: 1 }); // 104 + 0 + 9 = 113 kcal aus Makros
+  assert.ok(nah(s.p, 104 / 113) && nah(s.c, 0) && nah(s.f, 9 / 113));
+  assert.ok(s.p > 0.9);
+  assert.ok(nah(s.p + s.c + s.f, 1));
+});
+
+test("macroSplit: fettreiches Lebensmittel (Öl) liegt voll bei Fett", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const s = K.macroSplit({ kcal: 900, p: 0, c: 0, f: 100 });
+  assert.ok(nah(s.f, 1) && nah(s.p, 0) && nah(s.c, 0));
+  const mix = K.macroSplit({ kcal: 372, p: 13.5, c: 58.7, f: 7 }); // Hafer: 54 + 234,8 + 63 = 351,8
+  assert.ok(nah(mix.p, 54 / 351.8) && nah(mix.c, 234.8 / 351.8) && nah(mix.f, 63 / 351.8));
+});
+
+test("macroSplit: ohne verwertbare Makros (alles 0, nur kcal, kaputte Werte) → null, kein NaN", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  assert.equal(K.macroSplit({ kcal: 50, p: 0, c: 0, f: 0 }), null);
+  assert.equal(K.macroSplit({ kcal: 50 }), null);
+  assert.equal(K.macroSplit({ p: NaN, c: -3, f: undefined }), null);
+  assert.equal(K.macroSplit(null), null);
+  assert.equal(K.macroSplit(undefined), null);
+});
+
+test("Lebensmittel ohne Makros bekommt keine Ringe – nur die kcal; mit Makros drei Ringe in den Farben der Startseite (KH, Eiweiß, Fett)", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const leer = { id: "own:x", name: "Nur kcal", base: "g", kcal: 40, p: 0, c: 0, f: 0, src: "own" };
+  const html = K.nutH(leer, { id: "x", food: "own:x", amt: 100 });
+  assert.ok(html.includes("enutrow") && html.includes(">40<") && html.includes("pro 100 g"));
+  assert.ok(!html.includes("erg") && !html.includes("<svg"), "keine leeren Ringe");
+  const voll = K.nutH(K.E().foods.hafer, { id: "x", food: "hafer", amt: 100 });
+  const reihenfolge = [...voll.matchAll(/<small>(KH|Eiweiß|Fett)<\/small>/g)].map(m => m[1]);
+  assert.deepEqual(reihenfolge, ["KH", "Eiweiß", "Fett"]);
+  assert.equal((voll.match(/<svg/g) || []).length, 3);
+  assert.ok(!voll.includes("NaN"));
+});
+
+test("Ringe füllen den Anteil an den Kalorien (stroke-dashoffset), nicht ein Tagesziel: Öl → Fett-Ring voll, Eiweiß-Ring leer", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const oel = { id: "own:oel", name: "Öl", base: "g", kcal: 900, p: 0, c: 0, f: 100, src: "own" };
+  const html = K.nutBlock(K.nutInfo(oel, 100));
+  const ringe = html.split('class="erg"').slice(1); // KH, Eiweiß, Fett
+  const offset = s => +s.match(/rfg" stroke-dasharray="[\d.]+" stroke-dashoffset="([\d.]+)"/)[1];
+  const voll = 2 * Math.PI * 34;
+  assert.ok(Math.abs(offset(ringe[2]) - 0) < 0.05, "Fett voll");
+  assert.ok(Math.abs(offset(ringe[1]) - voll) < 0.05, "Eiweiß leer");
+  assert.ok(Math.abs(offset(ringe[0]) - voll) < 0.05, "KH leer");
 });
 
 test("nutH ändert nichts am Speicher (reine Anzeige)", () => {
@@ -218,15 +275,19 @@ test("unitAmt: Gramm-Menge → Grammzahl; Stück-Menge → über Gramm pro Stüc
 });
 
 /* Antippen einer Einheit durch den echten bindUnits-Weg (Ersatz-Zeile/-Leiste/-Feld, wie bei der Tagesliste) */
-function leiste(K, f, en, onChange) {
+function leiste(K, f, en, onChange, done) {
   const doc = {};
   K.h.ctx.document.addEventListener = (t, fn) => { doc[t] = fn; };
   K.h.ctx.document.removeEventListener = () => {};
   const chips = [], bar = { listeners: {}, addEventListener(t, fn) { (this.listeners[t] = this.listeners[t] || []).push(fn); },
+    classList: { add() {}, remove() {} }, // V60: das Formular blendet die Chips über eine Klasse an der Leiste aus
     querySelectorAll: s => s === "[data-ui]" ? chips : [], querySelector: () => null };
   (f.units || []).forEach((u, i) => chips.push({ dataset: { ui: String(i) }, l: {}, addEventListener(t, fn) { this.l[t] = fn; } }));
   const inp = { value: String(en.amt), closest: s => s === ".eamtrow" ? { querySelector: q => q === "[data-un]" ? bar : null } : null };
-  K.K.bindUnits(inp, f, en, onChange);  const tippe = i => { chips[i].l.pointerdown({ button: 0, clientX: 0, clientY: 0, target: { closest: () => null } }); doc.pointerup({ target: { closest: () => null } }); };
+  K.K.bindUnits(inp, f, en, onChange, done);
+  /* wie im Browser: die Leiste hört in der Fang-Phase (merkt sich die Berührung für den Zuklapp-Schutz), DANN erst Chip und Dokument */
+  const leiste_ = t => (bar.listeners[t] || []).forEach(fn => fn());
+  const tippe = i => { leiste_("pointerdown"); chips[i].l.pointerdown({ button: 0, clientX: 0, clientY: 0, target: { closest: () => null } }); leiste_("pointerup"); doc.pointerup({ target: { closest: () => null } }); };
   return { inp, bar, tippe };
 }
 
@@ -261,6 +322,66 @@ test("Tipp auf eine Einheit bei Stück-Menge (Ei, u:stk) rechnet über Gramm pro
   const l2 = leiste({ K, h }, ro, en2, () => {});
   l2.tippe(0);
   assert.strictEqual(en2.amt, 1, "keine Umrechnung möglich → nichts geändert, kein NaN");
+});
+
+/* V60 (24.10.2026): Tipp auf eine Einheit setzt die Menge UND meldet „fertig“ (Zeile klappt zu) – ohne Zwischenschritt mit dem Haken. */
+test("Tipp auf eine Einheit setzt die Menge UND meldet fertig; der Zuklapp-Schutz ist danach aufgehoben", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K);
+  K.unitAdd(f, "Dose", "140");
+  const en = { id: "x1", slot: "fr", food: "own:t1", amt: 80 };
+  K.E().days["2026-01-01"] = { e: [en] };
+  const ereignisse = [];
+  const l = leiste({ K, h }, f, en, () => ereignisse.push("chg"), () => ereignisse.push("fertig:" + en.amt));
+  l.tippe(0);
+  assert.strictEqual(en.amt, 140);
+  assert.deepEqual(ereignisse, ["chg", "fertig:140"], "erst übernommen, dann fertig – in dieser Reihenfolge, genau einmal");
+  assert.equal(K.unHold(), false, "unmittelbar nach dem Tipp darf der Schutz die Zeile nicht mehr offen halten");
+});
+
+test("Tipp auf eine Einheit ohne Umrechnung (Stück ohne Gramm pro Stück) meldet NICHT fertig – nichts wurde übernommen", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, ro = K.E().foods.roggen;
+  ro.units = [{ g: 30 }];
+  const en = { id: "x2", slot: "fr", food: "roggen", amt: 1 };
+  let fertig = 0;
+  const l = leiste({ K, h }, ro, en, () => {}, () => { fertig++; });
+  l.tippe(0);
+  assert.strictEqual(en.amt, 1);
+  assert.equal(fertig, 0);
+});
+
+test("ohne done-Funktion (alter Aufrufweg) setzt der Tipp die Menge wie bisher, ohne zu werfen", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K);
+  K.unitAdd(f, "", "50");
+  const en = { id: "x3", slot: "fr", food: "own:t1", amt: 80 };
+  K.E().days["2026-01-01"] = { e: [en] };
+  leiste({ K, h }, f, en, () => {}).tippe(0);
+  assert.strictEqual(en.amt, 50);
+});
+
+/* Das Anlege-Formular (＋) behält den Zuklapp-Schutz, sonst verschwindet die Leiste mitten im Tippen – und die Chips weichen,
+   die Leiste steht auf scrollLeft 0 (Namensfeld nicht mehr links abgeschnitten, V60). */
+test("Anlege-Formular (＋) hält die Zeile offen (unHold), blendet die Chips aus und scrollt auf 0; Escape stellt alles zurück", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = eigen(K);
+  K.unitAdd(f, "Scheibe", "30");
+  const en = { id: "x4", slot: "fr", food: "own:t1", amt: 80 };
+  const klassen = new Set(), felder = {};
+  const feld = () => ({ value: "", l: {}, addEventListener(t, fn) { this.l[t] = fn; }, focus() {} });
+  const bar = { scrollLeft: 99, scrollWidth: 500, addEventListener() {},
+    classList: { add: c => klassen.add(c), remove: c => klassen.delete(c) },
+    querySelectorAll: () => [],
+    querySelector(s) { if (s === "[data-uadd]") return add; if (s === ".eunt" || s === ".eung" || s === ".eunok") return felder[s] = felder[s] || feld(); return null; },
+    set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; } };
+  const add = { onclick: null, insertAdjacentHTML() {}, remove() {} };
+  const inp = { value: "80", closest: s => s === ".eamtrow" ? { querySelector: q => q === "[data-un]" ? bar : null } : null };
+  K.bindUnits(inp, f, en, () => {}, () => {});
+  assert.equal(K.unHold(), false, "vor dem Formular kein Schutz");
+  add.onclick();
+  assert.equal(K.unHold(), true, "Formular offen → Zeile klappt nicht zu");
+  assert.ok(klassen.has("eunform"), "Chips ausgeblendet");
+  assert.equal(bar.scrollLeft, 0, "Formular steht vorn, nicht ans Ende gescrollt");
+  felder[".eunt"].l.keydown({ key: "Escape", preventDefault() {} });
+  assert.equal(K.unHold(), false, "Escape: Schutz weg");
+  assert.ok(!klassen.has("eunform"), "Chips wieder da");
 });
 
 test("Export → Import (Teilen per Link): units überleben den Rundlauf; ohne units kein Feld im Link", async () => {
@@ -394,4 +515,16 @@ test("holdH: Karte aus den Bezugswerten des Lebensmittels (pro Stück bei Stück
   const stk = K.holdH(E.foods.roggen);
   assert.ok(stk.includes("pro Stück") && stk.includes(">172<") && stk.includes(">5,3<"));
   assert.equal(K.holdH(undefined), "");
+});
+
+/* V60: die Karte beim Gedrückthalten benutzt DENSELBEN Block wie die Zeile (nutBlock), keinen Nachbau */
+test("holdH: dieselben drei Ringe wie das Panel unter der Zeile (derselbe Block), pro 100 g", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, f = K.E().foods.hafer;
+  const karte = K.holdH(f), block = K.nutBlock(K.nutInfo(f, 0));
+  assert.ok(karte.includes(block), "Block unverändert in der Karte");
+  assert.ok(K.nutH(f, { id: "x", food: "hafer", amt: 80 }).includes(block), "und im Panel");
+  assert.equal((karte.match(/class="erg"/g) || []).length, 3);
+  assert.equal((karte.match(/pro 100 g/g) || []).length, 1, "Bezug steht einmal, nicht zusätzlich in der Kopfzeile");
+  const leer = K.holdH({ id: "own:n", name: "Nur kcal", base: "g", kcal: 40, p: 0, c: 0, f: 0 });
+  assert.ok(leer.includes(">40<") && !leer.includes("erg") && !leer.includes("<svg"), "ohne Makros keine Ringe");
 });

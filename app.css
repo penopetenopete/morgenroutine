@@ -506,14 +506,15 @@ img.emini{background:#fff}
 .edhead{display:flex;justify-content:space-between;align-items:center;font-family:var(--f-display);font-size:.8rem;color:var(--muted);padding:0 4px}
 .edhead button{border:0;background:none;color:var(--accent);font-family:var(--f-display);font-size:.85rem;min-height:36px;padding:0 6px;cursor:pointer}
 .edrow{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
-/* Fünf Knöpfe, zwei mit Datumstext (24.10.2026): auf schmalen Handys nicht quetschen, sondern sauber umbrechen –
-   erste Zeile gestern · Kalender · Nochmal, zweite Zeile morgen · Löschen (Löschen bleibt rechts und eigenständig groß). */
+/* Fünf Knöpfe, zwei mit Datumstext (24.10.2026): auf schmalen Handys nicht quetschen, sondern sauber umbrechen. Seit V60 (Nutzer:
+   „sieht nicht symmetrisch aus“) in der Reihenfolge der Markierung: oben die drei Tage-Knöpfe gestern · Kalender · morgen (je ein Drittel),
+   unten Nochmal · Löschen (je die Hälfte). Die Reihenfolge im HTML ist dafür schon so, kein `order` nötig. */
 .edrow .edz{min-width:0;padding:0 4px}
 .edrow .edz span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:460px){
   .edrow{grid-template-columns:repeat(6,1fr)}
   .edrow .edz{grid-column:span 2}
-  .edrow .edz[data-sb="next"],.edrow .edz[data-sb="del"]{grid-column:span 3}
+  .edrow .edz[data-sb="again"],.edrow .edz[data-sb="del"]{grid-column:span 3}
 }
 .edock .edz{border-style:solid;cursor:pointer;flex-direction:column;gap:2px;min-height:62px;color:var(--fg)}
 .edock .edz svg{width:20px;height:20px;color:var(--accent)}
@@ -549,26 +550,29 @@ img.emini{background:#fff}
 .einfo.show{transform:translate(-50%,0);opacity:1}
 .einfo .eit{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .einfo .eit .enm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400}
-.einfo .eit small{flex:none;color:var(--muted);font-size:.7rem}
-.einfo .enut{gap:2px 16px;font-size:.8rem}
-.einfo .enut b{font-size:1.2rem}
 #eRes .erow img{pointer-events:none;-webkit-user-drag:none}
 @media (prefers-reduced-motion:reduce){.einfo{transition:none}}
 .eundo button{border:0;background:none;color:var(--accent);font-family:var(--f-display);font-size:.85rem;min-height:36px;padding:0 10px;cursor:pointer}
 /* Fenster (selten) */
-.enut{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;font-family:var(--f-display);color:var(--muted);font-size:.9rem}
-.enut b{color:var(--fg);font-size:1.4rem}
-/* Nährwerte unter der Tageszeile (24.10.2026): gleicher Unterbau wie das Mengenfeld (.eamtrow.in) */
-.enutrow{display:flex;flex-direction:column;gap:5px;padding:8px 12px 9px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 55%,var(--card))}
-.enutrow .enut{gap:2px 12px;font-size:.78rem}
-.enutrow .enut b{font-size:1.02rem}
-.enutrow .enref{font-size:.68rem;opacity:.8}
-.enutrow .enref b{font-size:.78rem;color:var(--muted)}
-.enutrow .enref>span:first-child{color:var(--fg);flex:none}
-.enutrow .ensrc{margin-left:auto}
-/* Vielfaches der Menge (24.10.2026): zwei Knöpfe, rechnen die Menge um (legen nichts neu an); im Nährwerte-Bereich der Zeile und der Mahlzeit */
+/* Nährwerte-Block (24.10.2026, zweite Runde): links kcal mit Bezug und Herkunft, rechts drei Ringe KH · Eiweiß · Fett – dieselbe Bildsprache wie die
+   Startseite (.rwrap/.rbg/.rfg/.rin, Farbe über --rc). Ein Block für die Zeile (.enutrow) und die Karte beim Gedrückthalten (.einfo). */
+.enutrow{padding:8px 12px 9px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 55%,var(--card))}
+.enb{display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:var(--f-display)}
+.enk{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.enkv{color:var(--muted);font-size:.8rem;white-space:nowrap}
+.enkv b{color:var(--fg);font-size:1.5rem;font-weight:600}
+.enk small{color:var(--muted);font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.enk .ensrc{opacity:.7}
+.erings{flex:none;display:flex;gap:6px}
+.erg{display:block}
+.erg .rwrap{display:block;width:min(62px,17vw)}
+.erg .rbg,.erg .rfg{stroke-width:6}
+.erg .rin b{font-size:.78rem;line-height:1}
+.erg .rin b i{font-style:normal;font-size:.62em;margin-left:1px;opacity:.85}
+.erg .rin small{font-size:.54rem;margin-top:1px}
+.einfo .eit{padding:0 2px}
+/* Vielfaches der Menge (24.10.2026): zwei Knöpfe, rechnen die Menge um (legen nichts neu an); nur noch in der Ansicht einer Mahlzeit (am Einzel-Eintrag seit V60 wieder weg) */
 .emul{display:flex;gap:6px}
-.enutrow .emul{margin-top:3px}
 .emulb{flex:none;min-width:60px;min-height:40px;border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--fg);font-family:var(--f-display);font-size:.8rem;padding:0 14px;cursor:pointer;-webkit-user-select:none;user-select:none}
 .emulb:active{background:rgba(0,229,255,.16)}
 .eamtrow{display:flex;align-items:center;gap:8px}
@@ -588,10 +592,13 @@ img.emini{background:#fff}
 .eunadd,.eunok{min-width:40px;padding:0;display:grid;place-items:center;color:var(--accent);border-style:dashed}
 .eunok{border-style:solid;font-size:1rem}
 .eunadd svg{width:16px;height:16px}
-.eunf{flex:none;display:flex;align-items:center;gap:6px}
+.eunf{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px}
+/* Anlege-Formular offen (V60): die Chips weichen, das Formular steht vorn in der Leiste (scrollLeft 0) – vorher scrollte die Leiste ans Ende und
+   schnitt das Namensfeld links ab, sobald Chips + Formular breiter waren als die Leiste. */
+.eun.eunform .eunit{display:none}
 /* Eingabefelder nie unter 16 px (iOS zoomt sonst und zoomt nicht zurück) */
 .eunt,.eung{min-height:40px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--fg);padding:0 10px;font-family:var(--f-display);font-size:1rem}
-.eunt{width:96px}.eung{width:64px}
+.eunt{flex:1 1 56px;min-width:56px;width:auto;padding:0 8px}.eung{flex:none;width:52px;padding:0 8px}
 .eunt:focus,.eung:focus{outline:2px solid var(--accent);outline-offset:-2px}
 .egrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .egrid .field input{width:100%;min-width:0}

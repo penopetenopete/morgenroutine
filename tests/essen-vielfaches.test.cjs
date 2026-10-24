@@ -139,30 +139,30 @@ function tagesliste(eintraege) {
   return { h, K, E, k, reihe, tipp, mul, html: () => S2.innerHTML };
 }
 
-test("Nährwerte-Panel der Zeile hat die Knöpfe ×1,5 und ×2; das Panel bleibt offen, die Zeilenzahl gleich", () => {
+/* V60 (24.10.2026): umgeschrieben. Vorher prüften die zwei Fälle, dass das Nährwerte-Panel einer EINZELNEN Zeile die Knöpfe ×1,5 / ×2
+   hat und sie umrechnen. Der Nutzer wollte das „gar nicht so sehr bei Zutaten, sondern bei Mahlzeiten“ – am Einzel-Eintrag sind die Knöpfe
+   wieder weg. Geprüft wird jetzt das Gegenteil (keine Knöpfe, auch kein Handler) und dass das Öffnen des Panels nichts verändert;
+   scaleEntries selbst und die Mahlzeiten-Knöpfe behalten ihre Fälle weiter unten unverändert. */
+test("Nährwerte-Panel einer einzelnen Zeile hat KEINE Vielfach-Knöpfe mehr; Öffnen und Schließen ändert keine Menge", () => {
   const t = tagesliste([{ id: "x1", slot: "fr", food: "hafer", amt: 100 }, { id: "x2", slot: "fr", food: "quark", amt: 250 }]);
   const r = t.reihe({ e: "x1" });
   t.K.setDay(t.k);
   assert.ok(!t.html().includes("data-mul"), "zu: keine Knöpfe");
   t.tipp(r);
   const html = t.html();
-  assert.ok(html.includes("enutrow") && html.includes('data-mul="1.5"') && html.includes('data-mul="2"'));
-  assert.ok(html.includes("×1,5") && html.includes("×2"));
-  // der echte Handler hängt sich per querySelectorAll an die Knöpfe: Knopf bereitstellen, Panel nochmal aufbauen lassen
-  const b = t.mul(1.5);
-  t.tipp(r); // zu
-  t.tipp(r); // wieder auf: bindSlots läuft und bindet an den bereitgestellten Knopf
-  b.onclick();
+  assert.ok(html.includes("enutrow"), "Panel offen");
+  assert.ok(!html.includes("data-mul") && !html.includes("emul") && !html.includes("×1,5") && !html.includes("×2"), "keine Vielfach-Knöpfe am Einzel-Eintrag");
+  const b = t.mul(1.5); // selbst wenn ein Knopf da wäre: kein Handler hängt mehr an ihm
+  t.tipp(r); t.tipp(r);
+  assert.equal(b.onclick, null, "bindSlots bindet keinen Vielfach-Handler mehr an eine einzelne Zeile");
   const e = t.E.days[t.k].e;
-  assert.equal(e.length, 2, "keine neue Zeile");
-  assert.equal(e.find(x => x.id === "x1").amt, 150);
-  assert.equal(e.find(x => x.id === "x2").amt, 250, "andere Zeile unberührt");
-  assert.ok(t.html().includes("enutrow"), "Panel bleibt nach dem Umrechnen offen");
-  assert.ok(t.html().includes(">150<") || t.html().includes("150 g"), "Anzeige zeigt die neue Menge");
+  assert.equal(e.length, 2);
+  assert.equal(e.find(x => x.id === "x1").amt, 100);
+  assert.equal(e.find(x => x.id === "x2").amt, 250);
   assert.ok(!t.h.dump().essen_v1.includes("NaN"));
 });
 
-test("Knopf an einer Zutat in der Tagesliste rechnet nur diese Zutat, die Mahlzeit behält ihre g.id", () => {
+test("Zutat einer Mahlzeit in der Tagesliste: Panel ohne Vielfach-Knöpfe, Mengen und g.id bleiben beim Öffnen unberührt", () => {
   const t = tagesliste([
     { id: "m1", slot: "ab", food: "hafer", amt: 80, g: { id: "g1", name: "Müsli" } },
     { id: "m2", slot: "ab", food: "quark", amt: 250, g: { id: "g1", name: "Müsli" } },
@@ -171,13 +171,14 @@ test("Knopf an einer Zutat in der Tagesliste rechnet nur diese Zutat, die Mahlze
   t.K.setDay(t.k);
   t.tipp(kopf); // Gruppe auf, bindet die Zutaten-Ersatzzeilen
   t.tipp(r); // Nährwerte der Zutat
+  assert.ok(t.html().includes("enutrow") && !t.html().includes("data-mul"));
   const b = t.mul(2);
   t.tipp(r); t.tipp(r);
-  b.onclick();
+  assert.equal(b.onclick, null);
   const e = t.E.days[t.k].e;
   assert.equal(e.length, 2);
-  assert.equal(e[0].amt, 160);
-  assert.equal(e[1].amt, 250, "die andere Zutat bleibt");
+  assert.equal(e[0].amt, 80);
+  assert.equal(e[1].amt, 250);
   assert.ok(e.every(x => x.g.id === "g1"));
 });
 
@@ -253,11 +254,13 @@ const PIZZA2 = () => [
   { id: "b1", slot: "ab", food: "ei", amt: 2, u: "stk" },
 ];
 
-test("Auswahl-Leiste hat „Nochmal“ neben Kalender, Löschen bleibt der letzte Knopf", () => {
+/* V60 (24.10.2026): Reihenfolge umgeschrieben. Vorher gestern · Kalender · Nochmal · morgen · Löschen; der Umbruch auf schmalen Handys
+   sah damit unsymmetrisch aus. Jetzt gestern · Kalender · morgen | Nochmal · Löschen – oben die Tage, unten die zwei Aktionen. */
+test("Auswahl-Leiste: oben gestern · Kalender · morgen, unten Nochmal · Löschen (Löschen bleibt der letzte Knopf)", () => {
   const a = auswahl(PIZZA2(), ["b1"]);
   const html = a.bar.innerHTML;
   const reihenfolge = [...html.matchAll(/data-sb="(\w+)"/g)].map(m => m[1]);
-  assert.deepEqual(reihenfolge, ["x", "prev", "cal", "again", "next", "del"]);
+  assert.deepEqual(reihenfolge, ["x", "prev", "cal", "next", "again", "del"]);
   assert.ok(html.includes("Nochmal"));
 });
 
