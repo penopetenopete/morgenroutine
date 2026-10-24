@@ -317,6 +317,7 @@ const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" 
 const PLUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const CAM='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/><path d="M8 9v6M11 9v6M14 9v6M16.5 9v6"/></svg>';
 const CALI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>';
+const DUP='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 9V6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15H9"/></svg>';
 const BIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
 let sel=new Set();
 function rowH(en,sub){
@@ -327,8 +328,19 @@ function rowH(en,sub){
    oben die Werte für die eingetragene Menge, darunter kleiner der Bezugswert und die Herkunft. */
 function nutH(f,en){
   const i=nutInfo(f,en.amt,en.u);if(!i)return "";
-  return `<div class="enutrow"><div class="enut">${nutCells(i.n)}</div><div class="enut enref"><span>${i.lab}</span>${nutCells(i.ref)}${i.src?`<span class="ensrc">${esc(i.src)}</span>`:""}</div></div>`;
+  return `<div class="enutrow"><div class="enut">${nutCells(i.n)}</div><div class="enut enref"><span>${i.lab}</span>${nutCells(i.ref)}${i.src?`<span class="ensrc">${esc(i.src)}</span>`:""}</div>${mulH()}</div>`;
 }
+/* Vielfaches der Menge (24.10.2026, vom Nutzer so entschieden): ×1,5 / ×2 RECHNEN UM, sie legen NICHT mehrfach an – aus 100 g werden
+   150 g in EINEM Eintrag, es entsteht keine zweite Zeile. Eine Mahlzeit rechnet alle Zutaten mit und behält ihre g.id.
+   Alles oder nichts: wäre eine Zutat danach ungültig (> AMAX), bleibt die ganze Liste unverändert – sonst stimmt das Verhältnis nicht mehr.
+   Gerundet wird wie beim Mengenfeld (parseAmt, zwei Stellen); nie NaN, nie ≤ 0 im Speicher. Gibt true zurück, wenn umgerechnet wurde. */
+const MULS=[[1.5,"×1,5"],[2,"×2"]];
+function scaleEntries(list,factor){
+  const k=Number(factor);if(!Array.isArray(list)||!list.length||!isFinite(k)||!(k>0))return false;
+  const nv=list.map(x=>x?parseAmt(x.amt*k):null);if(nv.some(v=>v===null))return false;
+  list.forEach((x,i)=>{x.amt=nv[i]});esave();return true;
+}
+const mulH=()=>`<div class="emul">${MULS.map(([k,t])=>`<button type="button" class="emulb" data-mul="${k}" aria-label="Menge mal ${String(k).replace(".",",")}">${t}</button>`).join("")}</div>`;
 const onPill=e=>!!(e&&e.target&&typeof e.target.closest==="function"&&e.target.closest("[data-pill]"));
 function bindSlots(){
   const S2=$("eSlots"),d=dayGet(curDay);
@@ -353,6 +365,8 @@ function bindSlots(){
       swipe:r.dataset.e?()=>delWithUndo(d.e.filter(x=>x.id===r.dataset.e)):null
     });
   });
+  S2.querySelectorAll("[data-mul]").forEach(b=>b.onclick=()=>{const en=d.e.find(x=>x.id===nutId);if(!en)return;
+    if(scaleEntries([en],b.dataset.mul))renderEssen();else toast("Zu groß")}); // Panel bleibt offen (nutId), renderEssen hält die Scrollposition
   const ai=S2.querySelector(".eamt");
   if(ai){const en=d.e.find(x=>x.id===editId),f=E.foods[en.food],pcs=(f&&f.base==="stk")||en.u==="stk",row=S2.querySelector(`[data-e="${editId}"]`);
     const chg=()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
@@ -392,21 +406,33 @@ function gesture(el,{tap,long,swipe,rel}){
     document.addEventListener("pointermove",mv);document.addEventListener("pointerup",up);document.addEventListener("pointercancel",cc);
   });
 }
-/* Auswahl-Leiste unten: Gestern · Kalender · Morgen · Löschen */
+/* Auswahl-Leiste unten: Gestern · Kalender · Nochmal · Morgen · Löschen (Nochmal 24.10.2026: dasselbe nochmal in den SELBEN Tag,
+   neben Kalender, weil beides kopiert; Löschen bleibt am rechten Rand). Auf schmalen Handys bricht die Reihe in zwei Zeilen (app.css). */
 function renderSelBar(){
   let bar=$("eSelBar");const on=!!sel.size&&!$("essen").hidden&&!macro;document.body.classList.toggle("esel",on);
   if(!on){if(bar)bar.hidden=true;return}
   if(!bar){bar=document.createElement("div");bar.id="eSelBar";bar.className="edock";document.body.appendChild(bar)}
   bar.hidden=false;
   bar.innerHTML=`<div class="edhead"><span>${selCount()} ausgewählt</span><button data-sb="x">Fertig</button></div>
-    <div class="edrow"><button class="edz" data-sb="prev"><b>‹</b><span>${dayLab(addDays(curDay,-1))}</span></button><button class="edz" data-sb="cal">${CALI}<span>Kalender</span></button><button class="edz" data-sb="next"><b>›</b><span>${dayLab(addDays(curDay,1))}</span></button><button class="edz del" data-sb="del">${BIN}<span>Löschen</span></button></div>`;
+    <div class="edrow"><button class="edz" data-sb="prev"><b>‹</b><span>${dayLab(addDays(curDay,-1))}</span></button><button class="edz" data-sb="cal">${CALI}<span>Kalender</span></button><button class="edz" data-sb="again">${DUP}<span>Nochmal</span></button><button class="edz" data-sb="next"><b>›</b><span>${dayLab(addDays(curDay,1))}</span></button><button class="edz del" data-sb="del">${BIN}<span>Löschen</span></button></div>`;
   bar.querySelectorAll("[data-sb]").forEach(b=>b.onclick=()=>{
     const a=b.dataset.sb,list=dayGet(curDay).e.filter(x=>sel.has(x.id));
     if(a==="x"){sel.clear();renderEssen();return}
     if(a==="del"){sel.clear();delWithUndo(list);return}
     if(a==="prev"||a==="next"){sel.clear();moveTo(list,addDays(curDay,a==="prev"?-1:1));return}
+    if(a==="again"){if(!list.length)return;sel.clear();againEntries(list);renderEssen();toast("Nochmal angelegt");return}
     if(a==="cal")calPop(k=>{sel.clear();copyEntries(list,k);esave();renderEssen();toast(`Dupliziert → ${dayLab(k)}`)});
   });
+}
+/* „Nochmal“ (24.10.2026): kopiert über copyEntries (neue Eintrags-IDs, jede kopierte Mahlzeit bekommt eine NEUE g.id – sonst würden zwei
+   gleiche Mahlzeiten zu einer verschmelzen) und rückt die Kopien direkt hinter ihr Original, statt ans Tagesende. Nur die Reihenfolge im Tag
+   ändert sich, kein Feld. */
+function againEntries(list){
+  const d=day(curDay),n0=d.e.length;
+  copyEntries(list,curDay);
+  const neu=d.e.splice(n0);
+  neu.forEach((c,i)=>{const at=d.e.indexOf(list[i]);if(at<0)d.e.push(c);else d.e.splice(at+1,0,c)});
+  esave();
 }
 function selCount(){const g=new Set();let n=0;dayGet(curDay).e.forEach(x=>{if(!sel.has(x.id))return;if(x.g){if(!g.has(x.g.id)){g.add(x.g.id);n++}}else n++});return n}
 function moveTo(list,k){ /* Pfeile kopieren nur – am aktuellen Tag bleibt alles stehen */
@@ -494,7 +520,7 @@ function mealSheet(c){
   const draw=keep=>{
     const items=c.items();if(mEd>=items.length)mEd=-1;
     const y=keep?$("shBody").scrollTop:0;
-    const body=openSheet(c.eyebrow,c.title(),`<div class="emnut" id="mNut">${nutHead(sumE(items))}</div>${c.top?c.top():""}
+    const body=openSheet(c.eyebrow,c.title(),`<div class="emnut" id="mNut">${nutHead(sumE(items))}</div>${c.mul?mulH():""}${c.top?c.top():""}
       <div class="elist emlist">${items.map((it,i)=>{const f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",ed=i===mEd;
         return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${ed?" editing":""}" data-mi="${i}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}">${nf(it.amt,1)} ${pcs?"Stk":"g"}</span><span class="ev">${nf(nut(f,it.amt,it.u).kcal)}</span>${ed?`<button class="ermv" data-mx="${i}" aria-label="Zutat entfernen">×</button>`:""}</div></div>${ed?amtH(pcs,it.amt,true,unH(f,it)):""}`}).join("")}
         <button class="eaddin emadd" id="mAdd">＋ Zutat</button></div>${c.actions()}`,{onClose:c.onClose});
@@ -506,6 +532,7 @@ function mealSheet(c){
     body.querySelectorAll("[data-mi]").forEach(r=>{const i=+r.dataset.mi;
       gesture(r,{tap:e=>{if(e&&e.target.closest("[data-mx]"))return;mEd=mEd===i?-1:i;if(mEd>=0)amtGo=true;draw(true)},swipe:()=>delIt(items[i])})});
     body.querySelectorAll("[data-mx]").forEach(b=>b.onclick=()=>delIt(items[+b.dataset.mx]));
+    body.querySelectorAll("[data-mul]").forEach(b=>b.onclick=()=>{if(scaleEntries(c.items(),b.dataset.mul))draw(true);else toast("Zu groß")}); // alle Zutaten, g.id bleibt; nur für Mahlzeiten im Tag (c.mul)
     const ai=body.querySelector(".eamt");
     if(ai){const it=items[mEd],f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",row=body.querySelector(`[data-mi="${mEd}"]`);
       const chg=()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))};
@@ -522,7 +549,8 @@ function grpView(gid,full){
   const first=gl()[0];if(!first)return;
   const g=()=>(gl()[0]||first).g,tpl=()=>g().tpl&&E.meals[g().tpl];
   const toTpl=list=>list.map(x=>{const it={food:x.food,amt:x.amt};if(x.u)it.u=x.u;return it});
-  mealSheet({eyebrow:SLOTN[first.slot],title:()=>g().name,items:gl,
+  /* mul: das Vielfache gibt es nur bei der Mahlzeit im Tag, nicht bei der Vorlage – ×2 dort würde das gespeicherte Rezept dauerhaft verdoppeln (24.10.2026) */
+  mealSheet({eyebrow:SLOTN[first.slot],title:()=>g().name,items:gl,mul:true,
     remove:it=>{const d=day(curDay);d.e=d.e.filter(x=>x!==it);tidyDay(curDay)},
     snap:()=>{const k=curDay,s=day(k).e.slice();return ()=>{day(k).e=s}},
     add:()=>openSearch({kind:"grp",gid,slot:first.slot,back:()=>grpView(gid,full)}),
@@ -922,5 +950,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setDay:k=>{curDay=k;renderEssen()}};
 })();
