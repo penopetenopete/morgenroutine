@@ -457,6 +457,9 @@ img.eic{background:#fff}
 .enm small{color:var(--muted)}
 .epill{flex:none;font-family:var(--f-display);font-size:.75rem;color:var(--muted);padding:3px 9px;border-radius:999px;background:var(--bg)}
 .epill.on{color:var(--accent);background:rgba(0,229,255,.08);cursor:pointer}
+/* Tagesliste (24.10.2026): die Pille öffnet das Mengenfeld, der Rest der Zeile die Nährwerte – die Pille ist klein, darum eine etwas größere Trefferfläche (bleibt in der Lücke zwischen Name und Kalorien) */
+.erow[data-e] .epill{position:relative}
+.erow[data-e] .epill::after{content:"";position:absolute;inset:-10px -6px}
 .ev{flex:none;min-width:38px;text-align:right;font-family:var(--f-display);font-size:.8rem;color:var(--muted)}
 .erow.sub{padding-left:16px;background:color-mix(in srgb,var(--bg) 30%,var(--card))}
 .erow.editing{background:color-mix(in srgb,var(--accent) 6%,var(--card))}
@@ -532,10 +535,28 @@ img.emini{background:#fff}
 /* Rückgängig */
 .eundo{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));z-index:24;display:flex;align-items:center;gap:14px;padding:8px 8px 8px 16px;border-radius:999px;background:#1A2430;border:1px solid var(--line);font-size:.85rem;box-shadow:0 10px 26px rgba(0,0,0,.5);max-width:calc(100% - 24px)}
 .eundo span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Werte-Karte beim Gedrückthalten in der Suche (24.10.2026): fährt von unten herein, fängt keine Berührung ab (sonst wäre das Loslassen nicht mehr auf der Zeile) */
+.einfo{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:35;width:min(420px,calc(100% - 24px));display:flex;flex-direction:column;gap:6px;padding:12px 16px;border-radius:16px;background:#1A2430;border:1px solid var(--line);box-shadow:0 10px 26px rgba(0,0,0,.5);transform:translate(-50%,calc(100% + 40px));opacity:0;pointer-events:none;transition:transform .2s ease-out,opacity .2s}
+.einfo.show{transform:translate(-50%,0);opacity:1}
+.einfo .eit{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.einfo .eit .enm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400}
+.einfo .eit small{flex:none;color:var(--muted);font-size:.7rem}
+.einfo .enut{gap:2px 16px;font-size:.8rem}
+.einfo .enut b{font-size:1.2rem}
+#eRes .erow img{pointer-events:none;-webkit-user-drag:none}
+@media (prefers-reduced-motion:reduce){.einfo{transition:none}}
 .eundo button{border:0;background:none;color:var(--accent);font-family:var(--f-display);font-size:.85rem;min-height:36px;padding:0 10px;cursor:pointer}
 /* Fenster (selten) */
 .enut{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;font-family:var(--f-display);color:var(--muted);font-size:.9rem}
 .enut b{color:var(--fg);font-size:1.4rem}
+/* Nährwerte unter der Tageszeile (24.10.2026): gleicher Unterbau wie das Mengenfeld (.eamtrow.in) */
+.enutrow{display:flex;flex-direction:column;gap:5px;padding:8px 12px 9px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 55%,var(--card))}
+.enutrow .enut{gap:2px 12px;font-size:.78rem}
+.enutrow .enut b{font-size:1.02rem}
+.enutrow .enref{font-size:.68rem;opacity:.8}
+.enutrow .enref b{font-size:.78rem;color:var(--muted)}
+.enutrow .enref>span:first-child{color:var(--fg);flex:none}
+.enutrow .ensrc{margin-left:auto}
 .eamtrow{display:flex;align-items:center;gap:8px}
 .eamtrow.in{padding:6px 12px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 55%,var(--card))}
 .eamt{width:110px;min-height:46px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font-family:var(--f-display);font-size:1.05rem}
@@ -543,7 +564,21 @@ img.emini{background:#fff}
    gezeichneter Rahmen wird dort an den Rändern abgeschnitten – mal fehlte links, mal links und
    rechts. Mit negativem Versatz liegt er im Feld und bleibt vollständig. */
 .eamt:focus{outline:2px solid var(--accent);outline-offset:-2px}
-.eau{font-family:var(--f-display);font-size:.8rem;color:var(--muted)}
+.eau{font-family:var(--f-display);font-size:.8rem;color:var(--muted);flex:none}
+.eamt{flex:none}
+/* Eigene Einheiten (24.10.2026): waagerecht scrollbare Leiste rechts neben dem Zahlenfeld. Die Zeile hat feste Höhe,
+   nichts wandert; die Leiste scrollt für sich (Tagwechsel-Wischen ist über .eun in hSwipe ausgenommen). */
+.eun{flex:1;min-width:0;display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:1px 0}
+.eun::-webkit-scrollbar{display:none}
+.eunit,.eunadd,.eunok{flex:none;min-height:40px;border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--fg);font-family:var(--f-display);font-size:.75rem;white-space:nowrap;padding:0 12px;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.eunadd,.eunok{min-width:40px;padding:0;display:grid;place-items:center;color:var(--accent);border-style:dashed}
+.eunok{border-style:solid;font-size:1rem}
+.eunadd svg{width:16px;height:16px}
+.eunf{flex:none;display:flex;align-items:center;gap:6px}
+/* Eingabefelder nie unter 16 px (iOS zoomt sonst und zoomt nicht zurück) */
+.eunt,.eung{min-height:40px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--fg);padding:0 10px;font-family:var(--f-display);font-size:1rem}
+.eunt{width:96px}.eung{width:64px}
+.eunt:focus,.eung:focus{outline:2px solid var(--accent);outline-offset:-2px}
 .egrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .egrid .field input{width:100%;min-width:0}
 .eslotseg{flex-wrap:wrap}.eslotseg .sbtn{flex:1 1 40%}
@@ -694,7 +729,7 @@ html[data-theme="hell"] .tle.open span{background:var(--card);border-color:var(-
 html[data-theme="hell"] .tlcab .cb0{stroke:rgba(0,0,0,.06)}
 html[data-theme="hell"] .tlcab .cb2{stroke:#fff;stroke-opacity:.8}
 html[data-theme="hell"] .tl{background:var(--card)}
-html[data-theme="hell"] .toast,html[data-theme="hell"] .eundo,html[data-theme="hell"] .ecal,html[data-theme="hell"] .edock,html[data-theme="hell"] .tlhead .tlcopy{background:var(--card);color:var(--fg)}
+html[data-theme="hell"] .toast,html[data-theme="hell"] .eundo,html[data-theme="hell"] .einfo,html[data-theme="hell"] .ecal,html[data-theme="hell"] .edock,html[data-theme="hell"] .tlhead .tlcopy{background:var(--card);color:var(--fg)}
 html[data-theme="hell"] .brand img{background:#0B0F14}
 html[data-theme="hell"] .chip{background:rgba(255,255,255,.85)}
 html[data-theme="hell"] .scrim{background:rgba(20,25,30,.35)}
