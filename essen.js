@@ -327,8 +327,19 @@ function rowH(en,sub){
    oben die Werte für die eingetragene Menge, darunter kleiner der Bezugswert und die Herkunft. */
 function nutH(f,en){
   const i=nutInfo(f,en.amt,en.u);if(!i)return "";
-  return `<div class="enutrow"><div class="enut">${nutCells(i.n)}</div><div class="enut enref"><span>${i.lab}</span>${nutCells(i.ref)}${i.src?`<span class="ensrc">${esc(i.src)}</span>`:""}</div></div>`;
+  return `<div class="enutrow"><div class="enut">${nutCells(i.n)}</div><div class="enut enref"><span>${i.lab}</span>${nutCells(i.ref)}${i.src?`<span class="ensrc">${esc(i.src)}</span>`:""}</div>${mulH()}</div>`;
 }
+/* Vielfaches der Menge (24.10.2026, vom Nutzer so entschieden): ×1,5 / ×2 RECHNEN UM, sie legen NICHT mehrfach an – aus 100 g werden
+   150 g in EINEM Eintrag, es entsteht keine zweite Zeile. Eine Mahlzeit rechnet alle Zutaten mit und behält ihre g.id.
+   Alles oder nichts: wäre eine Zutat danach ungültig (> AMAX), bleibt die ganze Liste unverändert – sonst stimmt das Verhältnis nicht mehr.
+   Gerundet wird wie beim Mengenfeld (parseAmt, zwei Stellen); nie NaN, nie ≤ 0 im Speicher. Gibt true zurück, wenn umgerechnet wurde. */
+const MULS=[[1.5,"×1,5"],[2,"×2"]];
+function scaleEntries(list,factor){
+  const k=Number(factor);if(!Array.isArray(list)||!list.length||!isFinite(k)||!(k>0))return false;
+  const nv=list.map(x=>x?parseAmt(x.amt*k):null);if(nv.some(v=>v===null))return false;
+  list.forEach((x,i)=>{x.amt=nv[i]});esave();return true;
+}
+const mulH=()=>`<div class="emul">${MULS.map(([k,t])=>`<button type="button" class="emulb" data-mul="${k}" aria-label="Menge mal ${String(k).replace(".",",")}">${t}</button>`).join("")}</div>`;
 const onPill=e=>!!(e&&e.target&&typeof e.target.closest==="function"&&e.target.closest("[data-pill]"));
 function bindSlots(){
   const S2=$("eSlots"),d=dayGet(curDay);
@@ -353,6 +364,8 @@ function bindSlots(){
       swipe:r.dataset.e?()=>delWithUndo(d.e.filter(x=>x.id===r.dataset.e)):null
     });
   });
+  S2.querySelectorAll("[data-mul]").forEach(b=>b.onclick=()=>{const en=d.e.find(x=>x.id===nutId);if(!en)return;
+    if(scaleEntries([en],b.dataset.mul))renderEssen();else toast("Zu groß")}); // Panel bleibt offen (nutId), renderEssen hält die Scrollposition
   const ai=S2.querySelector(".eamt");
   if(ai){const en=d.e.find(x=>x.id===editId),f=E.foods[en.food],pcs=(f&&f.base==="stk")||en.u==="stk",row=S2.querySelector(`[data-e="${editId}"]`);
     const chg=()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
@@ -494,7 +507,7 @@ function mealSheet(c){
   const draw=keep=>{
     const items=c.items();if(mEd>=items.length)mEd=-1;
     const y=keep?$("shBody").scrollTop:0;
-    const body=openSheet(c.eyebrow,c.title(),`<div class="emnut" id="mNut">${nutHead(sumE(items))}</div>${c.top?c.top():""}
+    const body=openSheet(c.eyebrow,c.title(),`<div class="emnut" id="mNut">${nutHead(sumE(items))}</div>${c.mul?mulH():""}${c.top?c.top():""}
       <div class="elist emlist">${items.map((it,i)=>{const f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",ed=i===mEd;
         return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${ed?" editing":""}" data-mi="${i}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}">${nf(it.amt,1)} ${pcs?"Stk":"g"}</span><span class="ev">${nf(nut(f,it.amt,it.u).kcal)}</span>${ed?`<button class="ermv" data-mx="${i}" aria-label="Zutat entfernen">×</button>`:""}</div></div>${ed?amtH(pcs,it.amt,true,unH(f,it)):""}`}).join("")}
         <button class="eaddin emadd" id="mAdd">＋ Zutat</button></div>${c.actions()}`,{onClose:c.onClose});
@@ -506,6 +519,7 @@ function mealSheet(c){
     body.querySelectorAll("[data-mi]").forEach(r=>{const i=+r.dataset.mi;
       gesture(r,{tap:e=>{if(e&&e.target.closest("[data-mx]"))return;mEd=mEd===i?-1:i;if(mEd>=0)amtGo=true;draw(true)},swipe:()=>delIt(items[i])})});
     body.querySelectorAll("[data-mx]").forEach(b=>b.onclick=()=>delIt(items[+b.dataset.mx]));
+    body.querySelectorAll("[data-mul]").forEach(b=>b.onclick=()=>{if(scaleEntries(c.items(),b.dataset.mul))draw(true);else toast("Zu groß")}); // alle Zutaten, g.id bleibt; nur für Mahlzeiten im Tag (c.mul)
     const ai=body.querySelector(".eamt");
     if(ai){const it=items[mEd],f=E.foods[it.food],pcs=(f&&f.base==="stk")||it.u==="stk",row=body.querySelector(`[data-mi="${mEd}"]`);
       const chg=()=>{row.querySelector(".epill").textContent=nf(it.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,it.amt,it.u).kcal);$("mNut").innerHTML=nutHead(sumE(c.items()))};
@@ -522,7 +536,8 @@ function grpView(gid,full){
   const first=gl()[0];if(!first)return;
   const g=()=>(gl()[0]||first).g,tpl=()=>g().tpl&&E.meals[g().tpl];
   const toTpl=list=>list.map(x=>{const it={food:x.food,amt:x.amt};if(x.u)it.u=x.u;return it});
-  mealSheet({eyebrow:SLOTN[first.slot],title:()=>g().name,items:gl,
+  /* mul: das Vielfache gibt es nur bei der Mahlzeit im Tag, nicht bei der Vorlage – ×2 dort würde das gespeicherte Rezept dauerhaft verdoppeln (24.10.2026) */
+  mealSheet({eyebrow:SLOTN[first.slot],title:()=>g().name,items:gl,mul:true,
     remove:it=>{const d=day(curDay);d.e=d.e.filter(x=>x!==it);tidyDay(curDay)},
     snap:()=>{const k=curDay,s=day(k).e.slice();return ()=>{day(k).e=s}},
     add:()=>openSearch({kind:"grp",gid,slot:first.slot,back:()=>grpView(gid,full)}),
@@ -922,5 +937,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setDay:k=>{curDay=k;renderEssen()}};
 })();

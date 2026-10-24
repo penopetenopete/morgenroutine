@@ -557,6 +557,11 @@ img.emini{background:#fff}
 .enutrow .enref b{font-size:.78rem;color:var(--muted)}
 .enutrow .enref>span:first-child{color:var(--fg);flex:none}
 .enutrow .ensrc{margin-left:auto}
+/* Vielfaches der Menge (24.10.2026): zwei Knöpfe, rechnen die Menge um (legen nichts neu an); im Nährwerte-Bereich der Zeile und der Mahlzeit */
+.emul{display:flex;gap:6px}
+.enutrow .emul{margin-top:3px}
+.emulb{flex:none;min-width:60px;min-height:40px;border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--fg);font-family:var(--f-display);font-size:.8rem;padding:0 14px;cursor:pointer;-webkit-user-select:none;user-select:none}
+.emulb:active{background:rgba(0,229,255,.16)}
 .eamtrow{display:flex;align-items:center;gap:8px}
 .eamtrow.in{padding:6px 12px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 55%,var(--card))}
 .eamt{width:110px;min-height:46px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font-family:var(--f-display);font-size:1.05rem}
