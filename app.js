@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="56"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="57"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -256,7 +256,7 @@ function wheelValues(e,k){
   return F.STEPS[e.weight];
 }
 const stepText=v=>v?v+" cm":"keine";
-function wheelLabel(e,k,v){if(k==="rest"&&isBtnPause(v))return "Weiter per Knopf";return (k==="secs"||k==="secs2"||k==="rest"||k==="sw")?fmtSecs(v):(k==="reps"||k==="sets"||k==="actual")?String(v):k==="step"?stepText(v):F.kgText(e.weight,v)}
+function wheelLabel(e,k,v){if(k==="rest"&&isBtnPause(v))return "Knopf";return (k==="secs"||k==="secs2"||k==="rest"||k==="sw")?fmtSecs(v):(k==="reps"||k==="sets"||k==="actual")?String(v):k==="step"?stepText(v):F.kgText(e.weight,v)}
 function wheelHTML(e,k,v){const t=wheelLabel(e,k,v),m=t.match(/^(.*?)\s(s|min|kg|cm)$/);return m?`<b>${m[1]}</b><small>${m[2]}</small>`:`<b>${t}</b>`}
 function platesVis(kg){const ps=F.plateSet(kg);return `<span class="plates" aria-label="Scheiben">${ps.map(p=>`<i style="height:${Math.round(F.PLATE[p][0]*52)}px"></i>`).join("")}<b>${ps.map(kgNum).join(" + ")} kg</b></span>`}
 /* Eine Zeile mit Drehrad. get(): aktueller Wert, set(v): speichern, std: Standardwert (oder null) */
@@ -724,7 +724,7 @@ document.querySelectorAll("#rView [data-v]").forEach(b=>b.onclick=()=>{rView=b.d
 const TL_COL=["#00E5FF","#FFB547","#5BE38C","#B18CFF","#FF7AB6","#F2E863","#6FA8FF","#FF8F6B","#4FD1C5","#E879F9","#A3E635","#F87171"];
 /* feste Farbe pro Übung (nach Katalog-Reihenfolge) – bleibt beim Verschieben gleich, gleiche Übung = gleiche Farbe */
 const exColor=ex=>{const i=Math.max(0,(F.EX||[]).findIndex(e=>e.id===ex));return TL_COL[(i*5)%TL_COL.length]};
-function pauseText(v){return isBtnPause(v)?"weiter per Knopf":v===0?"0 s":fmtSecs(v)}
+function pauseText(v){return isBtnPause(v)?"Knopf":v===0?"0 s":fmtSecs(v)}
 /* Musik/Podcast pro Stelle: Schlüssel wie bei den Pausen; ohne eigenen Wert gilt Smart (Satz = Musik, Pause ab X s = Podcast) */
 const audKey=s=>s.type==="work"?"w|"+[s.uid,s.set||1,s.side||0,s.part||0].join("|"):(s.pk||s.uid+"|"+(s.kind||"next"));
 const smartShort=()=>{try{const v=window.TrainingSpotify&&window.TrainingSpotify.state().short;return v==null?20:+v}catch(_){return 20}};
@@ -891,11 +891,15 @@ function renderTimeline(box,Wk,h){
   if(box.querySelector("#tlCopyOk"))box.querySelector("#tlCopyOk").onclick=()=>{tlCopy=null;h.redraw()};
   box.querySelectorAll("[data-e]").forEach(b=>{
     const x0=EDG[+b.dataset.e],s=x0.s;
-    onLongPress(b,()=>{if(s.dur==null||mus())return;tlCopy={v:s.dur,pk:s.pk,n:0};buzz(30);h.redraw()});
+    /* Am Pausen-Schlüssel unterscheiden, nicht an der Dauer (24.10.2026): eine auf „Knopf“
+       gestellte Pause hat ebenfalls keine Dauer, liess sich mit der alten Prüfung aber nicht mehr
+       antippen und damit nicht zurückstellen. Ohne pk sind es die „Nächste Übung“-Schritte
+       zwischen den Blöcken – die bleiben wie bisher unantastbar. */
+    onLongPress(b,()=>{if(!s.pk||mus())return;tlCopy={v:s.dur==null?PAUSE_BTN:s.dur,pk:s.pk,n:0};buzz(30);h.redraw()});
     b.onclick=()=>{
       if(b.dataset.lp){delete b.dataset.lp;return}
       if(mus()){toggleAud(s);return}
-      if(s.dur==null)return;
+      if(!s.pk)return;
       if(tlCopy){if(s.pk===tlCopy.pk)return;tlCopy.n++;tlFocus=b.dataset.k;h.onPause(s.pk,tlCopy.v);return}
       tlFocus=b.dataset.k;openPauseSheet(s,h.onPause,h.redraw);
     };
@@ -1118,7 +1122,7 @@ function onLongPress(el,fn){
 /* Pause einstellen (Timeline und laufendes Training) */
 function openPauseSheet(s,onSet,onCancel){
   const def=s.kind==="side"||s.kind==="umbau"?gv("side"):gv("rest");
-  let v=s.dur;
+  let v=s.dur==null?PAUSE_BTN:s.dur; // auf „Knopf“ gestellt: Rad soll dort stehen, nicht bei 0 s
   const what={side:"Zwischen den Seiten",umbau:"Umbau",set:"Nach dem Satz",link:"Vor der verknüpften Übung"}[s.kind]||"Pause";
   openSheet(what,"Pause einstellen",`<div class="wheelcenter">${wheelRow("pz","Diese Pause",EXB.balance,"rest")}</div>
     <button class="btn primary big" id="pzOk">Übernehmen</button>${s.custom?`<button class="btn ghost" id="pzStd">Zurück auf Standard (${pauseText(def)})</button>`:""}`,{onClose:onCancel});

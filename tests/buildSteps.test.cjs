@@ -558,6 +558,27 @@ test("Pause ohne Zeit: das Rad bietet den Eintrag an, der Seitenwechsel nicht", 
   assert.equal(rest[0], -1, "ganz unten im Rad");
   assert.equal(rest[1], 0, "danach kommt 0 s");
   assert.ok(!A.wheelValues(h.F.EXB.balance, "sw").some(v => v < 0), "beim Seitenwechsel gibt es das nicht");
-  assert.equal(A.wheelLabel(h.F.EXB.balance, "rest", -1), "Weiter per Knopf");
-  assert.equal(A.pauseText(-1), "weiter per Knopf");
+  assert.equal(A.wheelLabel(h.F.EXB.balance, "rest", -1), "Knopf");
+  assert.equal(A.pauseText(-1), "Knopf");
+});
+
+/* Nicht festhängen (24.10.2026): eine auf „Knopf“ gestellte Pause hat keine Dauer – genau wie die
+   „Nächste Übung“-Schritte zwischen den Blöcken. Unterschieden werden sie am Pausen-Schlüssel.
+   Prüft die Dauer statt des Schlüssels, lässt sich die Knopf-Pause nicht mehr antippen und damit
+   nicht mehr zurückstellen. Genau das war der Fehler. */
+test("Knopf-Pause bleibt antippbar: sie behält ihren Schlüssel, die Blocktrenner haben keinen", () => {
+  const items = [item("a", "pigeon", { sets: 2, reps: 10 })];
+  const pk = satzPause(sitzung(items)).pk;
+  const schritte = h.A.buildSteps(sitzung(items, { [pk]: -1 }));
+
+  const knopf = schritte.find(s => s.pk === pk);
+  assert.equal(knopf.dur, null, "keine Dauer");
+  assert.ok(knopf.pk, "aber ein Schlüssel – daran hängt das Antippen");
+
+  const trenner = schritte.filter(s => s.type === "trans" && s.kind === "next");
+  assert.ok(trenner.length > 0, "es gibt Blocktrenner");
+  trenner.forEach(s => assert.ok(!s.pk, "Blocktrenner haben keinen Schlüssel und bleiben unantastbar"));
+
+  const ohneDauer = schritte.filter(s => s.type === "trans" && s.dur == null);
+  assert.ok(ohneDauer.length > trenner.length, "ohne Dauer sind es mehr als nur die Trenner – die Dauer taugt nicht als Unterscheidung");
 });
