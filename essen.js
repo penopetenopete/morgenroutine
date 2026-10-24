@@ -70,6 +70,16 @@ function amtText(f,amt,u){
   return nf(amt,1)+" g";
 }
 const foodName=f=>f?f.name:"Unbekannt";
+/* Nährwerte ansehen (24.10.2026): n = Werte für die eingetragene Menge (genau nut), ref = der Bezugswert des
+   Lebensmittels selbst (pro 100 g bzw. pro Stück), lab = dessen Beschriftung, src = Herkunft (falls bekannt). */
+const SRCN={own:"eigene Liste",bls:"BLS",off:"Open Food Facts"};
+function nutInfo(f,amt,u){
+  if(!f)return null;
+  const stk=f.base==="stk";
+  return {n:nut(f,amt,u),ref:nut(f,stk?1:100,stk?"stk":"g"),lab:stk?"pro Stück":"pro 100 g",src:SRCN[f.src]||""};
+}
+/* Werte-Zeile: Zahl groß, Kürzel klein – dieselben Kürzel wie in den Ringen (KH, Eiweiß, Fett) */
+const nutCells=n=>`<span><b class="num">${nf(n.kcal)}</b> kcal</span><span><b class="num">${nf(n.p,1)}</b> Eiweiß</span><span><b class="num">${nf(n.c,1)}</b> KH</span><span><b class="num">${nf(n.f,1)}</b> Fett</span><span><b class="num">${nf(n.fib,1)}</b> Ballast.</span>`;
 
 /* ---------- Training: verbrannte Kalorien (grob) ---------- */
 /* Krafttraining/Mobilität netto ≈ 3,5 MET über dem Ruheumsatz → kcal/min = 3,5 × kg / 60 */
@@ -108,7 +118,7 @@ function iconOf(f){
 }
 
 /* ---------- Bildschirm ---------- */
-let curDay=today(),open={},editId=null,macro=null;
+let curDay=today(),open={},editId=null,nutId=null,macro=null; // nutId = Eintrag, unter dem die Nährwerte aufgeklappt sind (24.10.2026) – wie editId nur einer zugleich, und nie beide
 const MET={kcal:{n:"Kalorien",u:"kcal",c:"var(--accent)",goal:"kcal"},c:{n:"Kohlenhydrate",s:"KH",u:"g",c:"#FF5C93",goal:"c"},p:{n:"Eiweiß",s:"Eiweiß",u:"g",c:"#4DA3FF",goal:"p"},f:{n:"Fett",s:"Fett",u:"g",c:"#FF8A4C",goal:"f"}};
 const RC=2*Math.PI*34;
 function ringSvg(v,goal){const p=goal?Math.min(1,v/goal):0;return `<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" class="rbg"/><circle cx="40" cy="40" r="34" class="rfg" stroke-dasharray="${RC.toFixed(1)}" stroke-dashoffset="${(RC*(1-p)).toFixed(1)}"/></svg>`}
@@ -127,7 +137,7 @@ function renderEssen0(){
     const lab=i===0?"Heute":i===-1?"Gestern":i===1?"Morgen":dt.toLocaleDateString("de-DE",{weekday:"short"}).replace(".","");
     h+=`<button class="dtab eday${(E.days[k]&&E.days[k].e.length)?" has":""}" role="tab" data-d="${k}" aria-selected="${k===curDay}"><span class="nx">${lab}</span>${dt.getDate()}.</button>`}
   $("eDays").innerHTML=h;
-  $("eDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{curDay=b.dataset.d;editId=null;renderEssen()});
+  $("eDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{curDay=b.dataset.d;editId=nutId=null;renderEssen()});
   const sd=$("eDays").querySelector('[aria-selected="true"]'),bar=$("eDays");if(sd)bar.scrollLeft=sd.offsetLeft-bar.offsetLeft-(bar.clientWidth-sd.offsetWidth)/2; // nur waagerecht, Seite bleibt stehen
   if(macro){renderMacro();renderSelBar();essenMeta();return}
   renderSum();
@@ -246,7 +256,13 @@ const BIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wid
 let sel=new Set();
 function rowH(en,sub){
   const f=E.foods[en.food],n=nut(f,en.amt,en.u),pcs=(f&&f.base==="stk")||en.u==="stk",unit=pcs?"Stk":"g",ed=editId===en.id;
-  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}${sel.has(en.id)?" sel":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}" data-pill="${en.id}">${nf(en.amt,1)} ${unit}</span><span class="ev">${nf(n.kcal)}</span></div></div>${ed?amtH(pcs,en.amt,true):""}`;
+  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}${sel.has(en.id)?" sel":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}" data-pill="${en.id}">${nf(en.amt,1)} ${unit}</span><span class="ev">${nf(n.kcal)}</span></div></div>${ed?amtH(pcs,en.amt,true):""}${nutId===en.id?nutH(f,en):""}`;
+}
+/* Nährwerte unter der Zeile (24.10.2026), aufgeklappt wie das Mengenfeld, kein eigenes Fenster:
+   oben die Werte für die eingetragene Menge, darunter kleiner der Bezugswert und die Herkunft. */
+function nutH(f,en){
+  const i=nutInfo(f,en.amt,en.u);if(!i)return "";
+  return `<div class="enutrow"><div class="enut">${nutCells(i.n)}</div><div class="enut enref"><span>${i.lab}</span>${nutCells(i.ref)}${i.src?`<span class="ensrc">${esc(i.src)}</span>`:""}</div></div>`;
 }
 function bindSlots(){
   const S2=$("eSlots"),d=dayGet(curDay);
@@ -263,7 +279,7 @@ function bindSlots(){
         if(r.dataset.gt){open[r.dataset.gt]=!open[r.dataset.gt];renderEssen();return}
         editId=editId===r.dataset.e?null:r.dataset.e;if(editId)amtGo=true;renderEssen();
       },
-      long:()=>{buzz();editId=null;ids().forEach(i=>sel.add(i));renderEssen()},
+      long:()=>{buzz();editId=nutId=null;ids().forEach(i=>sel.add(i));renderEssen()},
       swipe:r.dataset.e?()=>delWithUndo(d.e.filter(x=>x.id===r.dataset.e)):null
     });
   });
@@ -351,7 +367,7 @@ function undoBar(text,restore){
 }
 function delWithUndo(list){
   const dd=day(curDay),k=curDay,snap=dd.e.slice();
-  dd.e=dd.e.filter(x=>!list.includes(x));tidyDay(k);esave();editId=null;renderEssen();
+  dd.e=dd.e.filter(x=>!list.includes(x));tidyDay(k);esave();editId=nutId=null;renderEssen();
   undoBar((list.length===1?foodName(E.foods[list[0].food]):list.length+" Einträge")+" gelöscht",()=>{day(k).e=snap;esave();renderEssen()});
 }
 
@@ -789,7 +805,7 @@ async function shareEssen(){
   }catch(e){toast("Teilen ging nicht: "+e.message)}
 }
 window.addEventListener("hashchange",checkEssen);
-window.addEventListener("popstate",()=>setTimeout(()=>{if($("essen").hidden){editId=null;sel.clear();renderSelBar()}},0));
+window.addEventListener("popstate",()=>setTimeout(()=>{if($("essen").hidden){editId=nutId=null;sel.clear();renderSelBar()}},0));
 
 /* ---------- Hauptmenü-Karte, Navigation, Datenübertragung ---------- */
 function essenMeta(){
@@ -806,8 +822,8 @@ $("openEssen").onclick=()=>{curDay=today();show("essen")};
 $("eMore").onclick=moreSheet;
 /* Wischen = Tag vor/zurück (nicht auf den Zeilen – dort ist Wischen = löschen) */
 if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk=addDays(curDay,d);if(nk<addDays(t,-14)||nk>addDays(t,1))return;
-  curDay=nk;editId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
+  curDay=nk;editId=nutId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,setDay:k=>{curDay=k;renderEssen()}};
 })();

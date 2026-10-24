@@ -536,6 +536,14 @@ img.emini{background:#fff}
 /* Fenster (selten) */
 .enut{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;font-family:var(--f-display);color:var(--muted);font-size:.9rem}
 .enut b{color:var(--fg);font-size:1.4rem}
+/* Nährwerte unter der Tageszeile (24.10.2026): gleicher Unterbau wie das Mengenfeld (.eamtrow.in) */
+.enutrow{display:flex;flex-direction:column;gap:5px;padding:8px 12px 9px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 55%,var(--card))}
+.enutrow .enut{gap:2px 12px;font-size:.78rem}
+.enutrow .enut b{font-size:1.02rem}
+.enutrow .enref{font-size:.68rem;opacity:.8}
+.enutrow .enref b{font-size:.78rem;color:var(--muted)}
+.enutrow .enref>span:first-child{color:var(--fg);flex:none}
+.enutrow .ensrc{margin-left:auto}
 .eamtrow{display:flex;align-items:center;gap:8px}
 .eamtrow.in{padding:6px 12px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 55%,var(--card))}
 .eamt{width:110px;min-height:46px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font-family:var(--f-display);font-size:1.05rem}
