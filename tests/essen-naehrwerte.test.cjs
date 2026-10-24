@@ -321,3 +321,77 @@ test("units anlegen berührt keine anderen Felder des Lebensmittels", () => {
   const nachher = Object.assign({}, f); delete nachher.units;
   assert.equal(json(nachher), vorher, "alle anderen Felder unverändert, gleiche Reihenfolge");
 });
+
+/* ---------- Suche: Gedrückthalten zeigt Werte, Loslassen wählt nichts aus ----------
+   Echter drawRes/gesture-Weg mit Ersatz-Trefferzeile; der 420-ms-Zeitgeber wird von Hand ausgelöst.
+   Wie es sich anfühlt (Dauer, Einfahren von unten, Vibration) → Gerät. */
+function suche() {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E(), k = heute();
+  const zeiger = [], doc = {};
+  h.ctx.setTimeout = (fn, ms) => { zeiger.push({ fn, ms, tot: false }); return zeiger.length; };
+  h.ctx.clearTimeout = id => { if (zeiger[id - 1]) zeiger[id - 1].tot = true; };
+  h.ctx.fetch = () => Promise.reject(new Error("offline"));
+  h.ctx.document.addEventListener = (t, fn) => { doc[t] = fn; };
+  h.ctx.document.removeEventListener = () => {};
+  const zeile = { dataset: { pick: "hafer" }, l: {}, addEventListener(t, fn) { this.l[t] = fn; } };
+  h.el("eRes").querySelectorAll = s => s === "[data-pick]" ? [zeile] : [];
+  K.setDay(k);
+  K.openSearch({ kind: "day", slot: "fr" });
+  const anz = () => ((E.days[k] || { e: [] }).e).length;
+  const druck = () => zeile.l.pointerdown({ button: 0, clientX: 0, clientY: 0, target: { closest: () => null } });
+  const los = () => doc.pointerup({ target: { closest: () => null } });
+  const lang = () => { const t = zeiger.find(z => z.ms === 420 && !z.tot); assert.ok(t, "Zeitgeber für langes Drücken läuft"); t.tot = true; t.fn(); };
+  const klick = () => zeile.onclick({ target: { closest: () => null } });
+  const karte = () => h.el("eInfo");
+  return { h, K, E, k, zeile, anz, druck, los, lang, klick, karte, zeiger, doc };
+}
+
+test("Gedrückt halten: Werte-Karte erscheint (kcal, E / KH / F pro 100 g), Loslassen blendet aus und wählt nichts aus", () => {
+  const s = suche();
+  assert.equal(s.anz(), 0);
+  s.druck(); s.lang();
+  assert.ok(s.karte().classList.contains("show"), "Karte sichtbar während des Haltens");
+  const html = s.karte().innerHTML, f = s.E.foods.hafer;
+  assert.ok(html.includes(f.name) && html.includes("pro 100 g"));
+  assert.ok(html.includes(">372<") && html.includes(">13,5<") && html.includes(">58,7<") && html.includes(">7<"), html);
+  assert.equal(s.anz(), 0, "beim Halten nichts ausgewählt");
+  s.los();
+  assert.ok(!s.karte().classList.contains("show"), "Loslassen blendet aus");
+  s.klick(); // der Klick, den der Browser nach dem Loslassen noch schickt
+  assert.equal(s.anz(), 0, "Loslassen wählt NICHTS aus");
+  assert.equal(JSON.stringify(s.E).includes("NaN"), false);
+});
+
+test("nach einem Halten wirkt der nächste normale Tipp wieder (Auswahl)", () => {
+  const s = suche();
+  s.druck(); s.lang(); s.los(); s.klick();
+  assert.equal(s.anz(), 0);
+  s.druck(); s.los(); // kurzer Tipp: Zeitgeber wird nicht ausgelöst
+  s.klick();
+  assert.equal(s.anz(), 1, "normaler Tipp wählt aus wie bisher");
+  assert.equal(s.E.days[s.k].e[0].food, "hafer");
+});
+
+test("kurzer Tipp ohne Halten: keine Karte, Auswahl wie bisher", () => {
+  const s = suche();
+  s.druck(); s.los(); s.klick();
+  assert.ok(!s.karte().classList.contains("show"));
+  assert.equal(s.anz(), 1);
+});
+
+test("Finger bewegt sich vor Ablauf des Zeitgebers (Scrollen der Trefferliste): Zeitgeber abgebrochen, keine Karte", () => {
+  const s = suche();
+  s.druck();
+  assert.ok(s.zeiger.some(z => z.ms === 420 && !z.tot), "Zeitgeber läuft");
+  s.doc.pointermove({ clientX: 0, clientY: 30 }); // mehr als 9 px
+  assert.ok(s.zeiger.filter(z => z.ms === 420).every(z => z.tot), "Zeitgeber abgebrochen");
+  assert.ok(!s.karte().classList.contains("show"));
+  assert.equal(s.anz(), 0);
+});
+
+test("holdH: Karte aus den Bezugswerten des Lebensmittels (pro Stück bei Stück-Lebensmitteln)", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E();
+  const stk = K.holdH(E.foods.roggen);
+  assert.ok(stk.includes("pro Stück") && stk.includes(">172<") && stk.includes(">5,3<"));
+  assert.equal(K.holdH(undefined), "");
+});

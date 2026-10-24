@@ -363,8 +363,9 @@ function bindSlots(){
   renderSelBar();
 }
 const buzz=()=>{try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}};
-/* Gesten: tippen · nach links wischen = löschen · lange drücken = auswählen (long optional) */
-function gesture(el,{tap,long,swipe}){
+/* Gesten: tippen · nach links wischen = löschen · lange drücken = auswählen (long optional)
+   rel (24.10.2026, optional): kommt beim Loslassen bzw. Abbruch NACH einem langen Drücken – für „solange gehalten“-Anzeigen */
+function gesture(el,{tap,long,swipe,rel}){
   el.addEventListener("pointerdown",ev=>{
     if(ev.button>0||ev.target.closest(".egm"))return;
     const x0=ev.clientX,y0=ev.clientY;let mode=null,dx=0;
@@ -380,6 +381,7 @@ function gesture(el,{tap,long,swipe}){
     };
     const end=(fire,e)=>{
       clearTimeout(lt);document.removeEventListener("pointermove",mv);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",cc);
+      if(mode==="long"&&rel)rel();
       if(mode==="swipe"){el.parentElement.classList.remove("armed");
         if(fire&&dx<-90){el.style.transition="transform .18s";el.style.transform="translateX(-110%)";setTimeout(swipe,170)}
         else{el.style.transition="transform .18s";el.style.transform="";setTimeout(()=>el.style.transition="",200)}
@@ -576,6 +578,18 @@ function openSearch(ctx,keep){
   $("eDone").onclick=closeSheet;
   drawRes();loadBLS().then(()=>{if(searchCtx===ctx&&$("eQ"))drawRes()}).catch(()=>{});
 }
+/* Werte-Karte beim Gedrückthalten in der Suche (24.10.2026): kurz – kcal, E / KH / F pro 100 g bzw. pro Stück. Keine Auswahl, kein Fenster. */
+let pickHold=false;
+function holdH(f){
+  const i=nutInfo(f,0);if(!i)return "";const r=i.ref;
+  return `<div class="eit"><b class="enm">${esc(f.name)}</b><small>${i.lab}</small></div><div class="enut"><span><b class="num">${nf(r.kcal)}</b> kcal</span><span><b class="num">${nf(r.p,1)}</b> E</span><span><b class="num">${nf(r.c,1)}</b> KH</span><span><b class="num">${nf(r.f,1)}</b> F</span></div>`;
+}
+function holdInfo(f){
+  let p=$("eInfo");if(!p){p=document.createElement("div");p.id="eInfo";p.className="einfo";document.body.appendChild(p)}
+  if(!f){p.classList.remove("show");return}
+  p.innerHTML=holdH(f);void p.offsetWidth; // erst anlegen, dann einblenden, damit es von unten hereinfährt
+  p.classList.add("show");
+}
 /* fügt hinzu und gibt das Objekt zurück, dessen amt/u man danach ändern kann */
 function snapSearch(){return {ctx:searchCtx,added,addedN,offRes,tab:sTab,q:$("eQ")?$("eQ").value:""}}
 function restoreSearch(st){added=st.added;addedN=st.addedN;offRes=st.offRes||[];sTab=st.tab;edKey=null;openSearch(st.ctx,st)}
@@ -636,9 +650,18 @@ function drawRes(stay){
   $("eDone").textContent=addedN?`Fertig · ${addedN} hinzugefügt`:"Fertig";
   // Tipp auf die graue Kalorienzahl = hinzufuegen und gleich das Mengenfeld oeffnen (18.10.2026);
   // ueberall sonst auf der Zeile nur hinzufuegen, wie bisher
-  box.querySelectorAll("[data-pick]").forEach(b=>b.onclick=ev=>{const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;
-    const direkt=!!(ev&&ev.target&&ev.target.closest&&ev.target.closest(".ev"));
-    edKey=direkt?k:null;if(direkt)amtGo=true;drawRes(true)});
+  // Gedrückt halten (24.10.2026): die wichtigsten Werte fahren von unten herein, Loslassen blendet sie aus und wählt NICHTS aus –
+  // der Klick, den der Browser nach dem Loslassen noch schickt, wird über pickHold verschluckt.
+  box.querySelectorAll("[data-pick]").forEach(b=>{
+    b.onclick=ev=>{if(pickHold){pickHold=false;return}
+      const k=b.dataset.pick,f=E.foods[pick[k].id]||pick[k];added[k]=addFood(f,ctx);addedN++;
+      const direkt=!!(ev&&ev.target&&ev.target.closest&&ev.target.closest(".ev"));
+      edKey=direkt?k:null;if(direkt)amtGo=true;drawRes(true)};
+    b.addEventListener("contextmenu",e=>e.preventDefault()); // Android: kein Kontextmenü (Bild speichern) beim Halten
+    gesture(b,{tap:()=>{},
+      long:()=>{const f=pick[b.dataset.pick];if(!f)return;buzz();pickHold=true;holdInfo(f)},
+      rel:()=>{holdInfo(null);setTimeout(()=>{pickHold=false},350)}});
+  });
   box.querySelectorAll("[data-ek]").forEach(b=>b.onclick=()=>{edKey=edKey===b.dataset.ek?null:b.dataset.ek;if(edKey)amtGo=true;drawRes(true)});
   box.querySelectorAll(".eadded[data-key]").forEach(r=>r.onclick=e=>{if(e.target.closest("[data-ek]"))return;const k=r.dataset.key;removeAdded(added[k],ctx);delete added[k];addedN--;if(edKey===k)edKey=null;drawRes(true)});
   box.querySelectorAll(".eadded.editing[data-key]").forEach(r=>{const k=r.dataset.key,a=added[k],f=pick[k],pcs=f.base==="stk"||a.u==="stk";const ai=r.nextElementSibling.querySelector(".eamt"),chg=()=>{r.querySelector(".epill").textContent=nf(a.amt,1)+(pcs?" Stk":" g")};bindAmtObj(ai,a,chg,()=>{const mein=edKey;setTimeout(()=>{if(edKey===mein&&mein&&!unHold()){edKey=null;drawRes(true)}},120)});bindUnits(ai,E.foods[f.id]||f,a,chg)});
@@ -899,5 +922,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,setDay:k=>{curDay=k;renderEssen()}};
 })();
