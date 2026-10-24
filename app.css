@@ -505,7 +505,16 @@ img.emini{background:#fff}
 .erow.sel{background:color-mix(in srgb,var(--accent) 14%,var(--card));box-shadow:inset 3px 0 0 var(--accent)}
 .edhead{display:flex;justify-content:space-between;align-items:center;font-family:var(--f-display);font-size:.8rem;color:var(--muted);padding:0 4px}
 .edhead button{border:0;background:none;color:var(--accent);font-family:var(--f-display);font-size:.85rem;min-height:36px;padding:0 6px;cursor:pointer}
-.edrow{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.edrow{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+/* Fünf Knöpfe, zwei mit Datumstext (24.10.2026): auf schmalen Handys nicht quetschen, sondern sauber umbrechen –
+   erste Zeile gestern · Kalender · Nochmal, zweite Zeile morgen · Löschen (Löschen bleibt rechts und eigenständig groß). */
+.edrow .edz{min-width:0;padding:0 4px}
+.edrow .edz span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:460px){
+  .edrow{grid-template-columns:repeat(6,1fr)}
+  .edrow .edz{grid-column:span 2}
+  .edrow .edz[data-sb="next"],.edrow .edz[data-sb="del"]{grid-column:span 3}
+}
 .edock .edz{border-style:solid;cursor:pointer;flex-direction:column;gap:2px;min-height:62px;color:var(--fg)}
 .edock .edz svg{width:20px;height:20px;color:var(--accent)}
 .edock .edz:active{background:rgba(0,229,255,.16)}
@@ -591,6 +600,7 @@ img.emini{background:#fff}
 .escan{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:14px;border:1px solid var(--line);background:#000}
 .esrc{font-size:.75rem!important;opacity:.8}
 body.esel #essen{padding-bottom:170px}
+@media (max-width:460px){body.esel #essen{padding-bottom:250px}} /* Leiste ist dort zweizeilig */
 
 /* Timeline 09.10.2026: Kopf mitlaufend, übersprungen, verschieben/kopieren, aktuelle Übung */
 .tlhead{position:sticky;top:0;z-index:6;background:var(--bg);padding:2px 0 6px;margin-top:-2px}

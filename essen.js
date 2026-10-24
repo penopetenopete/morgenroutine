@@ -317,6 +317,7 @@ const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" 
 const PLUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const CAM='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/><path d="M8 9v6M11 9v6M14 9v6M16.5 9v6"/></svg>';
 const CALI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>';
+const DUP='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 9V6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15H9"/></svg>';
 const BIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
 let sel=new Set();
 function rowH(en,sub){
@@ -405,21 +406,33 @@ function gesture(el,{tap,long,swipe,rel}){
     document.addEventListener("pointermove",mv);document.addEventListener("pointerup",up);document.addEventListener("pointercancel",cc);
   });
 }
-/* Auswahl-Leiste unten: Gestern · Kalender · Morgen · Löschen */
+/* Auswahl-Leiste unten: Gestern · Kalender · Nochmal · Morgen · Löschen (Nochmal 24.10.2026: dasselbe nochmal in den SELBEN Tag,
+   neben Kalender, weil beides kopiert; Löschen bleibt am rechten Rand). Auf schmalen Handys bricht die Reihe in zwei Zeilen (app.css). */
 function renderSelBar(){
   let bar=$("eSelBar");const on=!!sel.size&&!$("essen").hidden&&!macro;document.body.classList.toggle("esel",on);
   if(!on){if(bar)bar.hidden=true;return}
   if(!bar){bar=document.createElement("div");bar.id="eSelBar";bar.className="edock";document.body.appendChild(bar)}
   bar.hidden=false;
   bar.innerHTML=`<div class="edhead"><span>${selCount()} ausgewählt</span><button data-sb="x">Fertig</button></div>
-    <div class="edrow"><button class="edz" data-sb="prev"><b>‹</b><span>${dayLab(addDays(curDay,-1))}</span></button><button class="edz" data-sb="cal">${CALI}<span>Kalender</span></button><button class="edz" data-sb="next"><b>›</b><span>${dayLab(addDays(curDay,1))}</span></button><button class="edz del" data-sb="del">${BIN}<span>Löschen</span></button></div>`;
+    <div class="edrow"><button class="edz" data-sb="prev"><b>‹</b><span>${dayLab(addDays(curDay,-1))}</span></button><button class="edz" data-sb="cal">${CALI}<span>Kalender</span></button><button class="edz" data-sb="again">${DUP}<span>Nochmal</span></button><button class="edz" data-sb="next"><b>›</b><span>${dayLab(addDays(curDay,1))}</span></button><button class="edz del" data-sb="del">${BIN}<span>Löschen</span></button></div>`;
   bar.querySelectorAll("[data-sb]").forEach(b=>b.onclick=()=>{
     const a=b.dataset.sb,list=dayGet(curDay).e.filter(x=>sel.has(x.id));
     if(a==="x"){sel.clear();renderEssen();return}
     if(a==="del"){sel.clear();delWithUndo(list);return}
     if(a==="prev"||a==="next"){sel.clear();moveTo(list,addDays(curDay,a==="prev"?-1:1));return}
+    if(a==="again"){if(!list.length)return;sel.clear();againEntries(list);renderEssen();toast("Nochmal angelegt");return}
     if(a==="cal")calPop(k=>{sel.clear();copyEntries(list,k);esave();renderEssen();toast(`Dupliziert → ${dayLab(k)}`)});
   });
+}
+/* „Nochmal“ (24.10.2026): kopiert über copyEntries (neue Eintrags-IDs, jede kopierte Mahlzeit bekommt eine NEUE g.id – sonst würden zwei
+   gleiche Mahlzeiten zu einer verschmelzen) und rückt die Kopien direkt hinter ihr Original, statt ans Tagesende. Nur die Reihenfolge im Tag
+   ändert sich, kein Feld. */
+function againEntries(list){
+  const d=day(curDay),n0=d.e.length;
+  copyEntries(list,curDay);
+  const neu=d.e.splice(n0);
+  neu.forEach((c,i)=>{const at=d.e.indexOf(list[i]);if(at<0)d.e.push(c);else d.e.splice(at+1,0,c)});
+  esave();
 }
 function selCount(){const g=new Set();let n=0;dayGet(curDay).e.forEach(x=>{if(!sel.has(x.id))return;if(x.g){if(!g.has(x.g.id)){g.add(x.g.id);n++}}else n++});return n}
 function moveTo(list,k){ /* Pfeile kopieren nur – am aktuellen Tag bleibt alles stehen */

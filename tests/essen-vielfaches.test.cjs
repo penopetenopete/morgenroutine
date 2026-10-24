@@ -232,3 +232,83 @@ test("Vorlage (tplSheet) bekommt KEINE Vielfachen-Knöpfe – ×2 würde das ges
   assert.ok(m.html().includes("emnut"), "Ansicht steht");
   assert.ok(!m.html().includes("data-mul"));
 });
+
+/* ---------- Aufgabe 3: „Nochmal“ in der Auswahl-Leiste ---------- */
+
+/* Auswahl-Leiste: renderSelBar läuft über renderEssen; die Knöpfe holt der echte Code per querySelectorAll("[data-sb]") */
+function auswahl(eintraege, ausgewaehlt) {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E(), k = heute();
+  E.days[k] = { e: eintraege };
+  h.ctx.document.addEventListener = () => {};
+  h.ctx.document.removeEventListener = () => {};
+  const bar = h.el("eSelBar"), tasten = {};
+  bar.querySelectorAll = s => s === "[data-sb]" ? ["x", "prev", "cal", "again", "next", "del"].map(a => tasten[a] = tasten[a] || { dataset: { sb: a }, onclick: null }) : [];
+  ausgewaehlt.forEach(id => K.sel().add(id));
+  K.setDay(k);
+  return { h, K, E, k, bar, tasten, tag: () => E.days[k].e };
+}
+const PIZZA2 = () => [
+  { id: "a1", slot: "ab", food: "hafer", amt: 80, g: { id: "gp", name: "Pizza", tpl: "t9" } },
+  { id: "a2", slot: "ab", food: "quark", amt: 250, g: { id: "gp", name: "Pizza", tpl: "t9" } },
+  { id: "b1", slot: "ab", food: "ei", amt: 2, u: "stk" },
+];
+
+test("Auswahl-Leiste hat „Nochmal“ neben Kalender, Löschen bleibt der letzte Knopf", () => {
+  const a = auswahl(PIZZA2(), ["b1"]);
+  const html = a.bar.innerHTML;
+  const reihenfolge = [...html.matchAll(/data-sb="(\w+)"/g)].map(m => m[1]);
+  assert.deepEqual(reihenfolge, ["x", "prev", "cal", "again", "next", "del"]);
+  assert.ok(html.includes("Nochmal"));
+});
+
+test("Nochmal: legt die Auswahl ein zweites Mal im SELBEN Tag an, Auswahl wird geleert, Original unberührt", () => {
+  const a = auswahl(PIZZA2(), ["b1"]);
+  const orig = a.tag().find(x => x.id === "b1");
+  a.tasten.again.onclick();
+  const e = a.tag();
+  assert.equal(e.length, 4, "ein Eintrag mehr");
+  const kopien = e.filter(x => x.food === "ei");
+  assert.equal(kopien.length, 2);
+  assert.equal(kopien[0], orig, "Original bleibt wie es war");
+  assert.notEqual(kopien[1].id, orig.id, "neue Eintrags-ID");
+  assert.equal(kopien[1].amt, 2); assert.equal(kopien[1].u, "stk"); assert.equal(kopien[1].slot, "ab");
+  assert.equal(a.K.sel().size, 0, "Auswahl geleert");
+  assert.equal(e.indexOf(kopien[1]), e.indexOf(orig) + 1, "direkt hinter dem Original");
+  assert.ok(!a.h.dump().essen_v1.includes("NaN"));
+  assert.equal(gespeichert(a.h).days[a.k].e.length, 4, "im Speicher");
+});
+
+test("Nochmal auf eine Mahlzeit: die Kopie bekommt eine NEUE g.id – zwei Pizzen verschmelzen nicht", () => {
+  const a = auswahl(PIZZA2(), ["a1", "a2"]);
+  a.tasten.again.onclick();
+  const e = a.tag();
+  assert.equal(e.length, 5, "zwei Zutaten dazu");
+  const ids = new Set(e.filter(x => x.g).map(x => x.g.id));
+  assert.equal(ids.size, 2, "zwei verschiedene Mahlzeiten");
+  assert.ok(ids.has("gp"), "die alte bleibt");
+  const alt = e.filter(x => x.g && x.g.id === "gp"), neu = e.filter(x => x.g && x.g.id !== "gp");
+  assert.equal(alt.length, 2, "alte Mahlzeit hat weiter genau ihre zwei Zutaten");
+  assert.equal(neu.length, 2, "neue Mahlzeit hat die zwei kopierten Zutaten");
+  assert.equal(neu[0].g.id, neu[1].g.id, "beide Kopien in EINER neuen Mahlzeit");
+  assert.equal(neu[0].g.name, "Pizza"); assert.equal(neu[0].g.tpl, "t9");
+  assert.deepEqual(neu.map(x => x.amt), [80, 250]);
+  assert.deepEqual(neu.map(x => x.food), ["hafer", "quark"]);
+  assert.ok(neu.every(x => !alt.includes(x) && !alt.some(y => y.id === x.id)), "keine geteilten Objekte oder IDs");
+  assert.ok(alt.every(x => x.g.id === "gp"), "Originale unverändert");
+});
+
+test("Nochmal ohne gültige Auswahl tut nichts (kein leeres Duplikat)", () => {
+  const a = auswahl(PIZZA2(), ["b1"]);
+  a.K.sel().clear(); a.K.sel().add("gibt-es-nicht");
+  a.tasten.again.onclick();
+  assert.equal(a.tag().length, 3);
+});
+
+test("Pfeil › kopiert weiter in den Folgetag (heute unverändert) – der alte Weg ist durch Nochmal nicht gebrochen", () => {
+  const a = auswahl(PIZZA2(), ["b1"]);
+  a.tasten.next.onclick();
+  assert.equal(a.tag().length, 3, "heute unverändert");
+  const d = new Date(); d.setDate(d.getDate() + 1);
+  const morgen = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  assert.equal(a.E.days[morgen].e.length, 1, "Kopie liegt morgen");
+});
