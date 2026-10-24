@@ -457,6 +457,9 @@ img.eic{background:#fff}
 .enm small{color:var(--muted)}
 .epill{flex:none;font-family:var(--f-display);font-size:.75rem;color:var(--muted);padding:3px 9px;border-radius:999px;background:var(--bg)}
 .epill.on{color:var(--accent);background:rgba(0,229,255,.08);cursor:pointer}
+/* Tagesliste (24.10.2026): die Pille öffnet das Mengenfeld, der Rest der Zeile die Nährwerte – die Pille ist klein, darum eine etwas größere Trefferfläche (bleibt in der Lücke zwischen Name und Kalorien) */
+.erow[data-e] .epill{position:relative}
+.erow[data-e] .epill::after{content:"";position:absolute;inset:-10px -6px}
 .ev{flex:none;min-width:38px;text-align:right;font-family:var(--f-display);font-size:.8rem;color:var(--muted)}
 .erow.sub{padding-left:16px;background:color-mix(in srgb,var(--bg) 30%,var(--card))}
 .erow.editing{background:color-mix(in srgb,var(--accent) 6%,var(--card))}

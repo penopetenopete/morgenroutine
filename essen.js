@@ -264,6 +264,7 @@ function nutH(f,en){
   const i=nutInfo(f,en.amt,en.u);if(!i)return "";
   return `<div class="enutrow"><div class="enut">${nutCells(i.n)}</div><div class="enut enref"><span>${i.lab}</span>${nutCells(i.ref)}${i.src?`<span class="ensrc">${esc(i.src)}</span>`:""}</div></div>`;
 }
+const onPill=e=>!!(e&&e.target&&typeof e.target.closest==="function"&&e.target.closest("[data-pill]"));
 function bindSlots(){
   const S2=$("eSlots"),d=dayGet(curDay);
   S2.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{if(!sel.size)openSearch({kind:"day",slot:b.dataset.add})});
@@ -274,10 +275,14 @@ function bindSlots(){
   S2.querySelectorAll("[data-e],[data-gt]").forEach(r=>{
     const ids=()=>r.dataset.e?[r.dataset.e]:d.e.filter(x=>x.g&&x.g.id===r.dataset.gt).map(x=>x.id);
     gesture(r,{
-      tap:()=>{
+      tap:e=>{
         if(sel.size){const a=ids(),all=a.every(i=>sel.has(i));a.forEach(i=>all?sel.delete(i):sel.add(i));renderEssen();return}
         if(r.dataset.gt){open[r.dataset.gt]=!open[r.dataset.gt];renderEssen();return}
-        editId=editId===r.dataset.e?null:r.dataset.e;if(editId)amtGo=true;renderEssen();
+        /* 24.10.2026: Tipp auf die Gramm-Pille = Mengenfeld (wie bisher), Tipp auf den Rest der Zeile = Nährwerte.
+           Eine Zeile gleichzeitig, und nie beides: das eine schließt das andere. */
+        if(onPill(e)){nutId=null;editId=editId===r.dataset.e?null:r.dataset.e;if(editId)amtGo=true}
+        else{editId=null;nutId=nutId===r.dataset.e?null:r.dataset.e}
+        renderEssen();
       },
       long:()=>{buzz();editId=nutId=null;ids().forEach(i=>sel.add(i));renderEssen()},
       swipe:r.dataset.e?()=>delWithUndo(d.e.filter(x=>x.id===r.dataset.e)):null
@@ -825,5 +830,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,setDay:k=>{curDay=k;renderEssen()}};
 })();
