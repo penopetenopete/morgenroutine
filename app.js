@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="62"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="63"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -321,22 +321,38 @@ function bindLinks(list,fn){list.querySelectorAll("[data-link]").forEach(b=>b.on
   list.querySelectorAll("[data-mixlink]").forEach(b=>b.onclick=e=>{e.stopPropagation();toast("Gemischt – Reihenfolge in der Timeline ändern")})}
 /* =================== VIDEOS =================== */
 /* Eigene Clips pro Übung: dauerhaft auf dem Gerät in IndexedDB "trainingvid" (Store "v", Schlüssel = Übungs-ID, Wert = Blob).
+   Version 2 (V63): dazu Store "m" mit dem Abspielbereich {a,b} in Sekunden (Schlüssel = Übungs-ID). Der Aufstieg legt "m" nur an, wenn er fehlt,
+   und fasst "v" nie an – vorhandene Clips bleiben erhalten.
    Nichts davon liegt im Repo oder in localStorage. Fehlt IndexedDB oder schlägt etwas fehl, bleibt alles wie vorher. */
 let VDB=null,VIDS=new Set(),vidURL=null; // VIDS: Übungs-IDs mit Clip (nur Speicher, färbt das Symbol)
 function vidDB(){
   if(VDB)return VDB;
-  return new Promise(res=>{try{const rq=indexedDB.open("trainingvid",1);
-    rq.onupgradeneeded=()=>{try{rq.result.createObjectStore("v")}catch(_){}};
+  return new Promise(res=>{try{const rq=indexedDB.open("trainingvid",2);
+    rq.onupgradeneeded=()=>{try{const d=rq.result;["v","m"].forEach(n=>{if(!d.objectStoreNames.contains(n))d.createObjectStore(n)})}catch(_){}};
     rq.onsuccess=()=>{const d=rq.result;d.onversionchange=()=>{try{d.close()}catch(_){}VDB=null};VDB=Promise.resolve(d);res(d)};
     rq.onerror=rq.onblocked=()=>res(null)}catch(_){res(null)}});
 }
-function vidReq(mode,fn){
-  return vidDB().then(d=>d?new Promise(res=>{try{const t=d.transaction("v",mode),rq=fn(t.objectStore("v"));
+function vidReq(mode,fn,store="v"){
+  return vidDB().then(d=>d?new Promise(res=>{try{const t=d.transaction(store,mode),rq=fn(t.objectStore(store));
     t.oncomplete=()=>res(rq&&mode==="readonly"?rq.result:true);t.onerror=t.onabort=()=>res(null)}catch(_){res(null)}}):null).catch(()=>null);
 }
 const vidGet=id=>vidReq("readonly",st=>st.get(id)).then(b=>b||null);
 const vidPut=(id,blob)=>vidReq("readwrite",st=>st.put(blob,id)).then(r=>r===true);
-const vidDel=id=>vidReq("readwrite",st=>st.delete(id)).then(r=>r===true);
+const vidDel=id=>vidReq("readwrite",st=>st.delete(id)).then(r=>markDel(id).then(()=>r===true)); // Marke geht mit dem Clip
+/* Abspielbereich: {a,b} in Sekunden, null = ganzer Clip */
+const markGet=id=>vidReq("readonly",st=>st.get(id),"m").then(m=>m&&typeof m.a==="number"&&typeof m.b==="number"?m:null);
+const markPut=(id,a,b)=>vidReq("readwrite",st=>st.put({a,b},id),"m").then(r=>r===true);
+const markDel=id=>vidReq("readwrite",st=>st.delete(id),"m").then(r=>r===true);
+/* Marke neu setzen: a >= 0, b <= Länge, a mindestens 1 s vor b. Anstoßen an eine Grenze ändert nichts. */
+function markClamp(a,b,dur,which,v){
+  if(!(dur>=1))return[a,b];
+  if(which==="a"){const n=Math.max(0,Math.min(v,b-1));return[n,b]}
+  const n=Math.min(dur,Math.max(v,a+1));return[a,n];
+}
+const markTime=t=>{t=Math.max(0,Math.floor(t||0));return Math.floor(t/60)+":"+String(t%60).padStart(2,"0")};
+let markPend=null; // wartender Schreibvorgang {id,a,b,dur}, wird entprellt oder beim Schließen sofort geschrieben
+function markFlush(){if(!markPend)return;const p=markPend;markPend=null;clearTimeout(p.t);
+  (p.a<=0&&p.b>=p.dur?markDel(p.id):markPut(p.id,p.a,p.b)).then(ok=>{if(!ok)toast("Speichern ging nicht")})}
 const vidHas=()=>vidReq("readonly",st=>st.getAllKeys()).then(k=>new Set(Array.isArray(k)?k:[]));
 /* Symbole der sichtbaren Listen nachfärben, ohne neu zu zeichnen (nichts springt) */
 function vidSync(){return vidHas().then(set=>{VIDS=set;cueEx="";try{document.querySelectorAll("button[data-vid]").forEach(b=>b.classList.toggle("has",set.has(b.dataset.vid)))}catch(_){}})}
@@ -2207,5 +2223,5 @@ checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken,saveW};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()},vid:{open:openVideoSheet,get:vidGet,put:vidPut,del:vidDel,has:vidHas,sync:vidSync,ids:()=>VIDS}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()},vid:{open:openVideoSheet,get:vidGet,put:vidPut,del:vidDel,markGet,markPut,markDel,markClamp,markTime,has:vidHas,sync:vidSync,ids:()=>VIDS}};
 })();
