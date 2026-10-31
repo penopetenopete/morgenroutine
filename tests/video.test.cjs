@@ -440,3 +440,11 @@ test("Aufräumen: Zeiger-Lauscher weg, Video angehalten", () => {
   assert.equal(s.count(), 0);
   assert.equal(s.vd.paused, true);
 });
+test("Alle zwölf Squat-University-Übungen haben das Feld trim (ohne Zahlen: null = ganzer Clip)", () => {
+  const h = loadApp();
+  const su = h.F.EX.filter(e => e.src === "Squat University");
+  assert.equal(su.length, 12);
+  su.forEach(e => assert.ok("trim" in e, e.id + " ohne trim"));
+  su.forEach(e => assert.ok(e.trim === null || (Array.isArray(e.trim) && e.trim.length === 2), e.id));
+});
+
