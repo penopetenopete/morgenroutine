@@ -160,104 +160,283 @@ test("Datenbank ist schon auf Version 2: kein Aufstieg, nichts wird neu angelegt
   assert.equal(idb.log.upgraded, false);
 });
 
-test("Grenzen: a nie unter 0, b nie über die Länge, a mindestens 1 s vor b", () => {
+test("Grenzen: stufenlos, a nie unter 0, b nie über die Länge, Mindestabstand 0,5 s", () => {
   const h = loadApp();
   const c = (...a) => [...h.A.vid.markClamp(...a)];
   assert.deepEqual(c(0, 10, 10, "a", -1), [0, 10]);
-  assert.deepEqual(c(2, 10, 10, "a", 1), [1, 10]);
-  assert.deepEqual(c(2, 10, 10, "a", 12), [9, 10]);
+  assert.deepEqual(c(2, 10, 10, "a", 1.37), [1.37, 10]); // keine Sekundenschritte
+  assert.deepEqual(c(2, 10, 10, "a", 12), [9.5, 10]);
   assert.deepEqual(c(0, 10, 10, "b", 11), [0, 10]);
-  assert.deepEqual(c(0, 10, 10, "b", 0), [0, 1]);
-  assert.deepEqual(c(4, 8, 10, "b", 5), [4, 5]);
-  assert.deepEqual(c(4, 8, 10, "b", 3), [4, 5]);
+  assert.deepEqual(c(0, 10, 10, "b", 0), [0, 0.5]);
+  assert.deepEqual(c(4, 8, 10, "b", 4.2), [4, 4.5]);
+  assert.deepEqual(c(4, 8, 10, "b", 6.25), [4, 6.25]);
   assert.deepEqual(c(0, 0.5, 0.5, "a", 1), [0, 0.5]); // zu kurzer Clip: nichts ändert sich
   assert.equal(h.A.vid.markTime(75), "1:15");
   assert.equal(h.A.vid.markTime(5.9), "0:05");
 });
 
-/* Sheet-Verhalten: kleines Doppel für Video und Knöpfe; die Zeitgeber liegen in einer Liste und laufen von Hand */
-function fakeSheet(dur, start = 0) {
-  const ev = {};
-  const vd = {
-    duration: dur, readyState: 1, currentTime: start, plays: 0,
-    addEventListener(n, f) { ev[n] = f; },
-    play() { this.plays++; return Promise.resolve(); },
-  };
-  const txt = { mka: { textContent: "" }, mkb: { textContent: "" } };
-  const btns = [];
-  const mk = (k, d) => { const b = { dataset: { mk: k, d: String(d) }, onclick: null }; btns.push(b); return b; };
-  mk("a", -1); mk("a", 1); mk("a", 0); mk("b", -1); mk("b", 1); mk("b", 0);
-  const reset = { onclick: null };
-  const body = {
-    querySelector(s) { return s === "#mka" ? txt.mka : s === "#mkb" ? txt.mkb : s === "#mkReset" ? reset : null; },
-    querySelectorAll() { return btns; },
-  };
-  const tap = (k, d) => btns.find(b => b.dataset.mk === k && b.dataset.d === String(d)).onclick();
-  return { vd, ev, txt, reset, body, tap };
-}
+/* Vorschlag aus dem Katalog (EXB[id].trim) */
+test("Vorschlag: ohne eigene Marke gilt trim, mit eigener Marke gilt die eigene", async () => {
+  const h = loadApp();
+  h.ctx.indexedDB = fakeIDB();
+  h.F.EXB.splitsquat.trim = [2, 6.5];
+  const v = h.A.vid;
+  assert.deepEqual({ ...(await v.markGet("splitsquat")) }, { a: 2, b: 6.5 });
+  await v.markPut("splitsquat", 3, 5);
+  assert.deepEqual({ ...(await v.markGet("splitsquat")) }, { a: 3, b: 5 });
+  await v.markDel("splitsquat"); // Zurücksetzen = Vorschlag, nicht ganzer Clip
+  assert.deepEqual({ ...(await v.markGet("splitsquat")) }, { a: 2, b: 6.5 });
+});
 
-test("Sheet: Schleife, ±1 s, Grenzen, entprellt speichern, Zurücksetzen", async () => {
+test("Vorschlag fehlt oder ist unbrauchbar: ganzer Clip (null)", async () => {
+  const h = loadApp();
+  h.ctx.indexedDB = fakeIDB();
+  const e = h.F.EXB.splitsquat;
+  const v = h.A.vid;
+  for (const t of [undefined, null, [], [3], [5, 5.2], [5, 2], [-1, 4], ["1", "4"], [1, NaN], "kaputt"]) {
+    e.trim = t;
+    assert.equal(await v.markGet("splitsquat"), null, "trim=" + JSON.stringify(t));
+  }
+});
+
+test("Vorschlag und Aufstieg: gespeicherte Marke und Clip bleiben unberührt", async () => {
+  const h = loadApp();
+  h.F.EXB.splitsquat.trim = [1, 4];
+  const clip = blob("echter clip");
+  const idb = fakeIDB({ existing: { version: 2, stores: { v: new Map([["splitsquat", clip]]), m: new Map([["splitsquat", { a: 5, b: 9 }]]) } } });
+  h.ctx.indexedDB = idb;
+  assert.deepEqual({ ...(await h.A.vid.markGet("splitsquat")) }, { a: 5, b: 9 });
+  assert.ok((await h.A.vid.get("splitsquat")) === clip);
+  assert.equal(idb.log.upgraded, false);
+});
+
+/* Sheet-Verhalten: kleine Doppel für Video, Griffe und Dokument; Zeitgeber laufen von Hand */
+function fakeNode() {
+  const cls = new Set(), ev = {};
+  return {
+    style: {}, textContent: "", onclick: null, clientWidth: 300, clientHeight: 56,
+    classList: {
+      add(c) { cls.add(c); }, remove(c) { cls.delete(c); }, contains(c) { return cls.has(c); },
+      toggle(c, on) { const w = on === undefined ? !cls.has(c) : !!on; if (w) cls.add(c); else cls.delete(c); return w; },
+    },
+    addEventListener(n, f) { (ev[n] = ev[n] || []).push(f); },
+    emit(n, e = {}) { (ev[n] || []).slice().forEach(f => f(e)); },
+    getBoundingClientRect() { return { width: 300, left: 0 }; },
+  };
+}
+function fakeSheet(h, dur) {
+  const vd = fakeNode();
+  Object.assign(vd, { duration: dur, readyState: 1, currentTime: 0, paused: true, seeking: false, plays: 0, sets: [] });
+  let t = 0;
+  Object.defineProperty(vd, "currentTime", { get() { return t; }, set(v) { t = v; vd.sets.push(v); } });
+  vd.play = function () { this.paused = false; this.plays++; this.emit("play"); return Promise.resolve(); };
+  vd.pause = function () { if (this.paused) return; this.paused = true; this.emit("pause"); };
+  const n = {};
+  ["#mka", "#mkb", "#mkReset", "#trimIn", "#trimA", "#trimB", "#trimL", "#trimR", "#trimF", "#trimPos", "#vidPlay", "#vidWrap", "#trim"].forEach(s => { n[s] = fakeNode(); });
+  const body = { querySelector: s => n[s] || null };
+  /* Dokument: Lauscher mitzählen, Ereignisse von Hand auslösen */
+  const dl = {};
+  h.ctx.document.addEventListener = (k, f) => { (dl[k] = dl[k] || new Set()).add(f); };
+  h.ctx.document.removeEventListener = (k, f) => { if (dl[k]) dl[k].delete(f); };
+  const doc = (k, e) => [...(dl[k] || [])].forEach(f => f(e));
+  const count = () => Object.values(dl).reduce((s, x) => s + x.size, 0);
+  return { vd, n, body, doc, count };
+}
+function setup(dur) {
   const h = loadApp();
   h.ctx.indexedDB = fakeIDB();
   const timers = [];
   h.ctx.setTimeout = fn => timers.push(fn);
   h.ctx.clearTimeout = () => {};
-  const v = h.A.vid;
-  const s = fakeSheet(10);
-  v.markBind(s.body, s.vd, "squat", null);
+  return { h, timers, s: fakeSheet(h, dur) };
+}
+
+test("Sheet: öffnet auf dem ganzen Clip und spielt vom Anfang; Griffe stehen an den Rändern", () => {
+  const { h, s } = setup(10);
+  h.A.vid.markBind(s.body, s.vd, "squat", null);
   assert.equal(s.vd.currentTime, 0);
   assert.equal(s.vd.plays, 1);
-  assert.equal(s.txt.mka.textContent, "0:00");
-  assert.equal(s.txt.mkb.textContent, "0:10");
-  /* Anstoßen an die Grenzen: nichts passiert, nichts wird vorgemerkt */
-  s.tap("a", -1); s.tap("b", 1);
-  assert.equal(timers.length, 0);
-  /* Anfang +1 zweimal: springt auf den Anfang, schreibt erst nach Ablauf des Zeitgebers, nur einmal */
-  s.tap("a", 1); s.tap("a", 1);
-  assert.equal(s.txt.mka.textContent, "0:02");
-  assert.equal(s.vd.currentTime, 2);
+  assert.equal(s.n["#mka"].textContent, "0:00");
+  assert.equal(s.n["#mkb"].textContent, "0:10");
+  assert.equal(s.n["#trimB"].style.left, "100%");
+  assert.ok(s.n["#trim"].classList.contains("rdy"));
+});
+
+test("Ziehen am Anfangsgriff: Bild folgt sofort, Video hält an, nach dem Loslassen läuft es ab dem Anfang", async () => {
+  const { h, timers, s } = setup(10);
+  const v = h.A.vid;
+  v.markBind(s.body, s.vd, "squat", null);
+  const a = s.n["#trimA"];
+  a.emit("pointerdown", { pointerId: 1, clientX: 0 });
+  assert.equal(s.vd.paused, true, "beim Ziehen steht das Video");
+  assert.ok(a.classList.contains("drag"));
+  s.doc("pointermove", { pointerId: 1, clientX: 90 }); // 300 px = 10 s -> +3 s
+  assert.equal(s.vd.currentTime, 3, "Bild am Anfang der Auswahl");
+  assert.equal(s.n["#mka"].textContent, "0:03");
+  s.doc("pointermove", { pointerId: 1, clientX: 91.5 });
+  assert.equal(s.vd.currentTime, 3.05, "stufenlos, nicht in Sekunden");
+  s.doc("pointermove", { pointerId: 2, clientX: 250 }); // fremder Finger zählt nicht
+  assert.equal(s.vd.currentTime, 3.05);
+  assert.equal(timers.length, 0, "während des Ziehens wird nichts geschrieben");
+  const plays = s.vd.plays;
+  s.doc("pointerup", { pointerId: 1 });
+  assert.ok(!a.classList.contains("drag"));
+  assert.equal(s.vd.currentTime, 3.05, "läuft ab dem Anfang");
+  assert.equal(s.vd.plays, plays + 1);
+  assert.equal(s.vd.paused, false);
+  assert.equal(s.count(), 0, "Zeiger-Lauscher werden wieder entfernt");
+  v.markFlush();
+  assert.deepEqual({ ...(await v.markGet("squat")) }, { a: 3.05, b: 10 });
+});
+
+test("Ziehen am Endgriff: Bild am Ende der Auswahl; Mindestabstand; am Ende halten und schwarz", () => {
+  const { h, s } = setup(10);
+  const v = h.A.vid;
+  v.markBind(s.body, s.vd, "squat", null);
+  const b = s.n["#trimB"];
+  b.emit("pointerdown", { pointerId: 1, clientX: 300 });
+  s.doc("pointermove", { pointerId: 1, clientX: 150 }); // -5 s
+  assert.equal(s.vd.currentTime, 5, "Bild am Ende der Auswahl");
+  assert.equal(s.n["#mkb"].textContent, "0:05");
+  s.doc("pointermove", { pointerId: 1, clientX: -500 }); // weit nach links: Ende bleibt 0,5 s hinter dem Anfang
+  assert.equal(s.vd.currentTime, 0.5);
+  s.doc("pointermove", { pointerId: 1, clientX: 150 });
+  s.doc("pointerup", { pointerId: 1 });
+  assert.equal(s.vd.currentTime, 0, "läuft ab dem Anfang");
+  assert.equal(s.vd.paused, false);
+  /* kurz vor dem Ende: bleibt laufen; am Ende: anhalten, nicht zurückspringen, Bild schwarz */
+  s.vd.currentTime = 4.9; s.vd.emit("timeupdate");
+  assert.equal(s.vd.paused, false);
+  assert.ok(!s.vd.classList.contains("end"));
+  s.vd.currentTime = 5.01; s.vd.emit("timeupdate");
+  assert.equal(s.vd.paused, true);
+  assert.equal(s.vd.currentTime, 5.01, "kein Zurückspringen");
+  assert.ok(s.vd.classList.contains("end"), "Bild bleibt schwarz");
+  /* erneutes Abspielen startet wieder beim Anfang, Bild wieder da */
+  const plays = s.vd.plays;
+  s.n["#vidPlay"].onclick();
+  assert.equal(s.vd.currentTime, 0);
+  assert.equal(s.vd.plays, plays + 1);
+  assert.ok(!s.vd.classList.contains("end"));
+  /* Antippen während des Laufs hält an */
+  s.n["#vidPlay"].onclick();
+  assert.equal(s.vd.paused, true);
+  assert.ok(!s.vd.classList.contains("end"));
+});
+
+test("Ziehen: bis ganz ans Ende des Clips (ended-Ereignis) hält an und bleibt schwarz", () => {
+  const { h, s } = setup(10);
+  h.A.vid.markBind(s.body, s.vd, "squat", null);
+  s.vd.currentTime = 10; s.vd.emit("ended");
+  assert.equal(s.vd.paused, true);
+  assert.ok(s.vd.classList.contains("end"));
+  assert.equal(s.vd.currentTime, 10);
+});
+
+test("Ziehen: nur die jüngste Stelle wird angesprungen, solange das Video noch sucht", () => {
+  const { h, s } = setup(10);
+  h.A.vid.markBind(s.body, s.vd, "squat", null);
+  s.n["#trimA"].emit("pointerdown", { pointerId: 1, clientX: 0 });
+  s.vd.seeking = true;
+  const n0 = s.vd.sets.length;
+  s.doc("pointermove", { pointerId: 1, clientX: 30 });
+  s.doc("pointermove", { pointerId: 1, clientX: 60 });
+  s.doc("pointermove", { pointerId: 1, clientX: 90 });
+  assert.equal(s.vd.sets.length, n0, "keine Zwischenstellen während des Suchens");
+  s.vd.seeking = false; s.vd.emit("seeked");
+  assert.equal(s.vd.currentTime, 3);
+  assert.equal(s.vd.sets.length, n0 + 1);
+});
+
+test("Ziehen: Marke wird entprellt gespeichert (einmal), ganzer Clip ohne Vorschlag löscht die Marke", async () => {
+  const { h, timers, s } = setup(10);
+  const v = h.A.vid;
+  v.markBind(s.body, s.vd, "squat", null);
+  const a = s.n["#trimA"];
+  a.emit("pointerdown", { pointerId: 1, clientX: 0 });
+  s.doc("pointermove", { pointerId: 1, clientX: 60 });
+  s.doc("pointerup", { pointerId: 1 });
+  assert.equal(timers.length, 1);
   assert.equal(await v.markGet("squat"), null);
   v.markFlush();
   assert.deepEqual({ ...(await v.markGet("squat")) }, { a: 2, b: 10 });
-  /* Ende −1: Schleife läuft zwischen 2 und 9 */
-  s.tap("b", -1);
-  assert.equal(s.txt.mkb.textContent, "0:09");
-  s.vd.currentTime = 9.1; s.ev.timeupdate();
-  assert.equal(s.vd.currentTime, 2);
-  s.vd.currentTime = 5; s.ev.timeupdate();
-  assert.equal(s.vd.currentTime, 5);
-  /* Position übernehmen als Ende */
-  s.vd.currentTime = 6.2; s.tap("b", 0);
-  assert.equal(s.txt.mkb.textContent, "0:06");
-  /* Anfang darf höchstens 1 s unter dem Ende landen */
-  for (let i = 0; i < 10; i++) s.tap("a", 1);
-  assert.equal(s.txt.mka.textContent, "0:05");
+  /* zurück auf ganz: kein Eintrag mehr */
+  a.emit("pointerdown", { pointerId: 3, clientX: 60 });
+  s.doc("pointermove", { pointerId: 3, clientX: -100 });
+  s.doc("pointerup", { pointerId: 3 });
   v.markFlush();
-  assert.deepEqual({ ...(await v.markGet("squat")) }, { a: 5, b: 6 });
-  /* Zurücksetzen: ganzer Clip, Marke weg */
-  s.reset.onclick(); v.markFlush();
-  assert.equal(s.txt.mka.textContent, "0:00");
-  assert.equal(s.txt.mkb.textContent, "0:10");
   assert.equal(await v.markGet("squat"), null);
 });
 
-test("Sheet: gespeicherte Marke wird beim Öffnen angesprungen; Ende des Clips startet die Schleife neu", () => {
-  const h = loadApp();
-  h.ctx.indexedDB = fakeIDB();
-  const s = fakeSheet(20);
-  h.A.vid.markBind(s.body, s.vd, "squat", { a: 3, b: 12 });
+test("Zurücksetzen: ohne Vorschlag ganzer Clip, mit Vorschlag der Vorschlag", async () => {
+  const { h, s } = setup(10);
+  const v = h.A.vid;
+  v.markBind(s.body, s.vd, "squat", { a: 3, b: 7 });
+  assert.equal(s.n["#mka"].textContent, "0:03");
   assert.equal(s.vd.currentTime, 3);
-  assert.equal(s.txt.mkb.textContent, "0:12");
-  s.vd.currentTime = 20; s.ev.ended();
-  assert.equal(s.vd.currentTime, 3);
-  assert.equal(s.vd.plays, 2);
+  s.n["#mkReset"].onclick();
+  assert.equal(s.n["#mka"].textContent, "0:00");
+  assert.equal(s.n["#mkb"].textContent, "0:10");
+  assert.equal(s.vd.currentTime, 0);
+  await new Promise(r => setImmediate(r));
+  assert.equal(await v.markGet("squat"), null);
+
+  const t = setup(10);
+  t.h.F.EXB.splitsquat.trim = [2, 6];
+  await t.h.A.vid.markPut("splitsquat", 4, 9);
+  t.h.A.vid.markBind(t.s.body, t.s.vd, "splitsquat", { a: 4, b: 9 });
+  t.s.n["#mkReset"].onclick();
+  assert.equal(t.s.n["#mka"].textContent, "0:02");
+  assert.equal(t.s.n["#mkb"].textContent, "0:06");
+  assert.equal(t.s.vd.currentTime, 2);
+  await new Promise(r => setImmediate(r));
+  assert.deepEqual({ ...(await t.h.A.vid.markGet("splitsquat")) }, { a: 2, b: 6 });
 });
 
-test("Sheet: Marke außerhalb der Clip-Länge fällt auf den ganzen Clip zurück", () => {
-  const h = loadApp();
-  h.ctx.indexedDB = fakeIDB();
-  const s = fakeSheet(5);
-  h.A.vid.markBind(s.body, s.vd, "squat", { a: 8, b: 30 });
-  assert.equal(s.vd.currentTime, 0);
-  assert.equal(s.txt.mkb.textContent, "0:05");
+test("Vorschlag und ganzer Clip: bewusst auf ganz gestellte Marke bleibt erhalten", async () => {
+  const { h, s } = setup(10);
+  h.F.EXB.splitsquat.trim = [2, 6];
+  const v = h.A.vid;
+  v.markBind(s.body, s.vd, "splitsquat", { a: 2, b: 6 });
+  s.n["#trimA"].emit("pointerdown", { pointerId: 1, clientX: 60 });
+  s.doc("pointermove", { pointerId: 1, clientX: -100 });
+  s.doc("pointerup", { pointerId: 1 });
+  s.n["#trimB"].emit("pointerdown", { pointerId: 2, clientX: 180 });
+  s.doc("pointermove", { pointerId: 2, clientX: 900 });
+  s.doc("pointerup", { pointerId: 2 });
+  v.markFlush();
+  assert.deepEqual({ ...(await v.markGet("splitsquat")) }, { a: 0, b: 10 });
+});
+
+test("Sheet: gespeicherte Marke wird beim Öffnen angesprungen; Marke außerhalb der Länge = ganzer Clip", () => {
+  const { h, s } = setup(20);
+  h.A.vid.markBind(s.body, s.vd, "squat", { a: 3, b: 12 });
+  assert.equal(s.vd.currentTime, 3);
+  assert.equal(s.n["#mkb"].textContent, "0:12");
+  const u = setup(5);
+  u.h.A.vid.markBind(u.s.body, u.s.vd, "squat", { a: 8, b: 30 });
+  assert.equal(u.s.vd.currentTime, 0);
+  assert.equal(u.s.n["#mkb"].textContent, "0:05");
+});
+
+test("Sheet: Länge erst nach den Metadaten bekannt; vorher tut kein Griff etwas", () => {
+  const { h, s } = setup(10);
+  s.vd.readyState = 0; s.vd.duration = NaN;
+  h.A.vid.markBind(s.body, s.vd, "squat", null);
+  s.n["#trimA"].emit("pointerdown", { pointerId: 1, clientX: 0 });
+  assert.equal(s.count(), 0);
+  s.vd.duration = 10; s.vd.emit("loadedmetadata");
+  assert.equal(s.vd.plays, 1);
+  s.n["#trimA"].emit("pointerdown", { pointerId: 1, clientX: 0 });
+  assert.equal(s.count(), 3);
+});
+
+test("Aufräumen: Zeiger-Lauscher weg, Video angehalten", () => {
+  const { h, s } = setup(10);
+  const off = h.A.vid.markBind(s.body, s.vd, "squat", null);
+  s.n["#trimB"].emit("pointerdown", { pointerId: 1, clientX: 300 });
+  assert.equal(s.count(), 3);
+  off();
+  assert.equal(s.count(), 0);
+  assert.equal(s.vd.paused, true);
 });

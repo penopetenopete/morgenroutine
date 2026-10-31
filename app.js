@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="64"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="65"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -337,22 +337,28 @@ function vidReq(mode,fn,store="v"){
     t.oncomplete=()=>res(rq&&mode==="readonly"?rq.result:true);t.onerror=t.onabort=()=>res(null)}catch(_){res(null)}}):null).catch(()=>null);
 }
 const vidGet=id=>vidReq("readonly",st=>st.get(id)).then(b=>b||null);
-const vidPut=(id,blob)=>vidReq("readwrite",st=>st.put(blob,id)).then(r=>r===true);
-const vidDel=id=>vidReq("readwrite",st=>st.delete(id)).then(r=>markDel(id).then(()=>r===true)); // Marke geht mit dem Clip
-/* Abspielbereich: {a,b} in Sekunden, null = ganzer Clip */
-const markGet=id=>vidReq("readonly",st=>st.get(id),"m").then(m=>m&&typeof m.a==="number"&&typeof m.b==="number"?m:null);
+const vidPut=(id,blob)=>{STRIPS.delete(id);return vidReq("readwrite",st=>st.put(blob,id)).then(r=>r===true)};
+const vidDel=id=>{STRIPS.delete(id);return vidReq("readwrite",st=>st.delete(id)).then(r=>markDel(id).then(()=>r===true))}; // Marke geht mit dem Clip
+/* Abspielbereich: {a,b} in Sekunden. Hat der Nutzer nichts eingestellt, gilt der Vorschlag aus dem Katalog (trimOf), sonst null = ganzer Clip */
+const markGet=id=>vidReq("readonly",st=>st.get(id),"m").then(m=>m&&typeof m.a==="number"&&typeof m.b==="number"?m:trimOf(id));
 const markPut=(id,a,b)=>vidReq("readwrite",st=>st.put({a,b},id),"m").then(r=>r===true);
 const markDel=id=>vidReq("readwrite",st=>st.delete(id),"m").then(r=>r===true);
-/* Marke neu setzen: a >= 0, b <= Länge, a mindestens 1 s vor b. Anstoßen an eine Grenze ändert nichts. */
+/* Marke neu setzen (stufenlos): a >= 0, b <= Länge, Mindestabstand MINGAP. Anstoßen an eine Grenze ändert nichts. */
+const MINGAP=0.5;
 function markClamp(a,b,dur,which,v){
   if(!(dur>=1))return[a,b];
-  if(which==="a"){const n=Math.max(0,Math.min(v,b-1));return[n,b]}
-  const n=Math.min(dur,Math.max(v,a+1));return[a,n];
+  if(which==="a"){const n=Math.max(0,Math.min(v,b-MINGAP));return[n,b]}
+  const n=Math.min(dur,Math.max(v,a+MINGAP));return[a,n];
 }
+/* Vorschlag aus dem Katalog (EXB[id].trim = [a,b] in Sekunden); fehlt er oder ist er unbrauchbar, gilt der ganze Clip */
+function trimOf(id){const e=EXB[id],t=e&&e.trim;
+  return Array.isArray(t)&&typeof t[0]==="number"&&typeof t[1]==="number"&&isFinite(t[0])&&isFinite(t[1])&&t[0]>=0&&t[1]>=t[0]+MINGAP?{a:t[0],b:t[1]}:null}
+/* Marke auf die echte Länge anpassen; unbrauchbar (null, zu kurz, hinter dem Ende) = ganzer Clip */
+function markFit(mk,dur){if(!mk||mk.a<0)return[0,dur];const b=Math.min(mk.b,dur);return b<mk.a+MINGAP?[0,dur]:[mk.a,b]}
 const markTime=t=>{t=Math.max(0,Math.floor(t||0));return Math.floor(t/60)+":"+String(t%60).padStart(2,"0")};
 let markPend=null; // wartender Schreibvorgang {id,a,b,dur}, wird entprellt oder beim Schließen sofort geschrieben
 function markFlush(){if(!markPend)return;const p=markPend;markPend=null;clearTimeout(p.t);
-  (p.a<=0&&p.b>=p.dur?markDel(p.id):markPut(p.id,p.a,p.b)).then(ok=>{if(!ok)toast("Speichern ging nicht")})}
+  (p.a<=0&&p.b>=p.dur&&!trimOf(p.id)?markDel(p.id):markPut(p.id,p.a,p.b)).then(ok=>{if(!ok)toast("Speichern ging nicht")})}
 const markQueue=(id,a,b,dur)=>{if(markPend)clearTimeout(markPend.t);markPend={id,a,b,dur,t:setTimeout(markFlush,300)}};
 const markCancel=()=>{if(markPend){clearTimeout(markPend.t);markPend=null}};
 const vidHas=()=>vidReq("readonly",st=>st.getAllKeys()).then(k=>new Set(Array.isArray(k)?k:[]));
@@ -361,46 +367,111 @@ function vidSync(){return vidHas().then(set=>{VIDS=set;cueEx="";try{document.que
 function vidFree(){if(vidURL){try{URL.revokeObjectURL(vidURL)}catch(_){}vidURL=null}}
 const ytUrl=e=>e&&e.yt?`https://www.youtube.com/watch?v=${e.yt}&t=${e.t||0}s`:"";
 const ICON_PLAY='<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor"/></svg>';
-const ICON_MARK='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>';
+const ICON_PLAYBIG='<svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="rgb(0 0 0 / .45)"/><path d="M10 8l6.5 4-6.5 4z" fill="currentColor"/></svg>';
 const ICON_RESET='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9M4 4v4h4"/></svg>';
-const mkRow=(k,lb,t)=>`<div class="mkrow"><span class="mklb">${lb}</span><button type="button" class="btn ghost mkb" data-mk="${k}" data-d="-1" aria-label="${lb} 1 Sekunde früher">&minus;1</button><b class="mkt" id="mk${k}">${t}</b><button type="button" class="btn ghost mkb" data-mk="${k}" data-d="1" aria-label="${lb} 1 Sekunde später">+1</button><button type="button" class="btn ghost mkb" data-mk="${k}" data-d="0" aria-label="${lb}: aktuelle Position übernehmen">${ICON_MARK}</button></div>`;
 const vidBtn=ex=>`<button type="button" class="ytl${VIDS.has(ex)?" has":""}" data-vid="${esc(ex)}" aria-label="Video">${ICON_PLAY}</button>`;
 const vidTag=it=>it&&EXB[it.ex]?" "+vidBtn(it.ex):"";
+/* Bildstreifen je Übung: 12 Einzelbilder des Clips nebeneinander, einmal erzeugt und im Speicher gehalten (fällt mit dem Clip) */
+const STRIPS=new Map(),VSTRIP=12;
+let vidDispose=null; // räumt das offene Video-Sheet ab (Zeichner, Zeiger-Lauscher); wird beim Schließen und beim Neuaufbau gerufen
+function trimHTML(a,b){
+  return `<div class="trim" id="trim"><div class="trimin" id="trimIn"><canvas id="trimCv"></canvas><i class="trimdim" id="trimL"></i><i class="trimdim r" id="trimR"></i><i class="trimfr" id="trimF"></i><i class="trimpos" id="trimPos"></i><span class="trimh" id="trimA" role="slider" aria-label="Anfang"></span><span class="trimh r" id="trimB" role="slider" aria-label="Ende"></span></div></div><div class="trimt"><b class="mkt" id="mka">${a}</b><b class="mkt" id="mkb">${b}</b></div>`;
+}
 function openVideoSheet(exId){
-  const e=EXB[exId];if(!e)return;markFlush();vidFree();
+  const e=EXB[exId];if(!e)return;markFlush();vidFree();if(vidDispose){vidDispose();vidDispose=null}
   Promise.all([vidGet(exId),markGet(exId)]).then(([blob,mk])=>{
     vidFree();
     const yt=ytUrl(e),ytl=yt?`<a class="ytsrc" href="${yt}" target="_blank" rel="noopener">YouTube</a>`:"";
     let html;
     if(blob){vidURL=URL.createObjectURL(blob);
-      html=`<video class="vidp" controls playsinline preload="metadata" src="${vidURL}"></video>${mkRow("a","Anfang",markTime(mk?mk.a:0))}${mkRow("b","Ende",mk?markTime(mk.b):"–:––")}<div class="vidrow"><button class="btn ghost danger" id="vidDel">Entfernen</button><button type="button" class="btn ghost mkb" id="mkReset" aria-label="Ganzer Clip">${ICON_RESET}</button>${ytl}</div>`}
+      html=`<div class="vidwrap" id="vidWrap"><video class="vidp" playsinline preload="auto" src="${vidURL}"></video><button type="button" class="vidtap" id="vidPlay" aria-label="Abspielen">${ICON_PLAYBIG}</button></div>${trimHTML(markTime(mk?mk.a:0),mk?markTime(mk.b):"–:––")}<div class="vidrow"><button class="btn ghost danger" id="vidDel">Entfernen</button><button type="button" class="btn ghost mkb" id="mkReset" aria-label="Zurücksetzen">${ICON_RESET}</button>${ytl}</div>`}
     else html=`<input type="file" accept="video/*" id="vidFile" hidden><button class="btn primary big" id="vidPick" aria-label="Video wählen">${ICON.plus} Video wählen</button>${ytl?`<div class="vidrow">${ytl}</div>`:""}`;
-    const body=openSheet("",e.name,html,{onClose:()=>{markFlush();vidFree()}});
+    const body=openSheet("",e.name,html,{onClose:()=>{markFlush();vidFree();if(vidDispose){vidDispose();vidDispose=null}}});
     const del=body.querySelector("#vidDel"),pick=body.querySelector("#vidPick"),file=body.querySelector("#vidFile");
     if(del)del.onclick=()=>{markCancel();vidDel(exId).then(ok=>{if(!ok)toast("Entfernen ging nicht");return vidSync()}).then(()=>openVideoSheet(exId))};
     if(pick&&file){pick.onclick=()=>file.click();
       file.onchange=()=>{const f=file.files&&file.files[0];if(!f)return;
         vidPut(exId,f).then(ok=>{if(!ok)toast("Speichern ging nicht");return vidSync()}).then(()=>openVideoSheet(exId))}}
-    const vd=body.querySelector("video");if(vd)markBind(body,vd,exId,mk);
+    const vd=body.querySelector("video");if(vd)vidDispose=markBind(body,vd,exId,mk,vidURL);
   });
 }
-/* Abspielbereich im Sheet: Schleife zwischen a und b, −1/+1/Position übernehmen, Zahl und Verhalten ändern sich, das Sheet bleibt stehen */
-function markBind(body,vd,id,mk){
-  let a=mk?mk.a:0,b=mk?mk.b:0,dur=0; // dur 0 = Länge noch unbekannt, dann gilt der ganze Clip
-  const mkShow=()=>{const ta=body.querySelector("#mka"),tb=body.querySelector("#mkb");if(ta)ta.textContent=markTime(a);if(tb)tb.textContent=markTime(b)};
+/* Bildstreifen zeichnen: ein zweites, stummes Video springt zu 12 Stellen und kopiert je ein Bild (zugeschnitten auf den Platz) in die Leinwand.
+   Läuft im Hintergrund; bis es fertig ist, steht die ruhige Füllfläche der Leiste. Liefert true, wenn alle Bilder da sind. */
+function vidStrip(url,dur,cv,dead){
+  return new Promise(res=>{try{
+    const v=document.createElement("video"),c=cv.getContext("2d");let i=0,fin=false;
+    const done=ok=>{if(fin)return;fin=true;try{v.removeAttribute("src");v.load()}catch(_){}res(ok&&!dead())};
+    const next=()=>{if(dead())return done(false);if(i>=VSTRIP)return done(true);try{v.currentTime=Math.min(Math.max(0,dur-.05),(i+.5)/VSTRIP*dur)}catch(_){done(false)}};
+    v.muted=true;v.playsInline=true;v.preload="auto";
+    v.addEventListener("loadeddata",next);
+    v.addEventListener("error",()=>done(false));
+    v.addEventListener("seeked",()=>{
+      try{const vw=v.videoWidth,vh=v.videoHeight,sw=cv.width/VSTRIP,sh=cv.height;
+        if(vw&&vh){const s=Math.max(sw/vw,sh/vh),cw=sw/s,ch=sh/s;c.drawImage(v,(vw-cw)/2,(vh-ch)/2,cw,ch,i*sw,0,sw,sh)}}catch(_){}
+      i++;next()});
+    v.src=url;
+  }catch(_){res(false)}});
+}
+/* Abspielbereich im Sheet: zwei stufenlose Griffe auf dem Bildstreifen. Beim Ziehen folgt das Videobild (Anfangsgriff: Bild am Anfang, Endgriff: Bild am Ende);
+   nach dem Loslassen läuft der Ausschnitt vom Anfang bis zum Ende und hält dort an (Bild schwarz), erneutes Abspielen startet wieder am Anfang.
+   Marken werden entprellt gespeichert; das Sheet wird dabei nie neu gebaut. Liefert eine Funktion zum Aufräumen. */
+function markBind(body,vd,id,mk,url){
+  const q=s=>body.querySelector(s);
+  let a=0,b=0,dur=0,dead=false,fin=false,want=null,drag=null,spin=false; // dur 0 = Länge noch unbekannt
+  const wrap=q("#vidWrap"),tIn=q("#trimIn"),hA=q("#trimA"),hB=q("#trimB"),dL=q("#trimL"),dR=q("#trimR"),fr=q("#trimF"),pos=q("#trimPos"),tap=q("#vidPlay"),tr=q("#trim");
+  const pc=t=>dur?100*Math.max(0,Math.min(dur,t))/dur+"%":"0%";
+  const paint=()=>{const ta=q("#mka"),tb=q("#mkb");if(ta)ta.textContent=markTime(a);if(tb)tb.textContent=markTime(b);
+    if(hA)hA.style.left=`calc(${pc(a)} - var(--hw))`;if(hB)hB.style.left=pc(b);
+    if(dL)dL.style.width=pc(a);if(dR)dR.style.left=pc(b);
+    if(fr){fr.style.left=pc(a);fr.style.width=dur?100*(b-a)/dur+"%":"0%"}};
+  const paintPos=()=>{if(pos)pos.style.left=pc(vd.currentTime)};
+  const state=()=>{if(wrap)wrap.classList.toggle("play",!vd.paused&&!fin)};
+  const blank=on=>{fin=on;vd.classList.toggle("end",on)};
   const go=t=>{try{vd.currentTime=t}catch(_){}};
+  const play=()=>{try{const p=vd.play();if(p&&p.catch)p.catch(()=>{})}catch(_){}};
+  const flushSeek=()=>{if(want==null)return;const t=want;want=null;go(t);paintPos()};
+  const seek=t=>{want=t;if(!vd.seeking)flushSeek()}; // nur die jüngste Stelle anspringen, nicht jede Zwischenstelle
+  const start=()=>{want=null;blank(false);go(a);play()};
+  const finish=()=>{try{vd.pause()}catch(_){}blank(true);state();paintPos()};
+  const step=()=>{if(!dur)return;if(!drag&&!vd.paused&&!fin&&vd.currentTime>=b-0.02)finish();paintPos()};
+  const spinUp=()=>{if(spin||dead)return;spin=true;requestAnimationFrame(function f(){if(dead||vd.paused){spin=false;return}step();requestAnimationFrame(f)})};
+  const toggle=()=>{if(!dur)return;
+    if(!vd.paused&&!fin){try{vd.pause()}catch(_){}return}
+    if(fin||vd.currentTime<a||vd.currentTime>=b-0.02)start();else play()};
   const meta=()=>{if(dur)return;const d=vd.duration;if(!(d>=1)||!isFinite(d))return;
-    dur=d;if(!mk||mk.a<0||mk.b<=mk.a+0.5||mk.a>dur-1){a=0;b=dur}else{a=mk.a;b=Math.min(mk.b,dur);if(b<a+1){a=0;b=dur}}
-    mkShow();go(a);try{const p=vd.play();if(p&&p.catch)p.catch(()=>{})}catch(_){}};
-  vd.addEventListener("loadedmetadata",meta);if(vd.readyState>=1)meta();
-  vd.addEventListener("timeupdate",()=>{if(dur&&vd.currentTime>=b)go(a)});
-  vd.addEventListener("ended",()=>{if(dur){go(a);try{const p=vd.play();if(p&&p.catch)p.catch(()=>{})}catch(_){}}});
-  const set=(na,nb,seek)=>{if(na===a&&nb===b)return;a=na;b=nb;mkShow();if(seek!=null)go(seek);markQueue(id,a,b,dur)};
-  body.querySelectorAll("button[data-mk]").forEach(btn=>btn.onclick=()=>{
-    if(!dur)return;const k=btn.dataset.mk,d=+btn.dataset.d;
-    const v=d===0?Math.round(vd.currentTime):(k==="a"?a:b)+d,[na,nb]=markClamp(a,b,dur,k,v);
-    set(na,nb,d===0?null:k==="a"?na:Math.max(na,nb-1.5))});
-  const rs=body.querySelector("#mkReset");if(rs)rs.onclick=()=>{if(!dur)return;set(0,dur,0)};
+    dur=d;[a,b]=markFit(mk,dur);if(tr)tr.classList.add("rdy");paint();paintPos();stripUp();start()};
+  const stripUp=()=>{
+    const cv=q("#trimCv");if(!cv||!url)return;
+    const have=STRIPS.get(id);if(have&&cv.replaceWith){cv.replaceWith(have);return}
+    const w=(tIn&&tIn.clientWidth)||280,h=(tIn&&tIn.clientHeight)||56,dpr=Math.min(2,window.devicePixelRatio||1),sw=Math.max(8,Math.round(w*dpr/VSTRIP));
+    cv.width=sw*VSTRIP;cv.height=Math.round(h*dpr);
+    vidStrip(url,dur,cv,()=>dead).then(ok=>{if(ok)STRIPS.set(id,cv)});
+  };
+  vd.addEventListener("loadedmetadata",meta);
+  vd.addEventListener("play",()=>{state();spinUp()});
+  vd.addEventListener("pause",state);
+  vd.addEventListener("seeked",()=>{if(want!=null)flushSeek();paintPos()});
+  vd.addEventListener("timeupdate",step);
+  vd.addEventListener("ended",()=>{if(dur)finish()});
+  if(tap)tap.onclick=toggle;
+  if(tr)tr.addEventListener("touchstart",e=>e.stopPropagation(),{passive:true}); // Griff am Rand packen soll nicht das Zurückwischen auslösen
+  /* Ziehen: Zeiger auf dem Dokument, damit der Finger den Griff verlassen darf */
+  const move=e=>{if(!drag||e.pointerId!==drag.id)return;
+    const v=Math.round((drag.v+(e.clientX-drag.x)/drag.w*dur)*100)/100,[na,nb]=markClamp(a,b,dur,drag.k,v);
+    a=na;b=nb;paint();seek(drag.k==="a"?a:Math.min(b,dur-.05))};
+  const up=e=>{if(!drag||e.pointerId!==drag.id)return;
+    document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",up);
+    drag.h.classList.remove("drag");drag=null;markQueue(id,a,b,dur);start()};
+  const down=(k,h)=>e=>{if(!dur||drag)return;if(e.preventDefault)e.preventDefault();
+    try{vd.pause()}catch(_){}blank(false);state();
+    drag={k,h,id:e.pointerId,x:e.clientX,v:k==="a"?a:b,w:(tIn&&tIn.getBoundingClientRect().width)||1};
+    h.classList.add("drag");seek(k==="a"?a:Math.min(b,dur-.05));
+    document.addEventListener("pointermove",move);document.addEventListener("pointerup",up);document.addEventListener("pointercancel",up)};
+  if(hA)hA.addEventListener("pointerdown",down("a",hA));
+  if(hB)hB.addEventListener("pointerdown",down("b",hB));
+  const rs=q("#mkReset");if(rs)rs.onclick=()=>{if(!dur)return;markCancel();markDel(id);[a,b]=markFit(trimOf(id),dur);paint();start()};
+  if(vd.readyState>=1)meta();
+  return()=>{dead=true;if(drag){document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",up)}try{vd.pause()}catch(_){}};
 }
 /* Ein Fang-Handler für alle Symbole (Listen und Player): Antippen öffnet das Sheet, die Zeile dahinter bekommt nichts mit */
 document.addEventListener("click",ev=>{const b=ev.target&&ev.target.closest&&ev.target.closest("button[data-vid]");if(!b)return;ev.stopPropagation();ev.preventDefault();openVideoSheet(b.dataset.vid)},true);
