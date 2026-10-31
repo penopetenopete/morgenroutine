@@ -394,6 +394,14 @@ function balance(o){
   const A=ext(base,{dir:{spine:D(.02,1,.03)}}),B=ext(base,{dir:{spine:D(-.02,1,.05),chest:D(-.01,1,.03)}});
   return hold(A,B);
 }
+/* Video-Übungen: keine eigene 3D-Pose – ruhige Stehfigur als Platzhalter,
+   damit Player, Vorschaubild und Timeline unverändert weiterlaufen.
+   Das Ansehen läuft über die Felder yt (YouTube-Kennung) und t (Startsekunde). */
+function videoStand(o){
+  const base={anchor:{b:"footL",x:.09,z:0},hands:handsOnHips,pole:hipPole,dir:{...STAND}};
+  const A=ext(base,{dir:{spine:D(.01,1,.02)}}),B=ext(base,{dir:{spine:D(-.01,1,.04),chest:D(0,1,.03)}});
+  return hold(A,B,"Video ansehen");
+}
 const INC=Math.tan(10*Math.PI/180), BELT_H=.2;
 const treadmill=group("treadmill");const tmBelt=piece(treadmill,BOX,OUT_GEAR),tmRailL=piece(treadmill,BOX,OUT_GEAR),tmRailR=piece(treadmill,BOX,OUT_GEAR),tmPost=piece(treadmill,BOX,OUT_GEAR),tmConsole=piece(treadmill,BOX,OUT_GEAR),tmFoot=piece(treadmill,BOX,OUT_GEAR);
 function treadmillUpdate(){
@@ -671,7 +679,7 @@ const STEPS={
 const kgText=(w,kg)=>{const n=String(kg).replace(".",",");if(w==="kb2")return kg?"2 × "+n+" kg":"ohne";if(w==="cable")return n+" kg";if(w==="plate")return kg?n+" kg":"ohne";if(w==="kb")return kg?n+" kg":"ohne";if(w==="db")return kg?"2 × "+n+" kg":"ohne";return n+" kg"};
 
 /* ---------- Katalog ---------- */
-const G1="Kern · Low Back Ability",G2="Mit Gewicht",G3="Am Boden",G4="Mobilität",K1="Kern · Knees Over Toes",K2="Basis",K3="Aufwärmen",H1="90/90 & Morgenroutine",H2="Hüftbeuger-Kraft",H3="Dehnen & Mobilität",B1="Seitlich (Flanke)",B2="Vorne",M1="Morgenroutine";
+const G1="Kern · Low Back Ability",G2="Mit Gewicht",G3="Am Boden",G4="Mobilität",K1="Kern · Knees Over Toes",K2="Basis",K3="Aufwärmen",H1="90/90 & Morgenroutine",H2="Hüftbeuger-Kraft",H3="Dehnen & Mobilität",B1="Seitlich (Flanke)",B2="Vorne",M1="Morgenroutine",V1="Video · Squat University";
 const MR_OUT=["Stufe 1 · Fuß hoch","Stufe 2 · Fuß + Knie hoch","Stufe 3 · Bein gestreckt hoch"];
 const MR_IN=["Stufe 1 · vorderen Fuß heben","Stufe 2 · Fuß + Knie heben","Stufe 3 · hinlegen, Bein gestreckt heben"];
 const EX=[
@@ -865,7 +873,39 @@ const EX=[
   def:{mode:"hold",secs:30,sets:1},opts:o=>[],
   cam:{y:.65,d:4,yaw:-1.4,p:.15},build:o=>[["Wade dehnen",1.6,WS0,WS0],["leicht vorbeugen, Rücken flach",2,WS0,WS1],["halten",2.4,WS1,WS1],["aufrichten",1.6,WS1,WS0]],
   clip:s=>({pre:[s[0],s[1]],loop:[s[2]]}),props:o=>({wallM:wallAt(wallAtToe)}),
-  tips:o=>["Fußballen an die Wand, Ferse am Boden","Erst nur Wade, dann mit flachem Rücken leicht vorbeugen","Nur 70–80 % Dehnung","Kribbeln Richtung Rücken: aufrichten, nur Wade dehnen"]}
+  tips:o=>["Fußballen an die Wand, Ferse am Boden","Erst nur Wade, dann mit flachem Rücken leicht vorbeugen","Nur 70–80 % Dehnung","Kribbeln Richtung Rücken: aufrichten, nur Wade dehnen"]},
+ {id:"sglbridgeband",muscle:"knie",group:V1,name:"Einbeinige Brücke mit Band",de:"Glute Bridge einbeinig, Band um die Knie",gear:["Band","Matte"],src:"Squat University",weight:"none",perSide:true,yt:"DJ8TzflTuQc",t:48,
+  def:{mode:"hold",secs:30,sets:3,reps:10,kg:0},opts:o=>[["mode","Ausführung",[["hold","Halten"],["reps","Wiederholungen"]]]],
+  cam:{y:.5,d:3.8,yaw:1.2,p:.14},build:videoStand,
+  tips:o=>["Band um beide Knie, Hüfte leicht gegen den Bandzug nach außen öffnen",
+    "Hände seitlich ablegen, nur zum Ausbalancieren",
+    "Standfuß kräftig in den Boden drücken",
+    "Oben das Gesäß bewusst zusammendrücken und halten",
+    "Das Band zieht das Knie nach innen – dagegenhalten weckt den Gluteus medius"]},
+ {id:"dnsstar",muscle:"knie",group:V1,name:"DNS-Stern",de:"Seitstütz mit angehobenem Bein, Hüfte hinge",gear:["Matte"],src:"Squat University",weight:"none",perSide:true,yt:"DJ8TzflTuQc",t:156,
+  def:{mode:"reps",reps:8,sets:3,secs:30,kg:0},opts:o=>[],
+  cam:{y:.4,d:3.6,yaw:1.3,p:.18},build:videoStand,
+  tips:o=>["Auf dem Boden starten, Knie vorne angewinkelt",
+    "Hüfte nach oben und vorne in den Seitstütz schieben",
+    "Oberes Bein anheben, dann aus der Hüfte runter und wieder hoch",
+    "5–10 Wiederholungen pro Seite – das untere Gesäß arbeitet",
+    "Die Hüfte nicht auf den Boden fallen lassen – sie bleibt oben"]},
+ {id:"cossackband",muscle:"knie",group:V1,name:"Cossack Squat mit Band",de:"Seitliche Kniebeuge, Band quer zum Körper",gear:["Band"],src:"Squat University",weight:"none",perSide:true,yt:"DJ8TzflTuQc",t:332,
+  def:{mode:"reps",reps:8,sets:3,secs:30,kg:0},opts:o=>[],
+  cam:{y:.6,d:4.2,yaw:1.1,p:.12},build:videoStand,
+  tips:o=>["Band um das Knie, Zug quer über den Körper",
+    "Sehr breiter Stand, Füße zeigen eher nach vorne",
+    "Hüfte nach hinten, Brust nach vorne – zur Seite absinken",
+    "Von vorne gesehen wie eine Kniebeuge, ein Bein nur seitlich abgestellt",
+    "So tief, wie es schmerzfrei geht – das Band führt nur"]},
+ {id:"touchdownsq",muscle:"knie",group:V1,name:"Touchdown Squat",de:"Einbeinige Kniebeuge von der Box, Ferse tippt auf",gear:["Box oder Scheibe 5–10 cm"],src:"Squat University",weight:"none",perSide:true,yt:"DJ8TzflTuQc",t:483,
+  def:{mode:"reps",reps:10,sets:3,secs:30,kg:0},opts:o=>[],
+  cam:{y:.7,d:4.2,yaw:1.15,p:.1},build:videoStand,
+  tips:o=>["Auf eine Box oder Scheibe von 5–10 cm stellen",
+    "Zuerst Hüfte nach hinten und Brust nach vorne – wie ein Kreuzheben",
+    "Dann beugen, bis die Ferse des freien Beins den Boden berührt",
+    "Knie bleibt über den Zehen – es darf nicht nach innen kippen",
+    "Steigerung: höhere Box, dann 3 s unten halten"]}
 ];
 const SETS_DEF={backext:2,seatedgm:2,bridge:3,slrdl:3,rdl:3,goodmorning:3,swing:3,revhyper:3,jefferson:2,superman:2,birddog:2,elephant:1,catcow:1,atgsplit:3,stepdown:2,poliquin:2,tibialis:2,calf:2,balance:1,walkback:1};
 EX.forEach(e=>{if(e.def.sets==null)e.def.sets=SETS_DEF[e.id]||1});

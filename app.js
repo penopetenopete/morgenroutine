@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="60"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="61"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -319,11 +319,15 @@ const inMix=(rs,i)=>rs.some(([a,b])=>i>=a&&i<=b);
 function linkCls(items,i){const on=k=>items[k]&&items[k].link&&items[k].status!=="removed";return (on(i)||on(i-1))?" lk":""}
 function bindLinks(list,fn){list.querySelectorAll("[data-link]").forEach(b=>b.onclick=e=>{e.stopPropagation();fn(+b.dataset.link)});
   list.querySelectorAll("[data-mixlink]").forEach(b=>b.onclick=e=>{e.stopPropagation();toast("Gemischt – Reihenfolge in der Timeline ändern")})}
+/* Video zum Nachschlagen: Übungen mit yt/t im Katalog öffnen das Video an der Stelle. */
+const ytUrl=e=>e&&e.yt?`https://www.youtube.com/watch?v=${e.yt}&t=${e.t||0}s`:"";
+const ICON_PLAY='<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor"/></svg>';
+function ytTag(it){const u=ytUrl(EXB[it&&it.ex]);return u?` <a class="ytl" href="${u}" target="_blank" rel="noopener" aria-label="Video ansehen" onclick="event.stopPropagation()">${ICON_PLAY}</a>`:""}
 function rowHTML(it,i,{lock,tags="",cls="",extra="",action="",link=null,mix=false}){
   const ch=itemChanged(it);
   return `<div class="row ${cls}" data-i="${i}"><button class="hdl${lock?" lock":""}" aria-label="Verschieben"${lock?' tabindex="-1"':""}>${ICON.grip}</button>
   <img alt="" src="${thumbOf(it)}" width="44" height="44">
-  <div class="mid" role="button" tabindex="0" data-tap="${i}"><span class="nm">${esc(itemName(it))}${tags}</span><span class="val${ch?" changed":""}">${esc(itemText(it))}</span>${ch?`<span class="def">Standard: ${esc(itemStdText(it))}</span>`:""}${extra}</div>${action?`<div class="acts">${action}</div>`:""}${mix?`<button class="lnk mix" data-mixlink="${i}" aria-label="Gemischt (in der Timeline verschoben)">${ICON_LINK}</button>`:link!=null?`<button class="lnk${link?" on":""}" data-link="${i}" aria-pressed="${!!link}" aria-label="${link?"Verknüpfung lösen":"Mit nächster Übung verknüpfen (Supersatz)"}">${ICON_LINK}</button>`:""}</div>`;
+  <div class="mid" role="button" tabindex="0" data-tap="${i}"><span class="nm">${esc(itemName(it))}${tags}${ytTag(it)}</span><span class="val${ch?" changed":""}">${esc(itemText(it))}</span>${ch?`<span class="def">Standard: ${esc(itemStdText(it))}</span>`:""}${extra}</div>${action?`<div class="acts">${action}</div>`:""}${mix?`<button class="lnk mix" data-mixlink="${i}" aria-label="Gemischt (in der Timeline verschoben)">${ICON_LINK}</button>`:link!=null?`<button class="lnk${link?" on":""}" data-link="${i}" aria-pressed="${!!link}" aria-label="${link?"Verknüpfung lösen":"Mit nächster Übung verknüpfen (Supersatz)"}">${ICON_LINK}</button>`:""}</div>`;
 }
 function bindTaps(list,fn){list.querySelectorAll("[data-tap]").forEach(m=>{m.onclick=()=>fn(+m.dataset.tap);m.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fn(+m.dataset.tap)}}})}
 
@@ -1531,7 +1535,7 @@ function stepUI(){stillK=null;
   $("bar").style.width=(100*idx/steps.length)+"%";
   const tx=esc(!it.pair&&isMixed(it)?valText(EXB[ws.ex],Object.assign({},ws.o,{sets:1}))+` · Satz ${ws.set}`:itemText(it));
   $("target").innerHTML=(ws.mode==="reps"&&s.type==="work"?"Ziel: ":"")+`<b>${tx}</b> ✎`;
-  if(cueEx!==ws.ex+"|"+JSON.stringify(ws.o)){cueEx=ws.ex+"|"+JSON.stringify(ws.o);$("cue").innerHTML=e.tips(ws.o).filter(x=>!x.startsWith("In der App")).map(x=>`<li>${esc(x)}</li>`).join("")}
+  if(cueEx!==ws.ex+"|"+JSON.stringify(ws.o)){cueEx=ws.ex+"|"+JSON.stringify(ws.o);$("cue").innerHTML=(ytUrl(e)?`<li><a class="ytl" href="${ytUrl(e)}" target="_blank" rel="noopener">${ICON_PLAY} Video ansehen</a></li>`:"")+e.tips(ws.o).filter(x=>!x.startsWith("In der App")).map(x=>`<li>${esc(x)}</li>`).join("")}
   $("restCtrl").hidden=s.type==="trans"&&s.kind==="next";
   $("plus10").hidden=!(s.type==="trans"&&s.dur!=null);
   $("pzEdit").hidden=!(s.type==="trans"&&s.dur!=null&&s.pk);

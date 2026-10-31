@@ -866,3 +866,8 @@ html[data-theme="hell"] .tlsw[aria-checked="true"] .tlswk::after{background:#fff
 .spotseg .spb{position:relative;z-index:1;background:none!important;border-radius:999px;transition:color .2s}
 .spot.busy .spotseg::before{animation:spPulse 1s ease-in-out infinite}
 @keyframes spPulse{50%{opacity:.6}}
+
+/* Video zum Nachschlagen (Übungen mit yt/t im Katalog) */
+.ytl{color:var(--accent);display:inline-flex;align-items:center;gap:.35em;vertical-align:-3px;text-decoration:none}
+.nm .ytl{margin-left:.15em}
+#cue .ytl{font:inherit}
