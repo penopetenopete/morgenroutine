@@ -867,7 +867,11 @@ html[data-theme="hell"] .tlsw[aria-checked="true"] .tlswk::after{background:#fff
 .spot.busy .spotseg::before{animation:spPulse 1s ease-in-out infinite}
 @keyframes spPulse{50%{opacity:.6}}
 
-/* Video zum Nachschlagen (Übungen mit yt/t im Katalog) */
-.ytl{color:var(--accent);display:inline-flex;align-items:center;gap:.35em;vertical-align:-3px;text-decoration:none}
+/* Eigene Videoclips pro Übung: Symbol (Button) an jeder Übung, Akzent = Clip liegt auf dem Gerät, gedämpft = noch keiner */
+.ytl{color:var(--muted);background:none;border:0;padding:6px;margin:-6px 0;font:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:.35em;vertical-align:-3px;text-decoration:none}
+.ytl.has{color:var(--accent)}
 .nm .ytl{margin-left:.15em}
 #cue .ytl{font:inherit}
+.vidp{width:100%;max-height:60dvh;border-radius:12px;background:#000}
+.vidrow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ytsrc{color:var(--muted);font-size:.8rem}

@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="61"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="62"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -319,15 +319,58 @@ const inMix=(rs,i)=>rs.some(([a,b])=>i>=a&&i<=b);
 function linkCls(items,i){const on=k=>items[k]&&items[k].link&&items[k].status!=="removed";return (on(i)||on(i-1))?" lk":""}
 function bindLinks(list,fn){list.querySelectorAll("[data-link]").forEach(b=>b.onclick=e=>{e.stopPropagation();fn(+b.dataset.link)});
   list.querySelectorAll("[data-mixlink]").forEach(b=>b.onclick=e=>{e.stopPropagation();toast("Gemischt – Reihenfolge in der Timeline ändern")})}
-/* Video zum Nachschlagen: Übungen mit yt/t im Katalog öffnen das Video an der Stelle. */
+/* =================== VIDEOS =================== */
+/* Eigene Clips pro Übung: dauerhaft auf dem Gerät in IndexedDB "trainingvid" (Store "v", Schlüssel = Übungs-ID, Wert = Blob).
+   Nichts davon liegt im Repo oder in localStorage. Fehlt IndexedDB oder schlägt etwas fehl, bleibt alles wie vorher. */
+let VDB=null,VIDS=new Set(),vidURL=null; // VIDS: Übungs-IDs mit Clip (nur Speicher, färbt das Symbol)
+function vidDB(){
+  if(VDB)return VDB;
+  return new Promise(res=>{try{const rq=indexedDB.open("trainingvid",1);
+    rq.onupgradeneeded=()=>{try{rq.result.createObjectStore("v")}catch(_){}};
+    rq.onsuccess=()=>{const d=rq.result;d.onversionchange=()=>{try{d.close()}catch(_){}VDB=null};VDB=Promise.resolve(d);res(d)};
+    rq.onerror=rq.onblocked=()=>res(null)}catch(_){res(null)}});
+}
+function vidReq(mode,fn){
+  return vidDB().then(d=>d?new Promise(res=>{try{const t=d.transaction("v",mode),rq=fn(t.objectStore("v"));
+    t.oncomplete=()=>res(rq&&mode==="readonly"?rq.result:true);t.onerror=t.onabort=()=>res(null)}catch(_){res(null)}}):null).catch(()=>null);
+}
+const vidGet=id=>vidReq("readonly",st=>st.get(id)).then(b=>b||null);
+const vidPut=(id,blob)=>vidReq("readwrite",st=>st.put(blob,id)).then(r=>r===true);
+const vidDel=id=>vidReq("readwrite",st=>st.delete(id)).then(r=>r===true);
+const vidHas=()=>vidReq("readonly",st=>st.getAllKeys()).then(k=>new Set(Array.isArray(k)?k:[]));
+/* Symbole der sichtbaren Listen nachfärben, ohne neu zu zeichnen (nichts springt) */
+function vidSync(){return vidHas().then(set=>{VIDS=set;cueEx="";try{document.querySelectorAll("button[data-vid]").forEach(b=>b.classList.toggle("has",set.has(b.dataset.vid)))}catch(_){}})}
+function vidFree(){if(vidURL){try{URL.revokeObjectURL(vidURL)}catch(_){}vidURL=null}}
 const ytUrl=e=>e&&e.yt?`https://www.youtube.com/watch?v=${e.yt}&t=${e.t||0}s`:"";
 const ICON_PLAY='<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor"/></svg>';
-function ytTag(it){const u=ytUrl(EXB[it&&it.ex]);return u?` <a class="ytl" href="${u}" target="_blank" rel="noopener" aria-label="Video ansehen" onclick="event.stopPropagation()">${ICON_PLAY}</a>`:""}
+const vidBtn=ex=>`<button type="button" class="ytl${VIDS.has(ex)?" has":""}" data-vid="${esc(ex)}" aria-label="Video">${ICON_PLAY}</button>`;
+const vidTag=it=>it&&EXB[it.ex]?" "+vidBtn(it.ex):"";
+function openVideoSheet(exId){
+  const e=EXB[exId];if(!e)return;vidFree();
+  vidGet(exId).then(blob=>{
+    vidFree();
+    const yt=ytUrl(e),ytl=yt?`<a class="ytsrc" href="${yt}" target="_blank" rel="noopener">YouTube</a>`:"";
+    let html;
+    if(blob){vidURL=URL.createObjectURL(blob);
+      html=`<video class="vidp" controls playsinline preload="metadata" src="${vidURL}"></video><div class="vidrow"><button class="btn ghost danger" id="vidDel">Entfernen</button>${ytl}</div>`}
+    else html=`<input type="file" accept="video/*" id="vidFile" hidden><button class="btn primary big" id="vidPick" aria-label="Video wählen">${ICON.plus} Video wählen</button>${ytl?`<div class="vidrow">${ytl}</div>`:""}`;
+    const body=openSheet("",e.name,html,{onClose:vidFree});
+    const del=body.querySelector("#vidDel"),pick=body.querySelector("#vidPick"),file=body.querySelector("#vidFile");
+    if(del)del.onclick=()=>{vidDel(exId).then(ok=>{if(!ok)toast("Entfernen ging nicht");return vidSync()}).then(()=>openVideoSheet(exId))};
+    if(pick&&file){pick.onclick=()=>file.click();
+      file.onchange=()=>{const f=file.files&&file.files[0];if(!f)return;
+        vidPut(exId,f).then(ok=>{if(!ok)toast("Speichern ging nicht");return vidSync()}).then(()=>openVideoSheet(exId))}}
+  });
+}
+/* Ein Fang-Handler für alle Symbole (Listen und Player): Antippen öffnet das Sheet, die Zeile dahinter bekommt nichts mit */
+document.addEventListener("click",ev=>{const b=ev.target&&ev.target.closest&&ev.target.closest("button[data-vid]");if(!b)return;ev.stopPropagation();ev.preventDefault();openVideoSheet(b.dataset.vid)},true);
+document.addEventListener("keydown",ev=>{if(ev.target&&ev.target.closest&&ev.target.closest("button[data-vid]"))ev.stopPropagation()},true);
+vidSync();
 function rowHTML(it,i,{lock,tags="",cls="",extra="",action="",link=null,mix=false}){
   const ch=itemChanged(it);
   return `<div class="row ${cls}" data-i="${i}"><button class="hdl${lock?" lock":""}" aria-label="Verschieben"${lock?' tabindex="-1"':""}>${ICON.grip}</button>
   <img alt="" src="${thumbOf(it)}" width="44" height="44">
-  <div class="mid" role="button" tabindex="0" data-tap="${i}"><span class="nm">${esc(itemName(it))}${tags}${ytTag(it)}</span><span class="val${ch?" changed":""}">${esc(itemText(it))}</span>${ch?`<span class="def">Standard: ${esc(itemStdText(it))}</span>`:""}${extra}</div>${action?`<div class="acts">${action}</div>`:""}${mix?`<button class="lnk mix" data-mixlink="${i}" aria-label="Gemischt (in der Timeline verschoben)">${ICON_LINK}</button>`:link!=null?`<button class="lnk${link?" on":""}" data-link="${i}" aria-pressed="${!!link}" aria-label="${link?"Verknüpfung lösen":"Mit nächster Übung verknüpfen (Supersatz)"}">${ICON_LINK}</button>`:""}</div>`;
+  <div class="mid" role="button" tabindex="0" data-tap="${i}"><span class="nm">${esc(itemName(it))}${tags}${vidTag(it)}</span><span class="val${ch?" changed":""}">${esc(itemText(it))}</span>${ch?`<span class="def">Standard: ${esc(itemStdText(it))}</span>`:""}${extra}</div>${action?`<div class="acts">${action}</div>`:""}${mix?`<button class="lnk mix" data-mixlink="${i}" aria-label="Gemischt (in der Timeline verschoben)">${ICON_LINK}</button>`:link!=null?`<button class="lnk${link?" on":""}" data-link="${i}" aria-pressed="${!!link}" aria-label="${link?"Verknüpfung lösen":"Mit nächster Übung verknüpfen (Supersatz)"}">${ICON_LINK}</button>`:""}</div>`;
 }
 function bindTaps(list,fn){list.querySelectorAll("[data-tap]").forEach(m=>{m.onclick=()=>fn(+m.dataset.tap);m.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fn(+m.dataset.tap)}}})}
 
@@ -1535,7 +1578,7 @@ function stepUI(){stillK=null;
   $("bar").style.width=(100*idx/steps.length)+"%";
   const tx=esc(!it.pair&&isMixed(it)?valText(EXB[ws.ex],Object.assign({},ws.o,{sets:1}))+` · Satz ${ws.set}`:itemText(it));
   $("target").innerHTML=(ws.mode==="reps"&&s.type==="work"?"Ziel: ":"")+`<b>${tx}</b> ✎`;
-  if(cueEx!==ws.ex+"|"+JSON.stringify(ws.o)){cueEx=ws.ex+"|"+JSON.stringify(ws.o);$("cue").innerHTML=(ytUrl(e)?`<li><a class="ytl" href="${ytUrl(e)}" target="_blank" rel="noopener">${ICON_PLAY} Video ansehen</a></li>`:"")+e.tips(ws.o).filter(x=>!x.startsWith("In der App")).map(x=>`<li>${esc(x)}</li>`).join("")}
+  if(cueEx!==ws.ex+"|"+JSON.stringify(ws.o)){cueEx=ws.ex+"|"+JSON.stringify(ws.o);$("cue").innerHTML=`<li>${vidBtn(ws.ex)}</li>`+e.tips(ws.o).filter(x=>!x.startsWith("In der App")).map(x=>`<li>${esc(x)}</li>`).join("")}
   $("restCtrl").hidden=s.type==="trans"&&s.kind==="next";
   $("plus10").hidden=!(s.type==="trans"&&s.dur!=null);
   $("pzEdit").hidden=!(s.type==="trans"&&s.dur!=null&&s.pk);
@@ -2164,5 +2207,5 @@ checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken,saveW};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()},vid:{open:openVideoSheet,get:vidGet,put:vidPut,del:vidDel,has:vidHas,sync:vidSync,ids:()=>VIDS}};
 })();
