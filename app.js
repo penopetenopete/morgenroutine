@@ -353,34 +353,59 @@ const markTime=t=>{t=Math.max(0,Math.floor(t||0));return Math.floor(t/60)+":"+St
 let markPend=null; // wartender Schreibvorgang {id,a,b,dur}, wird entprellt oder beim Schließen sofort geschrieben
 function markFlush(){if(!markPend)return;const p=markPend;markPend=null;clearTimeout(p.t);
   (p.a<=0&&p.b>=p.dur?markDel(p.id):markPut(p.id,p.a,p.b)).then(ok=>{if(!ok)toast("Speichern ging nicht")})}
+const markQueue=(id,a,b,dur)=>{if(markPend)clearTimeout(markPend.t);markPend={id,a,b,dur,t:setTimeout(markFlush,300)}};
+const markCancel=()=>{if(markPend){clearTimeout(markPend.t);markPend=null}};
 const vidHas=()=>vidReq("readonly",st=>st.getAllKeys()).then(k=>new Set(Array.isArray(k)?k:[]));
 /* Symbole der sichtbaren Listen nachfärben, ohne neu zu zeichnen (nichts springt) */
 function vidSync(){return vidHas().then(set=>{VIDS=set;cueEx="";try{document.querySelectorAll("button[data-vid]").forEach(b=>b.classList.toggle("has",set.has(b.dataset.vid)))}catch(_){}})}
 function vidFree(){if(vidURL){try{URL.revokeObjectURL(vidURL)}catch(_){}vidURL=null}}
 const ytUrl=e=>e&&e.yt?`https://www.youtube.com/watch?v=${e.yt}&t=${e.t||0}s`:"";
 const ICON_PLAY='<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor"/></svg>';
+const ICON_MARK='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>';
+const ICON_RESET='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9M4 4v4h4"/></svg>';
+const mkRow=(k,lb,t)=>`<div class="mkrow"><span class="mklb">${lb}</span><button type="button" class="btn ghost mkb" data-mk="${k}" data-d="-1" aria-label="${lb} 1 Sekunde früher">&minus;1</button><b class="mkt" id="mk${k}">${t}</b><button type="button" class="btn ghost mkb" data-mk="${k}" data-d="1" aria-label="${lb} 1 Sekunde später">+1</button><button type="button" class="btn ghost mkb" data-mk="${k}" data-d="0" aria-label="${lb}: aktuelle Position übernehmen">${ICON_MARK}</button></div>`;
 const vidBtn=ex=>`<button type="button" class="ytl${VIDS.has(ex)?" has":""}" data-vid="${esc(ex)}" aria-label="Video">${ICON_PLAY}</button>`;
 const vidTag=it=>it&&EXB[it.ex]?" "+vidBtn(it.ex):"";
 function openVideoSheet(exId){
-  const e=EXB[exId];if(!e)return;vidFree();
-  vidGet(exId).then(blob=>{
+  const e=EXB[exId];if(!e)return;markFlush();vidFree();
+  Promise.all([vidGet(exId),markGet(exId)]).then(([blob,mk])=>{
     vidFree();
     const yt=ytUrl(e),ytl=yt?`<a class="ytsrc" href="${yt}" target="_blank" rel="noopener">YouTube</a>`:"";
     let html;
     if(blob){vidURL=URL.createObjectURL(blob);
-      html=`<video class="vidp" controls playsinline preload="metadata" src="${vidURL}"></video><div class="vidrow"><button class="btn ghost danger" id="vidDel">Entfernen</button>${ytl}</div>`}
+      html=`<video class="vidp" controls playsinline preload="metadata" src="${vidURL}"></video>${mkRow("a","Anfang",markTime(mk?mk.a:0))}${mkRow("b","Ende",mk?markTime(mk.b):"–:––")}<div class="vidrow"><button class="btn ghost danger" id="vidDel">Entfernen</button><button type="button" class="btn ghost mkb" id="mkReset" aria-label="Ganzer Clip">${ICON_RESET}</button>${ytl}</div>`}
     else html=`<input type="file" accept="video/*" id="vidFile" hidden><button class="btn primary big" id="vidPick" aria-label="Video wählen">${ICON.plus} Video wählen</button>${ytl?`<div class="vidrow">${ytl}</div>`:""}`;
-    const body=openSheet("",e.name,html,{onClose:vidFree});
+    const body=openSheet("",e.name,html,{onClose:()=>{markFlush();vidFree()}});
     const del=body.querySelector("#vidDel"),pick=body.querySelector("#vidPick"),file=body.querySelector("#vidFile");
-    if(del)del.onclick=()=>{vidDel(exId).then(ok=>{if(!ok)toast("Entfernen ging nicht");return vidSync()}).then(()=>openVideoSheet(exId))};
+    if(del)del.onclick=()=>{markCancel();vidDel(exId).then(ok=>{if(!ok)toast("Entfernen ging nicht");return vidSync()}).then(()=>openVideoSheet(exId))};
     if(pick&&file){pick.onclick=()=>file.click();
       file.onchange=()=>{const f=file.files&&file.files[0];if(!f)return;
         vidPut(exId,f).then(ok=>{if(!ok)toast("Speichern ging nicht");return vidSync()}).then(()=>openVideoSheet(exId))}}
+    const vd=body.querySelector("video");if(vd)markBind(body,vd,exId,mk);
   });
+}
+/* Abspielbereich im Sheet: Schleife zwischen a und b, −1/+1/Position übernehmen, Zahl und Verhalten ändern sich, das Sheet bleibt stehen */
+function markBind(body,vd,id,mk){
+  let a=mk?mk.a:0,b=mk?mk.b:0,dur=0; // dur 0 = Länge noch unbekannt, dann gilt der ganze Clip
+  const mkShow=()=>{const ta=body.querySelector("#mka"),tb=body.querySelector("#mkb");if(ta)ta.textContent=markTime(a);if(tb)tb.textContent=markTime(b)};
+  const go=t=>{try{vd.currentTime=t}catch(_){}};
+  const meta=()=>{if(dur)return;const d=vd.duration;if(!(d>=1)||!isFinite(d))return;
+    dur=d;if(!mk||mk.a<0||mk.b<=mk.a+0.5||mk.a>dur-1){a=0;b=dur}else{a=mk.a;b=Math.min(mk.b,dur);if(b<a+1){a=0;b=dur}}
+    mkShow();go(a);try{const p=vd.play();if(p&&p.catch)p.catch(()=>{})}catch(_){}};
+  vd.addEventListener("loadedmetadata",meta);if(vd.readyState>=1)meta();
+  vd.addEventListener("timeupdate",()=>{if(dur&&vd.currentTime>=b)go(a)});
+  vd.addEventListener("ended",()=>{if(dur){go(a);try{const p=vd.play();if(p&&p.catch)p.catch(()=>{})}catch(_){}}});
+  const set=(na,nb,seek)=>{if(na===a&&nb===b)return;a=na;b=nb;mkShow();if(seek!=null)go(seek);markQueue(id,a,b,dur)};
+  body.querySelectorAll("button[data-mk]").forEach(btn=>btn.onclick=()=>{
+    if(!dur)return;const k=btn.dataset.mk,d=+btn.dataset.d;
+    const v=d===0?Math.round(vd.currentTime):(k==="a"?a:b)+d,[na,nb]=markClamp(a,b,dur,k,v);
+    set(na,nb,d===0?null:k==="a"?na:Math.max(na,nb-1.5))});
+  const rs=body.querySelector("#mkReset");if(rs)rs.onclick=()=>{if(!dur)return;set(0,dur,0)};
 }
 /* Ein Fang-Handler für alle Symbole (Listen und Player): Antippen öffnet das Sheet, die Zeile dahinter bekommt nichts mit */
 document.addEventListener("click",ev=>{const b=ev.target&&ev.target.closest&&ev.target.closest("button[data-vid]");if(!b)return;ev.stopPropagation();ev.preventDefault();openVideoSheet(b.dataset.vid)},true);
 document.addEventListener("keydown",ev=>{if(ev.target&&ev.target.closest&&ev.target.closest("button[data-vid]"))ev.stopPropagation()},true);
+window.addEventListener("pagehide",markFlush);
 vidSync();
 function rowHTML(it,i,{lock,tags="",cls="",extra="",action="",link=null,mix=false}){
   const ch=itemChanged(it);
@@ -2223,5 +2248,5 @@ checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken,saveW};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()},vid:{open:openVideoSheet,get:vidGet,put:vidPut,del:vidDel,markGet,markPut,markDel,markClamp,markTime,has:vidHas,sync:vidSync,ids:()=>VIDS}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()},vid:{open:openVideoSheet,get:vidGet,put:vidPut,del:vidDel,markGet,markPut,markDel,markClamp,markTime,markBind,markFlush,has:vidHas,sync:vidSync,ids:()=>VIDS}};
 })();

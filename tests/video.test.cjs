@@ -174,3 +174,90 @@ test("Grenzen: a nie unter 0, b nie über die Länge, a mindestens 1 s vor b", (
   assert.equal(h.A.vid.markTime(75), "1:15");
   assert.equal(h.A.vid.markTime(5.9), "0:05");
 });
+
+/* Sheet-Verhalten: kleines Doppel für Video und Knöpfe; die Zeitgeber liegen in einer Liste und laufen von Hand */
+function fakeSheet(dur, start = 0) {
+  const ev = {};
+  const vd = {
+    duration: dur, readyState: 1, currentTime: start, plays: 0,
+    addEventListener(n, f) { ev[n] = f; },
+    play() { this.plays++; return Promise.resolve(); },
+  };
+  const txt = { mka: { textContent: "" }, mkb: { textContent: "" } };
+  const btns = [];
+  const mk = (k, d) => { const b = { dataset: { mk: k, d: String(d) }, onclick: null }; btns.push(b); return b; };
+  mk("a", -1); mk("a", 1); mk("a", 0); mk("b", -1); mk("b", 1); mk("b", 0);
+  const reset = { onclick: null };
+  const body = {
+    querySelector(s) { return s === "#mka" ? txt.mka : s === "#mkb" ? txt.mkb : s === "#mkReset" ? reset : null; },
+    querySelectorAll() { return btns; },
+  };
+  const tap = (k, d) => btns.find(b => b.dataset.mk === k && b.dataset.d === String(d)).onclick();
+  return { vd, ev, txt, reset, body, tap };
+}
+
+test("Sheet: Schleife, ±1 s, Grenzen, entprellt speichern, Zurücksetzen", async () => {
+  const h = loadApp();
+  h.ctx.indexedDB = fakeIDB();
+  const timers = [];
+  h.ctx.setTimeout = fn => timers.push(fn);
+  h.ctx.clearTimeout = () => {};
+  const v = h.A.vid;
+  const s = fakeSheet(10);
+  v.markBind(s.body, s.vd, "squat", null);
+  assert.equal(s.vd.currentTime, 0);
+  assert.equal(s.vd.plays, 1);
+  assert.equal(s.txt.mka.textContent, "0:00");
+  assert.equal(s.txt.mkb.textContent, "0:10");
+  /* Anstoßen an die Grenzen: nichts passiert, nichts wird vorgemerkt */
+  s.tap("a", -1); s.tap("b", 1);
+  assert.equal(timers.length, 0);
+  /* Anfang +1 zweimal: springt auf den Anfang, schreibt erst nach Ablauf des Zeitgebers, nur einmal */
+  s.tap("a", 1); s.tap("a", 1);
+  assert.equal(s.txt.mka.textContent, "0:02");
+  assert.equal(s.vd.currentTime, 2);
+  assert.equal(await v.markGet("squat"), null);
+  v.markFlush();
+  assert.deepEqual({ ...(await v.markGet("squat")) }, { a: 2, b: 10 });
+  /* Ende −1: Schleife läuft zwischen 2 und 9 */
+  s.tap("b", -1);
+  assert.equal(s.txt.mkb.textContent, "0:09");
+  s.vd.currentTime = 9.1; s.ev.timeupdate();
+  assert.equal(s.vd.currentTime, 2);
+  s.vd.currentTime = 5; s.ev.timeupdate();
+  assert.equal(s.vd.currentTime, 5);
+  /* Position übernehmen als Ende */
+  s.vd.currentTime = 6.2; s.tap("b", 0);
+  assert.equal(s.txt.mkb.textContent, "0:06");
+  /* Anfang darf höchstens 1 s unter dem Ende landen */
+  for (let i = 0; i < 10; i++) s.tap("a", 1);
+  assert.equal(s.txt.mka.textContent, "0:05");
+  v.markFlush();
+  assert.deepEqual({ ...(await v.markGet("squat")) }, { a: 5, b: 6 });
+  /* Zurücksetzen: ganzer Clip, Marke weg */
+  s.reset.onclick(); v.markFlush();
+  assert.equal(s.txt.mka.textContent, "0:00");
+  assert.equal(s.txt.mkb.textContent, "0:10");
+  assert.equal(await v.markGet("squat"), null);
+});
+
+test("Sheet: gespeicherte Marke wird beim Öffnen angesprungen; Ende des Clips startet die Schleife neu", () => {
+  const h = loadApp();
+  h.ctx.indexedDB = fakeIDB();
+  const s = fakeSheet(20);
+  h.A.vid.markBind(s.body, s.vd, "squat", { a: 3, b: 12 });
+  assert.equal(s.vd.currentTime, 3);
+  assert.equal(s.txt.mkb.textContent, "0:12");
+  s.vd.currentTime = 20; s.ev.ended();
+  assert.equal(s.vd.currentTime, 3);
+  assert.equal(s.vd.plays, 2);
+});
+
+test("Sheet: Marke außerhalb der Clip-Länge fällt auf den ganzen Clip zurück", () => {
+  const h = loadApp();
+  h.ctx.indexedDB = fakeIDB();
+  const s = fakeSheet(5);
+  h.A.vid.markBind(s.body, s.vd, "squat", { a: 8, b: 30 });
+  assert.equal(s.vd.currentTime, 0);
+  assert.equal(s.txt.mkb.textContent, "0:05");
+});
