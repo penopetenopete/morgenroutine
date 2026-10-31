@@ -675,3 +675,27 @@ test("Zuordnen: alte Marke fällt weg, der Vorschlag aus dem Katalog gilt wieder
   assert.notEqual(JSON.stringify(mk), '{"a":3,"b":9}', "nicht mehr die eigene Marke");
   assert.equal(JSON.stringify(mk), '{"a":15,"b":31}', "stattdessen der Vorschlag aus dem Katalog");
 });
+
+test("Zuordnen: Fremddatei aus dem gezeigten Ordner wird still übersprungen", async () => {
+  const h = loadApp();
+  h.ctx.indexedDB = fakeIDB();
+  const v = h.A.vid;
+  assert.equal(v.isVid({ name: "Hip Thrust.mp4", type: "video/mp4" }), true);
+  assert.equal(v.isVid({ name: "Hip Thrust.jpg", type: "image/jpeg" }), false);
+  const r = await v.assign([
+    vfile("Hip Thrust.mp4"),
+    { name: "Hip Thrust.jpg", type: "image/jpeg" },
+    { name: "Notizen.txt", type: "text/plain" },
+  ]);
+  assert.equal(r.ok.map(x => x[1]).join(","), "hipthrust");
+  assert.equal(r.miss.join(","), "", "Fremddateien stehen nicht in der Fehlliste");
+});
+
+test("Zuordnen: Endung in Großbuchstaben zählt auch", async () => {
+  const h = loadApp();
+  h.ctx.indexedDB = fakeIDB();
+  const v = h.A.vid;
+  assert.equal(v.isVid({ name: "Split Squat.MP4", type: "" }), true);
+  const r = await v.assign([{ name: "Split Squat.MP4", type: "" }]);
+  assert.equal(r.ok.map(x => x[1]).join(","), "splitsquat");
+});
