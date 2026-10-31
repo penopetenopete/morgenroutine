@@ -112,8 +112,21 @@
       <div class="hublist plbox" id="hubList"></div>
     </section>
     <div class="stagebox" id="stagebox"><div class="stage" id="stage">
-      <div class="hud"><span class="chip on" id="sideChip">Seite 1</span><span class="chip" id="repChip"></span></div>
+      <div class="hud" id="hud"><span class="chip on" id="sideChip">Seite 1</span><span class="chip" id="repChip"></span></div>
       <div class="hint" id="hint"></div>
+      <button type="button" class="stagesw" id="swFig" hidden aria-label="Video zeigen"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.6-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.6 5.7L4 15.5M4 20v-4.5h4.5"/></svg></button>
+    </div>
+    <div class="stagevid" id="stagevid" hidden>
+      <video id="tvVid" playsinline preload="auto"></video>
+      <div class="tvctl" id="tvCtl">
+        <div class="tvbar" id="tvBar"><div class="tvtrk"><i class="tvfill" id="tvFill"></i><b class="tvth" id="tvTh"></b></div></div>
+        <div class="tvbot">
+          <button type="button" class="tvb" id="tvPlay" aria-label="Anhalten"></button>
+          <button type="button" class="tvb" id="tvEdit" aria-label="Bearbeiten"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>
+          <button type="button" class="tvb" id="tvBig" aria-label="Groß" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        </div>
+      </div>
+      <button type="button" class="stagesw" id="swVid" aria-label="Figur zeigen"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.6-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.6 5.7L4 15.5M4 20v-4.5h4.5"/></svg></button>
     </div></div>
     <div class="readout" id="readout">
       <div class="phase" id="phase"></div>

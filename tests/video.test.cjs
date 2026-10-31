@@ -448,3 +448,147 @@ test("Alle zwölf Squat-University-Übungen haben das Feld trim (ohne Zahlen: nu
   su.forEach(e => assert.ok(e.trim === null || (Array.isArray(e.trim) && e.trim.length === 2), e.id));
 });
 
+
+/* ---- Video in der Trainingsansicht (Bühne: Figur oder Clip) ---- */
+const tick = () => new Promise(r => setImmediate(r));
+async function tvSetup(withClip = true) {
+  const h = loadApp();
+  h.ctx.indexedDB = fakeIDB();
+  h.el("player").hidden = true; // size() braucht hier keine echte Bühne
+  const v = h.el("tvVid");
+  Object.assign(v, { paused: true, duration: 12, currentTime: 0, seeking: false });
+  v.plays = 0; v.pauses = 0;
+  v.play = () => { v.paused = false; v.plays++; return Promise.resolve(); };
+  v.pause = () => { v.paused = true; v.pauses++; };
+  if (withClip) await h.A.vid.put("splitsquat", blob("clip"));
+  await h.A.vid.sync();
+  return { h, v, tv: h.A.tv };
+}
+
+test("Bühne: das Symbol erscheint nur, wenn die laufende Übung einen Clip hat", async () => {
+  const { h, tv } = await tvSetup();
+  tv.step("splitsquat", false);
+  assert.equal(h.el("swFig").hidden, false);
+  tv.step("lunge", false);
+  assert.equal(h.el("swFig").hidden, true);
+  tv.step("splitsquat", false);
+  assert.equal(h.el("swFig").hidden, false);
+});
+
+test("Bühne: Symbol schaltet um (Figur weg, Video da), nochmal zurück; Video lädt und startet an der Marke", async () => {
+  const { h, v, tv } = await tvSetup();
+  tv.step("splitsquat", false);
+  await h.A.vid.markPut("splitsquat", 3, 8);
+  h.el("swFig").onclick({ stopPropagation() {} });
+  assert.equal(tv.state.on, true);
+  assert.equal(h.el("stage").hidden, true);
+  assert.equal(h.el("stagevid").hidden, false);
+  await tick(); await tick(); await tick();
+  tv.meta();
+  assert.equal(tv.state.dur, 12);
+  assert.equal(v.currentTime, 3, "beginnt an der Marke");
+  assert.equal(v.plays, 1);
+  h.el("swVid").onclick({ stopPropagation() {} });
+  assert.equal(tv.state.on, false);
+  assert.equal(h.el("stage").hidden, false);
+  assert.equal(h.el("stagevid").hidden, true);
+  assert.equal(v.paused, true, "Video hält an");
+});
+
+test("Bühne: ein Tipp auf die Fläche schaltet nie um (weder Figur noch Video), er weckt nur die Bedienung", async () => {
+  const { h, tv } = await tvSetup();
+  tv.step("splitsquat", false);
+  tv.wake();
+  assert.equal(tv.state.on, false);
+  assert.equal(h.el("stage").hidden, false);
+  tv.mode(true);
+  tv.wake();
+  assert.equal(tv.state.on, true);
+  /* Im Quelltext hängt an Bühne und Videofläche kein Klick-Handler, der umschaltet */
+  const src = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "app.js"), "utf8");
+  assert.ok(!/\$\("stage(vid)?"\)\.(onclick|ondblclick|ontouchend)/.test(src));
+  assert.ok(!/\$\("stage(vid)?"\)\.addEventListener\("(click|dblclick|touchend|pointerup)"/.test(src));
+});
+
+test("Bühne: Übungswechsel und Zwischenseite zurück auf die Figur, Video angehalten", async () => {
+  const { h, v, tv } = await tvSetup();
+  tv.step("splitsquat", false);
+  tv.mode(true);
+  v.paused = false;
+  tv.step("splitsquat", false); // gleiche Übung (nächster Satz): bleibt
+  assert.equal(tv.state.on, true);
+  tv.step("heelsit", false);
+  assert.equal(tv.state.on, false);
+  assert.equal(h.el("stage").hidden, false);
+  assert.equal(v.paused, true);
+  tv.step("splitsquat", false);
+  tv.mode(true);
+  tv.step("splitsquat", true); // Zwischenseite
+  assert.equal(tv.state.on, false);
+  tv.mode(true);
+  tv.reset(); // Workout beginnt oder endet
+  assert.equal(tv.state.on, false);
+  assert.equal(tv.state.ex, "");
+  assert.equal(h.el("swFig").hidden, true);
+});
+
+test("Bühne: Video läuft zwischen den Marken in Schleife", async () => {
+  const { h, v, tv } = await tvSetup();
+  tv.step("splitsquat", false);
+  await h.A.vid.markPut("splitsquat", 2, 6);
+  tv.mode(true);
+  await tick(); await tick(); await tick();
+  tv.meta();
+  assert.equal(v.currentTime, 2);
+  v.paused = false; v.currentTime = 5.5; tv.tick();
+  assert.equal(v.currentTime, 5.5);
+  v.currentTime = 5.99; tv.tick();
+  assert.equal(v.currentTime, 2, "springt zum Anfang zurück");
+  v.paused = true; v.currentTime = 6.5; tv.tick();
+  assert.equal(v.currentTime, 6.5, "angehaltenes Video bleibt stehen");
+});
+
+test("Bühne: ohne Marke läuft der ganze Clip; Vorschlag aus dem Katalog gilt, wenn vorhanden", async () => {
+  const { h, v, tv } = await tvSetup();
+  tv.step("splitsquat", false);
+  tv.mode(true);
+  await tick(); await tick(); await tick();
+  tv.meta();
+  assert.equal(tv.state.a, 0);
+  assert.equal(tv.state.b, 12);
+  tv.mode(false);
+  h.F.EXB.splitsquat.trim = [1.5, 4];
+  tv.mode(true);
+  await tick(); await tick(); await tick();
+  tv.meta();
+  assert.equal(tv.state.a, 1.5);
+  assert.equal(tv.state.b, 4);
+  assert.equal(v.currentTime, 1.5);
+});
+
+test("Bühne: verschwindet der Clip (im Sheet entfernt), geht es zurück zur Figur", async () => {
+  const { h, tv } = await tvSetup();
+  tv.step("splitsquat", false);
+  tv.mode(true);
+  await h.A.vid.del("splitsquat");
+  await h.A.vid.sync();
+  assert.equal(tv.state.on, false);
+  assert.equal(h.el("swFig").hidden, true);
+  assert.equal(h.el("stage").hidden, false);
+});
+
+test("Bühne: Sheet öffnen hält das Video an; beim Schließen wird neu geladen", async () => {
+  const { h, v, tv } = await tvSetup();
+  tv.step("splitsquat", false);
+  tv.mode(true);
+  v.paused = false;
+  tv.hold();
+  assert.equal(v.paused, true);
+  const tok = tv.state.tok;
+  tv.back();
+  assert.ok(tv.state.tok > tok);
+  tv.mode(false);
+  const t2 = tv.state.tok;
+  tv.back(); // Figur zeigt: nichts zu laden
+  assert.equal(tv.state.tok, t2);
+});

@@ -901,3 +901,27 @@ html[data-theme="hell"] .tlsw[aria-checked="true"] .tlswk::after{background:#fff
 .trimt{display:flex;justify-content:space-between;margin-top:6px}
 .trimt .mkt{flex:none}
 .trimt~.vidrow{margin-top:12px}
+
+/* Video in der Trainingsansicht: statt der Figur, umgeschaltet NUR über das runde Symbol unten rechts (nie durch Antippen der Fläche).
+   Bedienung liegt dunkel hinterlegt über dem Bild und blendet nach einigen Sekunden ohne Berührung aus. */
+.stagebox{position:relative}
+.stagesw{position:absolute;right:8px;bottom:8px;z-index:2;width:44px;height:44px;padding:0;display:grid;place-items:center;border-radius:999px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 72%,transparent);color:var(--accent);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.stagevid{position:relative;overflow:hidden;border-radius:18px;border:1px solid var(--line);background:black;touch-action:none}
+.stagevid.trans{border-color:var(--rest)}
+.stagevid.big{position:absolute;inset:0 -16px;width:auto;height:auto;border-radius:0;border-width:1px 0}
+.stagevid video{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain;background:black;transition:filter .25s}
+.stagevid video.end{filter:brightness(0)}
+.stagevid .hud{z-index:1}
+.stagevid .stagesw{border-color:transparent;background:rgb(0 0 0 / .55);color:white}
+.tvctl{position:absolute;inset:0;pointer-events:none;transition:opacity .3s}
+.tvctl.idle{opacity:0}
+.tvctl>*{pointer-events:auto}
+.tvctl.idle>*{pointer-events:none}
+.tvbot{position:absolute;left:8px;bottom:8px;display:flex;gap:8px}
+.tvb{width:44px;height:44px;padding:0;display:grid;place-items:center;border-radius:999px;border:0;background:rgb(0 0 0 / .55);color:white;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.tvb[aria-pressed="true"]{color:var(--accent)}
+.tvbar{position:absolute;left:8px;right:8px;bottom:62px;height:44px;border-radius:999px;background:rgb(0 0 0 / .55);touch-action:none}
+.tvtrk{position:absolute;left:18px;right:18px;top:0;bottom:0}
+.tvtrk::before{content:"";position:absolute;left:0;right:0;top:50%;height:4px;margin-top:-2px;border-radius:2px;background:rgb(255 255 255 / .3)}
+.tvfill{position:absolute;left:0;top:50%;height:4px;width:0;margin-top:-2px;border-radius:2px;background:var(--accent)}
+.tvth{position:absolute;left:0;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgb(0 0 0 / .35)}

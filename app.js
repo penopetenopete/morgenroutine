@@ -363,7 +363,7 @@ const markQueue=(id,a,b,dur)=>{if(markPend)clearTimeout(markPend.t);markPend={id
 const markCancel=()=>{if(markPend){clearTimeout(markPend.t);markPend=null}};
 const vidHas=()=>vidReq("readonly",st=>st.getAllKeys()).then(k=>new Set(Array.isArray(k)?k:[]));
 /* Symbole der sichtbaren Listen nachfärben, ohne neu zu zeichnen (nichts springt) */
-function vidSync(){return vidHas().then(set=>{VIDS=set;cueEx="";try{document.querySelectorAll("button[data-vid]").forEach(b=>b.classList.toggle("has",set.has(b.dataset.vid)))}catch(_){}})}
+function vidSync(){return vidHas().then(set=>{VIDS=set;cueEx="";try{tvRefresh()}catch(_){}try{document.querySelectorAll("button[data-vid]").forEach(b=>b.classList.toggle("has",set.has(b.dataset.vid)))}catch(_){}})}
 function vidFree(){if(vidURL){try{URL.revokeObjectURL(vidURL)}catch(_){}vidURL=null}}
 const ytUrl=e=>e&&e.yt?`https://www.youtube.com/watch?v=${e.yt}&t=${e.t||0}s`:"";
 const ICON_PLAY='<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor"/></svg>';
@@ -378,7 +378,7 @@ function trimHTML(a,b){
   return `<div class="trim" id="trim"><div class="trimin" id="trimIn"><canvas id="trimCv"></canvas><i class="trimdim" id="trimL"></i><i class="trimdim r" id="trimR"></i><i class="trimfr" id="trimF"></i><i class="trimpos" id="trimPos"></i><span class="trimh" id="trimA" role="slider" aria-label="Anfang"></span><span class="trimh r" id="trimB" role="slider" aria-label="Ende"></span></div></div><div class="trimt"><b class="mkt" id="mka">${a}</b><b class="mkt" id="mkb">${b}</b></div>`;
 }
 function openVideoSheet(exId){
-  const e=EXB[exId];if(!e)return;markFlush();vidFree();if(vidDispose){vidDispose();vidDispose=null}
+  const e=EXB[exId];if(!e)return;markFlush();vidFree();if(vidDispose){vidDispose();vidDispose=null}tvHold();
   Promise.all([vidGet(exId),markGet(exId)]).then(([blob,mk])=>{
     vidFree();
     const yt=ytUrl(e),ytl=yt?`<a class="ytsrc" href="${yt}" target="_blank" rel="noopener">YouTube</a>`:"";
@@ -386,7 +386,7 @@ function openVideoSheet(exId){
     if(blob){vidURL=URL.createObjectURL(blob);
       html=`<div class="vidwrap" id="vidWrap"><video class="vidp" playsinline preload="auto" src="${vidURL}"></video><button type="button" class="vidtap" id="vidPlay" aria-label="Abspielen">${ICON_PLAYBIG}</button></div>${trimHTML(markTime(mk?mk.a:0),mk?markTime(mk.b):"–:––")}<div class="vidrow"><button class="btn ghost danger" id="vidDel">Entfernen</button><button type="button" class="btn ghost mkb" id="mkReset" aria-label="Zurücksetzen">${ICON_RESET}</button>${ytl}</div>`}
     else html=`<input type="file" accept="video/*" id="vidFile" hidden><button class="btn primary big" id="vidPick" aria-label="Video wählen">${ICON.plus} Video wählen</button>${ytl?`<div class="vidrow">${ytl}</div>`:""}`;
-    const body=openSheet("",e.name,html,{onClose:()=>{markFlush();vidFree();if(vidDispose){vidDispose();vidDispose=null}}});
+    const body=openSheet("",e.name,html,{onClose:()=>{markFlush();vidFree();if(vidDispose){vidDispose();vidDispose=null}tvBack()}});
     const del=body.querySelector("#vidDel"),pick=body.querySelector("#vidPick"),file=body.querySelector("#vidFile");
     if(del)del.onclick=()=>{markCancel();vidDel(exId).then(ok=>{if(!ok)toast("Entfernen ging nicht");return vidSync()}).then(()=>openVideoSheet(exId))};
     if(pick&&file){pick.onclick=()=>file.click();
@@ -478,6 +478,109 @@ document.addEventListener("click",ev=>{const b=ev.target&&ev.target.closest&&ev.
 document.addEventListener("keydown",ev=>{if(ev.target&&ev.target.closest&&ev.target.closest("button[data-vid]"))ev.stopPropagation()},true);
 window.addEventListener("pagehide",markFlush);
 vidSync();
+/* =================== VIDEO IN DER TRAININGSANSICHT =================== */
+/* Statt der Figur zeigt die Bühne auf Wunsch den eigenen Clip der laufenden Übung (zwischen den Marken in Schleife, mit Ton).
+   Umgeschaltet wird NUR über das runde Symbol (.stagesw), nie durch Antippen der Fläche – sonst kippt es beim Training versehentlich (abgenommen 31.10.2026).
+   Die Fläche weckt nur die Bedienung (Abspielen, Spulen, Bearbeiten, Groß), die nach einigen Sekunden ohne Berührung ausblendet. */
+const TV={ex:"",on:false,big:false,url:null,mk:null,a:0,b:0,dur:0,tok:0,touch:0,idle:false,drag:null,want:null,pf:""};
+const tvV=()=>$("tvVid");
+const TV_PLAY='<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>';
+const TV_PAUSE='<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>';
+const TV_BIG='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+const TV_SMALL='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+const tvGo=t=>{try{tvV().currentTime=t}catch(_){}};
+function tvPlay(){try{const p=tvV().play();if(p&&p.catch)p.catch(()=>{})}catch(_){}}
+function tvBtn(){const p=tvV().paused;$("tvPlay").innerHTML=p?TV_PLAY:TV_PAUSE;$("tvPlay").setAttribute("aria-label",p?"Abspielen":"Anhalten")}
+/* Stand der Leiste: Anteil der aktuellen Stelle zwischen den Marken */
+function tvPaint(){
+  const f=TV.dur&&TV.b>TV.a?Math.max(0,Math.min(1,(tvV().currentTime-TV.a)/(TV.b-TV.a))):0,s=(100*f).toFixed(1)+"%";
+  if(s===TV.pf)return;TV.pf=s;$("tvFill").style.width=s;$("tvTh").style.left=s;
+}
+function tvMeta(){const d=tvV().duration;if(TV.dur||!TV.on||!(d>=1)||!isFinite(d))return;
+  TV.dur=d;[TV.a,TV.b]=markFit(TV.mk,d);TV.touch=now();tvGo(TV.a);tvPlay();tvPaint()}
+function tvFree(){
+  if(TV.url){try{URL.revokeObjectURL(TV.url)}catch(_){}TV.url=null}
+  TV.dur=0;TV.want=null;TV.pf="";
+  try{const v=tvV();v.pause();v.classList.remove("end");v.removeAttribute("src");v.load()}catch(_){}
+}
+/* Clip und Marken der laufenden Übung frisch aus dem Speicher holen und von der Marke a an abspielen */
+function tvLoad(){
+  const ex=TV.ex,tok=++TV.tok;TV.touch=now();
+  Promise.all([vidGet(ex),markGet(ex)]).then(([blob,mk])=>{
+    if(tok!==TV.tok||!TV.on)return;
+    if(!blob){tvMode(false);return}
+    tvFree();TV.url=URL.createObjectURL(blob);TV.mk=mk;
+    const v=tvV();v.src=TV.url;if(v.readyState>=1)tvMeta();
+  });
+}
+/* Figur oder Video zeigen; die Seiten-Anzeige (hud) zieht mit um */
+function tvMode(on){
+  on=!!on;if(on===TV.on)return;
+  TV.on=on;TV.tok++;
+  if(!on){TV.big=false;$("stagevid").classList.remove("big");$("tvBig").setAttribute("aria-pressed","false");$("tvBig").innerHTML=TV_BIG;tvFree()}
+  $("stage").hidden=on;$("stagevid").hidden=!on;
+  (on?$("stagevid"):$("stage")).appendChild($("hud"));
+  if(on){TV.idle=false;$("tvCtl").classList.remove("idle");tvBtn();tvLoad()}
+  if(!$("player").hidden)size();
+}
+/* Symbol nur, wenn für die laufende Übung ein Clip vorliegt; verschwindet der Clip, geht es zurück zur Figur */
+function tvRefresh(){
+  const has=!!TV.ex&&VIDS.has(TV.ex);
+  $("swFig").hidden=!has;
+  if(!has&&TV.on)tvMode(false);
+}
+/* Aus stepUI: bei Wechsel der Übung (und auf der Zwischenseite) zurück auf die Figur, Video anhalten */
+function tvStep(ex,hub){
+  if(TV.ex!==ex||hub){TV.ex=ex;tvMode(false)}
+  tvRefresh();
+}
+const tvReset=()=>{TV.ex="";tvMode(false);tvRefresh()};
+/* Sheet (Bearbeiten, Symbol im Cue): Video hält an; beim Schließen mit neuen Marken oder neuem Clip von vorn laden */
+const tvHold=()=>{if(TV.on){try{tvV().pause()}catch(_){}}};
+const tvBack=()=>{if(TV.on)tvLoad()};
+function tvTick(){
+  if(!TV.on||!TV.dur)return;
+  const v=tvV();
+  if(!TV.drag&&!v.paused&&v.currentTime>=TV.b-0.03)tvGo(TV.a); // Schleife zwischen den Marken
+  tvPaint();
+  const idle=!v.paused&&!TV.drag&&now()-TV.touch>3500;
+  if(idle!==TV.idle){TV.idle=idle;$("tvCtl").classList.toggle("idle",idle)}
+}
+const tvWake=()=>{TV.touch=now();if(TV.idle){TV.idle=false;$("tvCtl").classList.remove("idle")}}; // Fläche antippen: nur die Bedienung zeigen
+/* Spulen: Leiste ziehen, das Bild folgt sofort (nur die jüngste Stelle wird angesprungen) */
+function tvSeek(t){TV.want=t;if(!tvV().seeking)tvFlush()}
+function tvFlush(){if(TV.want==null)return;const t=TV.want;TV.want=null;tvGo(t);tvPaint()}
+function tvFrac(e){const r=$("tvBar").getBoundingClientRect(),w=Math.max(1,r.width-36);return Math.max(0,Math.min(1,(e.clientX-r.left-18)/w))}
+const tvAt=e=>Math.min(TV.b-0.05,TV.a+tvFrac(e)*(TV.b-TV.a));
+function tvMove(e){if(!TV.drag||e.pointerId!==TV.drag.id)return;TV.touch=now();tvSeek(tvAt(e))}
+function tvUp(e){
+  if(!TV.drag||e.pointerId!==TV.drag.id)return;
+  document.removeEventListener("pointermove",tvMove);document.removeEventListener("pointerup",tvUp);document.removeEventListener("pointercancel",tvUp);
+  const was=TV.drag.was;TV.drag=null;TV.touch=now();if(was)tvPlay();
+}
+function tvBarDown(e){
+  if(!TV.on||!TV.dur||TV.drag)return;if(e.preventDefault)e.preventDefault();
+  const v=tvV();TV.drag={id:e.pointerId,was:!v.paused};TV.touch=now();v.pause();tvSeek(tvAt(e));
+  document.addEventListener("pointermove",tvMove);document.addEventListener("pointerup",tvUp);document.addEventListener("pointercancel",tvUp);
+}
+(function(){
+  const v=tvV();
+  v.addEventListener("loadedmetadata",tvMeta);
+  v.addEventListener("play",tvBtn);v.addEventListener("pause",tvBtn);
+  v.addEventListener("seeked",()=>{if(TV.want!=null)tvFlush()});
+  v.addEventListener("ended",()=>{if(TV.on&&TV.dur&&!TV.drag){tvGo(TV.a);tvPlay()}});
+  $("stagevid").addEventListener("pointerdown",tvWake);
+  $("tvBar").addEventListener("pointerdown",tvBarDown);
+  $("tvPlay").onclick=()=>{TV.touch=now();const v=tvV();if(v.paused)tvPlay();else v.pause()};
+  $("tvEdit").onclick=()=>{if(TV.ex)openVideoSheet(TV.ex)};
+  $("tvBig").onclick=()=>{TV.touch=now();TV.big=!TV.big;$("stagevid").classList.toggle("big",TV.big);$("tvBig").setAttribute("aria-pressed",String(TV.big));$("tvBig").innerHTML=TV.big?TV_SMALL:TV_BIG;size()};
+  $("tvBig").innerHTML=TV_BIG;
+  /* Der einzige Umschalter: die runden Symbole. Sie dürfen weder die Figur drehen noch die Fläche wecken. */
+  [$("swFig"),$("swVid")].forEach(b=>{
+    b.addEventListener("pointerdown",e=>e.stopPropagation());
+    b.onclick=e=>{if(e&&e.stopPropagation)e.stopPropagation();if(TV.ex&&VIDS.has(TV.ex))tvMode(!TV.on)};
+  });
+})();
 function rowHTML(it,i,{lock,tags="",cls="",extra="",action="",link=null,mix=false}){
   const ch=itemChanged(it);
   return `<div class="row ${cls}" data-i="${i}"><button class="hdl${lock?" lock":""}" aria-label="Verschieben"${lock?' tabindex="-1"':""}>${ICON.grip}</button>
@@ -1652,7 +1755,7 @@ function startPlayer(w,isNew){
   idx=Math.max(0,steps.findIndex(s=>s.key===W.cur));
   ensureAudio();lockScreen();
   $("home").hidden=$("routine").hidden=$("stats").hidden=true;if($("essen"))$("essen").hidden=true;$("done").hidden=true;$("player").hidden=false;
-  $("tips").classList.remove("open");
+  $("tips").classList.remove("open");tvReset();
   size();
   if(isNew){W.stepStart=now();enter(0)}
   else{setPaused(!!W.pauseAt);catchUp();if(!W||W.ended)return;stepUI();onPhase(steps[idx].type==="work"?"work":"rest",phaseInfo(steps[idx],{fortgesetzt:true}));syncNative()}
@@ -1696,6 +1799,7 @@ function stepUI(){stillK=null;
   $("pzEdit").hidden=!(s.type==="trans"&&s.dur!=null&&s.pk);
   const hub=!!(s.type==="trans"&&s.hub);
   $("plan").hidden=hub;$("hub").hidden=!hub;$("stagebox").hidden=hub;$("readout").hidden=hub;$("tips").hidden=hub||!gv("tips");
+  $("stagevid").classList.toggle("trans",s.type==="trans");tvStep(ws.ex,hub);
   if(hub)renderHub(s);
   updateMain();
 }
@@ -1745,7 +1849,7 @@ $("close").onclick=()=>{
     <button class="btn primary big" id="cFinish">Beenden &amp; Statistik</button><button class="btn" id="cGo">Weiter trainieren</button><button class="btn danger" id="cDrop">Verwerfen (nicht speichern)</button>`);
   $("cFinish").onclick=()=>{closeSheet();finish()};
   $("cGo").onclick=closeSheet;
-  $("cDrop").onclick=()=>{closeSheet();onPhase("done",{uebung:"",verworfen:true,workout:W.rname});W.ended=true;W=null;try{localStorage.removeItem(ACT)}catch(_){}syncNative();releaseWake();$("player").hidden=true;show(screen==="home"?"home":screen,false)};
+  $("cDrop").onclick=()=>{closeSheet();tvReset();onPhase("done",{uebung:"",verworfen:true,workout:W.rname});W.ended=true;W=null;try{localStorage.removeItem(ACT)}catch(_){}syncNative();releaseWake();$("player").hidden=true;show(screen==="home"?"home":screen,false)};
 };
 
 /* ---- Wiederholungen bestätigen ---- */
@@ -1926,7 +2030,7 @@ function finish(at){
   onPhase("done",{uebung:"",workout:w.rname,dauerSek:Math.round(tot)});
   W=null;syncNative();releaseWake();
   sheetClose=null;sheetLocked=false;$("scrim").hidden=true;
-  $("player").hidden=true;$("done").hidden=false;
+  tvReset();$("player").hidden=true;$("done").hidden=false;
   renderDone(entry);
   snd("done");
 }
@@ -2012,13 +2116,13 @@ window.addEventListener("storage",e=>{if(e.key===ACT&&W&&!e.newValue){/* in ande
 /* ---- Hauptschleife ---- */
 const SIDE=["Seite 1","Seite 2"];
 let lastNow=performance.now();
-function size(){stillK=null;const b=$("stagebox");const w=Math.max(80,Math.floor(Math.min(b.clientWidth,b.clientHeight)))||300;$("stage").style.width=$("stage").style.height=w+"px";F.sizeTo(w)}
+function size(){stillK=null;const b=$("stagebox");const w=Math.max(80,Math.floor(Math.min(b.clientWidth,b.clientHeight)))||300;$("stage").style.width=$("stage").style.height=w+"px";const sv=$("stagevid").style;sv.width=sv.height=TV.big?"":w+"px";F.sizeTo(w)}
 if(window.ResizeObserver)new ResizeObserver(()=>{if(!$("player").hidden)size()}).observe($("stagebox"));
 window.addEventListener("resize",()=>{if(!$("player").hidden)size()});
 function frame(t){
   const dt=Math.min(.05,(t-lastNow)/1000);lastNow=t;
   if(W&&!W.ended&&!$("player").hidden){
-    catchUp();
+    catchUp();tvTick();
     if(W&&!W.ended)drawPlayer(dt);
   }
   requestAnimationFrame(frame);
@@ -2029,7 +2133,7 @@ const TXC={};function tx(id){return TXC[id]||(TXC[id]={el:$(id),set v(x){if(this
 let stillK=null; // zuletzt gezeichnetes Standbild (Pause/Vorlauf) – gleiches Bild nicht 60× pro Sekunde neu rendern
 function drawPlayer(dt){
   if(F.previewing){stillK=null;return}
-  const covered=!$("scrim").hidden;let r3=true; // offenes Fenster (Übersicht, Editor) verdeckt die Figur → nicht rendern
+  const covered=!$("scrim").hidden||TV.on;let r3=true; // offenes Fenster (Übersicht, Editor) verdeckt die Figur → nicht rendern
   const s=steps[idx];if(!s||!clip)return;
   const paused=!!W.pauseAt,el=elapsed();
   if(!paused)animT+=dt;
@@ -2319,5 +2423,5 @@ checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken,saveW};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()},vid:{open:openVideoSheet,get:vidGet,put:vidPut,del:vidDel,markGet,markPut,markDel,markClamp,markTime,markBind,markFlush,has:vidHas,sync:vidSync,ids:()=>VIDS}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()},tv:{state:TV,mode:tvMode,step:tvStep,reset:tvReset,refresh:tvRefresh,tick:tvTick,meta:tvMeta,load:tvLoad,wake:tvWake,barDown:tvBarDown,hold:tvHold,back:tvBack},vid:{open:openVideoSheet,get:vidGet,put:vidPut,del:vidDel,markGet,markPut,markDel,markClamp,markTime,markBind,markFlush,has:vidHas,sync:vidSync,ids:()=>VIDS}};
 })();
