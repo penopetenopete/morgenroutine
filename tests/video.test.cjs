@@ -302,7 +302,7 @@ test("Ziehen am Endgriff: Bild am Ende der Auswahl; Mindestabstand; am Ende halt
   assert.equal(s.vd.currentTime, 0.5);
   s.doc("pointermove", { pointerId: 1, clientX: 150 });
   s.doc("pointerup", { pointerId: 1 });
-  assert.equal(s.vd.currentTime, 0, "läuft ab dem Anfang");
+  assert.equal(s.vd.currentTime, 4, "Endgriff: beginnt eine Sekunde vor dem Ende, nicht am Anfang");
   assert.equal(s.vd.paused, false);
   /* kurz vor dem Ende: bleibt laufen; am Ende: anhalten, nicht zurückspringen, Bild schwarz */
   s.vd.currentTime = 4.9; s.vd.emit("timeupdate");
@@ -322,6 +322,38 @@ test("Ziehen am Endgriff: Bild am Ende der Auswahl; Mindestabstand; am Ende halt
   s.n["#vidPlay"].onclick();
   assert.equal(s.vd.paused, true);
   assert.ok(!s.vd.classList.contains("end"));
+});
+
+test("Positionsregler ziehen: Abspielstelle folgt, bleibt im gewählten Bereich, Marken unverändert", () => {
+  const { h, s } = setup(10);
+  const v = h.A.vid;
+  v.markBind(s.body, s.vd, "squat", { a: 2, b: 8 });
+  const pos = s.n["#trimPos"];
+  const mka = s.n["#mka"].textContent, mkb = s.n["#mkb"].textContent;
+  pos.emit("pointerdown", { pointerId: 2, clientX: 300 });
+  assert.equal(s.vd.paused, true, "beim Ziehen steht das Bild");
+  s.doc("pointermove", { pointerId: 2, clientX: 330 }); // +1 s
+  assert.equal(s.vd.currentTime, 3, "Bild folgt dem Regler");
+  s.doc("pointermove", { pointerId: 2, clientX: -500 }); // weit nach links
+  assert.equal(s.vd.currentTime, 2, "nicht vor den Anfang");
+  s.doc("pointermove", { pointerId: 2, clientX: 900 }); // weit nach rechts
+  assert.equal(s.vd.currentTime, 8, "nicht hinter das Ende");
+  s.doc("pointerup", { pointerId: 2 });
+  assert.equal(s.vd.paused, true, "nach dem Loslassen bleibt es stehen");
+  assert.equal(s.n["#mka"].textContent, mka, "Anfang unverändert");
+  assert.equal(s.n["#mkb"].textContent, mkb, "Ende unverändert");
+});
+
+test("Antippen der Leiste springt an die Stelle, innerhalb des Bereichs", () => {
+  const { h, s } = setup(10);
+  h.A.vid.markBind(s.body, s.vd, "squat", { a: 2, b: 8 });
+  const leiste = s.n["#trimIn"];
+  leiste.emit("pointerdown", { pointerId: 3, clientX: 120, target: leiste });
+  assert.equal(s.vd.currentTime, 4, "springt an die angetippte Stelle");
+  s.doc("pointerup", { pointerId: 3 });
+  leiste.emit("pointerdown", { pointerId: 4, clientX: 0, target: leiste });
+  assert.equal(s.vd.currentTime, 2, "vor dem Anfang wird auf den Anfang begrenzt");
+  s.doc("pointerup", { pointerId: 4 });
 });
 
 test("Ziehen: bis ganz ans Ende des Clips (ended-Ereignis) hält an und bleibt schwarz", () => {

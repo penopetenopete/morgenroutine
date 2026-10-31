@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="65"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="66"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -432,6 +432,7 @@ function markBind(body,vd,id,mk,url){
   const flushSeek=()=>{if(want==null)return;const t=want;want=null;go(t);paintPos()};
   const seek=t=>{want=t;if(!vd.seeking)flushSeek()}; // nur die jüngste Stelle anspringen, nicht jede Zwischenstelle
   const start=()=>{want=null;blank(false);go(a);play()};
+  const tail=()=>{want=null;blank(false);go(Math.max(a,b-1));play()}; // Endgriff: die letzte Sekunde zeigen, dann anhalten
   const finish=()=>{try{vd.pause()}catch(_){}blank(true);state();paintPos()};
   const step=()=>{if(!dur)return;if(!drag&&!vd.paused&&!fin&&vd.currentTime>=b-0.02)finish();paintPos()};
   const spinUp=()=>{if(spin||dead)return;spin=true;requestAnimationFrame(function f(){if(dead||vd.paused){spin=false;return}step();requestAnimationFrame(f)})};
@@ -457,18 +458,30 @@ function markBind(body,vd,id,mk,url){
   if(tr)tr.addEventListener("touchstart",e=>e.stopPropagation(),{passive:true}); // Griff am Rand packen soll nicht das Zurückwischen auslösen
   /* Ziehen: Zeiger auf dem Dokument, damit der Finger den Griff verlassen darf */
   const move=e=>{if(!drag||e.pointerId!==drag.id)return;
-    const v=Math.round((drag.v+(e.clientX-drag.x)/drag.w*dur)*100)/100,[na,nb]=markClamp(a,b,dur,drag.k,v);
+    const v=Math.round((drag.v+(e.clientX-drag.x)/drag.w*dur)*100)/100;
+    if(drag.k==="p"){seek(Math.max(a,Math.min(b,v)));return}   // nur die Abspielstelle, innerhalb des Bereichs
+    const [na,nb]=markClamp(a,b,dur,drag.k,v);
     a=na;b=nb;paint();seek(drag.k==="a"?a:Math.min(b,dur-.05))};
   const up=e=>{if(!drag||e.pointerId!==drag.id)return;
     document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",up);
-    drag.h.classList.remove("drag");drag=null;markQueue(id,a,b,dur);start()};
+    const k=drag.k;if(drag.h)drag.h.classList.remove("drag");drag=null;
+    if(k==="p"){paintPos();return}                 // Positionsregler: stehen bleiben, Marken unverändert
+    markQueue(id,a,b,dur);k==="b"?tail():start()};
   const down=(k,h)=>e=>{if(!dur||drag)return;if(e.preventDefault)e.preventDefault();
     try{vd.pause()}catch(_){}blank(false);state();
-    drag={k,h,id:e.pointerId,x:e.clientX,v:k==="a"?a:b,w:(tIn&&tIn.getBoundingClientRect().width)||1};
-    h.classList.add("drag");seek(k==="a"?a:Math.min(b,dur-.05));
+    const at=k==="p"?Math.max(a,Math.min(b,vd.currentTime)):k==="a"?a:b;
+    drag={k,h,id:e.pointerId,x:e.clientX,v:at,w:(tIn&&tIn.getBoundingClientRect().width)||1};
+    if(h)h.classList.add("drag");seek(k==="a"?a:k==="p"?at:Math.min(b,dur-.05));
     document.addEventListener("pointermove",move);document.addEventListener("pointerup",up);document.addEventListener("pointercancel",up)};
   if(hA)hA.addEventListener("pointerdown",down("a",hA));
   if(hB)hB.addEventListener("pointerdown",down("b",hB));
+  if(pos)pos.addEventListener("pointerdown",down("p",pos));
+  /* Auf die Leiste tippen springt an die Stelle (Griffe und Regler fangen ihren Tipp selbst ab) */
+  if(tIn)tIn.addEventListener("pointerdown",e=>{if(!dur||drag||e.target!==tIn&&e.target.id!=="trimCv"&&!e.target.classList.contains("trimdim")&&!e.target.classList.contains("trimfr"))return;
+    const r=tIn.getBoundingClientRect(),t=Math.max(a,Math.min(b,(e.clientX-r.left)/r.width*dur));
+    try{vd.pause()}catch(_){}blank(false);state();seek(t);
+    drag={k:"p",h:pos,id:e.pointerId,x:e.clientX,v:t,w:r.width||1};
+    document.addEventListener("pointermove",move);document.addEventListener("pointerup",up);document.addEventListener("pointercancel",up)});
   const rs=q("#mkReset");if(rs)rs.onclick=()=>{if(!dur)return;markCancel();markDel(id);[a,b]=markFit(trimOf(id),dur);paint();start()};
   if(vd.readyState>=1)meta();
   return()=>{dead=true;if(drag){document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",up)}try{vd.pause()}catch(_){}};
