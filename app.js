@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="66"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="67"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -361,6 +361,56 @@ function markFlush(){if(!markPend)return;const p=markPend;markPend=null;clearTim
   (p.a<=0&&p.b>=p.dur&&!trimOf(p.id)?markDel(p.id):markPut(p.id,p.a,p.b)).then(ok=>{if(!ok)toast("Speichern ging nicht")})}
 const markQueue=(id,a,b,dur)=>{if(markPend)clearTimeout(markPend.t);markPend={id,a,b,dur,t:setTimeout(markFlush,300)}};
 const markCancel=()=>{if(markPend){clearTimeout(markPend.t);markPend=null}};
+/* ---- Clips aus einem Ordner auf einmal zuordnen ----
+   Vergleichsform: Kleinbuchstaben, Umlaute ausgeschrieben, nur Buchstaben und Zahlen. Endung und eine fuehrende Nummer
+   ("01 Hip Hike.mp4") fallen weg, damit Dateinamen aus einem Ordner so verglichen werden koennen wie der Uebungsname. */
+const vidNorm=s=>String(s||"").toLowerCase()
+  .replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss")
+  .replace(/[^a-z0-9]+/g,"");
+const vidBase=n=>String(n||"").replace(/\.[a-z0-9]{2,4}$/i,"").replace(/^\s*\d{1,3}\s*[-_. ]+/,"");
+let VIDNAME=null; // Vergleichsform -> Übungs-ID, mehrfach belegte Formen sind null (mehrdeutig = kein Treffer)
+function vidIndex(){
+  if(VIDNAME)return VIDNAME;
+  const m=new Map();const add=(k,id)=>{if(!k)return;m.set(k,m.has(k)&&m.get(k)!==id?null:id)};
+  EXL.forEach(e=>{add(vidNorm(e.name),e.id);add(vidNorm(e.id),e.id)});
+  return VIDNAME=m;
+}
+/* Dateiname -> Übungs-ID oder null. Erst gleiche Form, dann eindeutiger Teilstring (in beide Richtungen). */
+function vidMatch(file){
+  const k=vidNorm(vidBase(file));if(k.length<3)return null;
+  const m=vidIndex();
+  if(m.has(k))return m.get(k);
+  let hit=null;
+  for(const[key,id]of m){if(!id||key.length<3)continue;
+    if(k.indexOf(key)<0&&key.indexOf(k)<0)continue;
+    if(hit&&hit!==id)return null;hit=id}
+  return hit;
+}
+/* Alle gewählten Dateien zuordnen: je Übung zählt die erste Datei. Die alte Marke fällt weg,
+   damit der Vorschlag aus dem Katalog (trimOf) wieder gilt. Liefert {ok:[[Datei,ID]],miss:[Datei]}. */
+async function vidAssign(files){
+  const ok=[],miss=[],seen=new Set();
+  for(const f of Array.from(files||[])){
+    const id=vidMatch(f.name);
+    if(!id||seen.has(id)){miss.push(f.name);continue}
+    seen.add(id);
+    const put=await vidPut(id,f);
+    if(!put){miss.push(f.name);seen.delete(id);continue}
+    await markDel(id);
+    ok.push([f.name,id]);
+  }
+  await vidSync();
+  return{ok,miss};
+}
+function vidAssignSheet(files){
+  if(!files||!files.length)return;
+  vidAssign(files).then(r=>{
+    const list=r.miss.length?`<div class="note">${r.miss.map(n=>esc(n)).join("<br>")}</div>`:"";
+    openSheet("",`${r.ok.length} von ${r.ok.length+r.miss.length} zugeordnet`,list+`<button class="btn primary big" id="vaOk">Fertig</button>`);
+    $("vaOk").onclick=closeSheet;
+    try{renderHome();if(screen==="routine")renderRoutine()}catch(_){}
+  });
+}
 const vidHas=()=>vidReq("readonly",st=>st.getAllKeys()).then(k=>new Set(Array.isArray(k)?k:[]));
 /* Symbole der sichtbaren Listen nachfärben, ohne neu zu zeichnen (nichts springt) */
 function vidSync(){return vidHas().then(set=>{VIDS=set;cueEx="";try{tvRefresh()}catch(_){}try{document.querySelectorAll("button[data-vid]").forEach(b=>b.classList.toggle("has",set.has(b.dataset.vid)))}catch(_){}})}
@@ -2390,6 +2440,8 @@ async function pasteData(){
   $("dtGo").onclick=()=>go($("dtTxt").value);
 }
 $("dtExport").onclick=exportAll;$("dtImport").onclick=pasteData;
+$("vaPick").onclick=()=>$("vaFile").click();
+$("vaFile").onchange=e=>{const f=Array.from(e.target.files||[]);e.target.value="";vidAssignSheet(f)};
 async function checkData(){
   if(!/[#&]d=/.test(location.hash))return;
   const h=location.hash;history.replaceState(history.state,"",location.pathname+location.search);
@@ -2436,5 +2488,5 @@ checkImport();checkData();checkSave();
 /* Für essen.js (Ernährung): gemeinsame Helfer */
 window.AppKit={hSwipe,slideIn,$,esc,toast,openSheet,closeSheet,show,SCREENS,screen:()=>screen,b64u,zip,APP_URL,S:()=>S,storeFail,keepBroken,saveW};
 /* Test-Hilfe (Playwright, tests/harness.cjs) */
-window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()},tv:{state:TV,mode:tvMode,step:tvStep,reset:tvReset,refresh:tvRefresh,tick:tvTick,meta:tvMeta,load:tvLoad,wake:tvWake,barDown:tvBarDown,hold:tvHold,back:tvBack},vid:{open:openVideoSheet,get:vidGet,put:vidPut,del:vidDel,markGet,markPut,markDel,markClamp,markTime,markBind,markFlush,has:vidHas,sync:vidSync,ids:()=>VIDS}};
+window.__app={get W(){return W},set W(v){W=v},get idx(){return idx},steps:()=>steps,S:()=>S,buildSteps:w=>buildSteps(w),foldRounds:(a,m,s,l)=>foldRounds(a,m,s,l),dataLink:()=>dataLink(),readData:t=>readData(t),backupOk:p=>backupOk(p),restoreData:p=>restoreData(p),saveFile:l=>saveFile(l),checkSave:()=>checkSave(),offerData:p=>offerData(p),save:()=>save(),saveW:()=>saveW(),shiftTime:ms=>{if(!W)return;W.startedAt-=ms;W.stepStart-=ms;if(W.pauseAt)W.pauseAt-=ms;saveW()},sfOn:(items,i)=>sfOn(items,i),wheelValues:(e,k)=>wheelValues(e,k),wheelLabel:(e,k,v)=>wheelLabel(e,k,v),pauseText:v=>pauseText(v),sfItem:(rid,day,uid,v)=>sfItem(rid,day,uid,v),orderItems:(rid,day,uids)=>orderItems(rid,day,uids),deleteItem:(rid,day,uid)=>deleteItem(rid,day,uid),getRoutine:id=>getRoutine(id),openEditor:(it,ctx)=>openEditor(it,ctx),rerenderEditor:()=>{if(lastEditorRender)lastEditorRender()},tv:{state:TV,mode:tvMode,step:tvStep,reset:tvReset,refresh:tvRefresh,tick:tvTick,meta:tvMeta,load:tvLoad,wake:tvWake,barDown:tvBarDown,hold:tvHold,back:tvBack},vid:{open:openVideoSheet,norm:vidNorm,match:vidMatch,assign:vidAssign,get:vidGet,put:vidPut,del:vidDel,markGet,markPut,markDel,markClamp,markTime,markBind,markFlush,has:vidHas,sync:vidSync,ids:()=>VIDS}};
 })();

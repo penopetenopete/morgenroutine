@@ -624,3 +624,54 @@ test("Bühne: Sheet öffnen hält das Video an; beim Schließen wird neu geladen
   tv.back(); // Figur zeigt: nichts zu laden
   assert.equal(tv.state.tok, t2);
 });
+
+/* ---- Clips aus einem Ordner auf einmal zuordnen ---- */
+const vfile = n => ({ name: n, type: "video/mp4" });
+
+test("Zuordnen: Dateiname trifft die Übung, Umlaut ausgeschrieben wie mit Umlaut", () => {
+  const h = loadApp();
+  const m = h.A.vid.match;
+  assert.equal(m("Hip Hike.mp4"), "hiphike");
+  assert.equal(m("Einbeinige Bruecke mit Band.mp4"), "sglbridgeband");
+  assert.equal(m("Einbeinige Brücke mit Band.mov"), "sglbridgeband");
+  assert.equal(m("01 Spanish Squat.mp4"), "spanishsquat");
+  assert.equal(m("sglbridgeband.mp4"), "sglbridgeband", "auch die Übungs-ID als Dateiname");
+});
+
+test("Zuordnen: unbekannter Name bleibt ohne Treffer", () => {
+  const h = loadApp();
+  assert.equal(h.A.vid.match("IMG_4711.mp4"), null);
+  assert.equal(h.A.vid.match("a.mp4"), null);
+});
+
+test("Zuordnen: Clips landen bei den Übungen, Unerkanntes wird gemeldet", async () => {
+  const h = loadApp();
+  const idb = fakeIDB();
+  h.ctx.indexedDB = idb;
+  const v = h.A.vid;
+  const r = await v.assign([vfile("Hip Thrust.mp4"), vfile("Split Squat.mp4"), vfile("Urlaub.mp4")]);
+  assert.equal(r.ok.map(x => x[1]).join(","), "hipthrust,splitsquat");
+  assert.equal(r.miss.join(","), "Urlaub.mp4");
+  assert.ok(await v.get("hipthrust"), "Clip liegt in der Datenbank");
+  assert.ok(v.ids().has("splitsquat"), "Symbol färbt nach");
+});
+
+test("Zuordnen: zweite Datei für dieselbe Übung zählt nicht", async () => {
+  const h = loadApp();
+  h.ctx.indexedDB = fakeIDB();
+  const r = await h.A.vid.assign([vfile("Hip Hike.mp4"), vfile("hiphike.mp4")]);
+  assert.equal(r.ok.map(x => x[1]).join(","), "hiphike");
+  assert.equal(r.miss.join(","), "hiphike.mp4");
+});
+
+test("Zuordnen: alte Marke fällt weg, der Vorschlag aus dem Katalog gilt wieder", async () => {
+  const h = loadApp();
+  h.ctx.indexedDB = fakeIDB();
+  const v = h.A.vid;
+  await v.markPut("spanishsquat", 3, 9);
+  assert.equal(JSON.stringify(await v.markGet("spanishsquat")), '{"a":3,"b":9}');
+  await v.assign([vfile("Spanish Squat.mp4")]);
+  const mk = await v.markGet("spanishsquat");
+  assert.notEqual(JSON.stringify(mk), '{"a":3,"b":9}', "nicht mehr die eigene Marke");
+  assert.equal(JSON.stringify(mk), '{"a":15,"b":31}', "stattdessen der Vorschlag aus dem Katalog");
+});
