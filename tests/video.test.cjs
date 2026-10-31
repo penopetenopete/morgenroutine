@@ -630,10 +630,11 @@ const vfile = n => ({ name: n, type: "video/mp4" });
 
 test("Zuordnen: Dateiname trifft die Übung, Umlaut ausgeschrieben wie mit Umlaut", () => {
   const h = loadApp();
-  const m = h.A.vid.match;
+  const m = h.A.vid.match, norm = h.A.vid.norm;
+  assert.equal(norm("Einbeinige Brücke"), norm("Einbeinige Bruecke"), "Umlaut und Umschrift gleich");
   assert.equal(m("Hip Hike.mp4"), "hiphike");
-  assert.equal(m("Einbeinige Bruecke mit Band.mp4"), "sglbridgeband");
-  assert.equal(m("Einbeinige Brücke mit Band.mov"), "sglbridgeband");
+  assert.equal(m("Single-Leg Bridge with Band.mp4"), "sglbridgeband");
+  assert.equal(m("Single-Leg Bridge with Band.mov"), "sglbridgeband");
   assert.equal(m("01 Spanish Squat.mp4"), "spanishsquat");
   assert.equal(m("sglbridgeband.mp4"), "sglbridgeband", "auch die Übungs-ID als Dateiname");
 });

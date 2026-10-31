@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="68"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="69"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -32,8 +32,8 @@ const MORGEN={id:"morgen",name:"Morgenroutine",settings:{umbau:10,satz:30,wechse
   {uid:"m9",ex:"drop_out",o:{secs:30,sets:1}},
   {uid:"m10",ex:"pigeonhold",o:{secs:30}},
   {uid:"m11",ex:"drop_in",o:{secs:30,sets:1}},
-  {uid:"m12",ex:"kickout",o:{secs:15},pair:{ex2:"hfstretch",o2:{secs:30},umbau:"Fuß auf den Stuhl",name:"Kick-out + Hüftbeuger-Dehnung"}},
-  {uid:"m13",ex:"hamcurl",o:{secs:30},pair:{ex2:"wallstretch",o2:{secs:30},umbau:"Fußballen an die Wand",name:"Hamstring-Curl + Wanddehnung"}}
+  {uid:"m12",ex:"kickout",o:{secs:15},pair:{ex2:"hfstretch",o2:{secs:30},umbau:"Fuß auf den Stuhl",name:"Kick-out + Hip Flexor Stretch"}},
+  {uid:"m13",ex:"hamcurl",o:{secs:30},pair:{ex2:"wallstretch",o2:{secs:30},umbau:"Fußballen an die Wand",name:"Hamstring Curl + Wall Stretch"}}
 ]};
 /* Beispiel für den ersten Start: Knie-Block aus dem Trainingsplan (frei änderbar oder löschbar) */
 const EXAMPLE={name:"Test · Knie-Block",items:[
