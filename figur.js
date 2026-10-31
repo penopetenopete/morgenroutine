@@ -602,6 +602,127 @@ function butterfly(o){
   return hold(A,B,"Knie sinken lassen");
 }
 
+/* ---- Video-Übungen: eigene Figuren statt der Stehfigur (ergänzt 31.10.2026) ----
+   Gebaut wie die ATG-Übungen: Füße stehen fest (abs + legs), bewegt wird das Becken.
+   Die Felder yt/t/trim bleiben unberührt, das Video läuft weiter über das runde Symbol. */
+function splitSquatV(o){
+  const front={a:V(.11,.045,.3),pole:V(0,.25,1),f:D(.05,-.08,1)};
+  const back={a:V(-.11,.12,-.44),pole:V(0,-.6,1),f:D(0,-.5,.85)};
+  const base={abs:true,hands:chestHands,legs:{L:front,R:back},dir:{}};
+  const TOP=ext(base,{pelvisPos:V(0,.84,-.04),dir:{spine:D(0,1,.04),chest:D(0,1,.04)}});
+  const BOT=ext(base,{pelvisPos:V(0,.52,.06),dir:{spine:D(0,1,.1),chest:D(0,1,.08)}});
+  return [["hinteres Knie Richtung Boden",1.7,TOP,BOT],["unten",.35,BOT,BOT],["hochdrücken",1.4,BOT,TOP],["oben",.5,TOP,TOP]];
+}
+function spanishSquat(o){
+  const L={a:V(.14,.045,0),pole:V(0,.2,1),f:D(.05,-.1,1)},R={a:V(-.14,.045,0),pole:V(0,.2,1),f:D(-.05,-.1,1)};
+  const hands=()=>{const c=wp("chest");return {L:V(c.x+.17,c.y-.04,c.z+.44),R:V(c.x-.17,c.y-.04,c.z+.44)}};
+  const base={abs:true,hands,pole:{L:()=>V(.3,0,-1),R:()=>V(-.3,0,-1)},legs:{L,R},dir:{}};
+  const TOP=ext(base,{pelvisPos:V(0,.87,-.02),dir:{spine:D(0,1,.03),chest:D(0,1,.03)}});
+  const BOT=ext(base,{pelvisPos:V(0,.55,-.26),dir:{spine:D(0,1,.05),chest:D(0,1,.04)}});
+  return [["gegen das Band nach hinten sinken",1.8,TOP,BOT],["unten",.4,BOT,BOT],["hoch",1.4,BOT,TOP],["oben",.5,TOP,TOP]];
+}
+function slSquatV(o){
+  const stand={a:V(.1,.045,0),pole:V(0,.15,1),f:D(.05,-.1,1)};
+  const base={abs:true,hands:()=>{const c=wp("chest");return {L:V(c.x+.19,c.y-.06,c.z+.4),R:V(c.x-.19,c.y-.06,c.z+.4)}},
+    pole:{L:()=>V(.3,0,-1),R:()=>V(-.3,0,-1)},dir:{}};
+  const TOP=ext(base,{pelvisPos:V(0,.88,-.03),legs:{L:stand,R:{a:V(-.12,.14,.26),pole:V(0,0,1),f:D(0,-.3,1)}},
+    dir:{spine:D(0,1,.05),chest:D(0,1,.05)}});
+  const BOT=ext(base,{pelvisPos:V(0,.54,-.2),legs:{L:stand,R:{a:V(-.12,.22,.52),pole:V(0,.1,1),f:D(0,-.15,1)}},
+    dir:{spine:D(0,1,.3),chest:D(0,1,.22)}});
+  return [["Hüfte zuerst nach hinten",2,TOP,BOT],["unten",.35,BOT,BOT],["hochdrücken",1.5,BOT,TOP],["oben",.5,TOP,TOP]];
+}
+function touchdownSq(o){
+  const bx=.09,stand={a:V(.1,bx+.045,0),pole:V(0,.15,1),f:D(.05,-.1,1)};
+  const base={abs:true,hands:()=>{const c=wp("chest");return {L:V(c.x+.19,c.y-.06,c.z+.4),R:V(c.x-.19,c.y-.06,c.z+.4)}},
+    pole:{L:()=>V(.3,0,-1),R:()=>V(-.3,0,-1)},dir:{}};
+  const TOP=ext(base,{pelvisPos:V(0,bx+.88,-.03),legs:{L:stand,R:{a:V(-.12,bx+.12,.22),pole:V(0,0,1),f:D(0,-.3,1)}},
+    dir:{spine:D(0,1,.05),chest:D(0,1,.05)}});
+  const BOT=ext(base,{pelvisPos:V(0,bx+.56,-.18),legs:{L:stand,R:{a:V(-.13,.03,.3),pole:V(0,0,1),f:D(0,.3,1)}},
+    dir:{spine:D(0,1,.3),chest:D(0,1,.22)}});
+  return [["Hüfte zurück, langsam absenken",2.2,TOP,BOT],["Ferse antippen",.3,BOT,BOT],["hochdrücken",1.4,BOT,TOP],["oben",.5,TOP,TOP]];
+}
+function cossackBand(o){
+  const bend={a:V(.42,.045,0),pole:V(.5,.2,1),f:D(.2,-.1,1)};
+  const str={a:V(-.52,.045,0),pole:V(-.4,.1,1),f:D(-.15,.3,1)};
+  const base={abs:true,hands:()=>{const c=wp("chest");return {L:V(c.x+.16,c.y-.02,c.z+.42),R:V(c.x-.16,c.y-.02,c.z+.42)}},
+    pole:{L:()=>V(.3,0,-1),R:()=>V(-.3,0,-1)},legs:{L:bend,R:str},dir:{}};
+  const TOP=ext(base,{pelvisPos:V(0,.86,-.02),dir:{spine:D(0,1,.04),chest:D(0,1,.04)}});
+  const BOT=ext(base,{pelvisPos:V(.3,.47,-.1),dir:{spine:D(-.1,1,.3),chest:D(-.08,1,.24)}});
+  return [["zur Seite absinken",2,TOP,BOT],["unten",.4,BOT,BOT],["zurück in die Mitte",1.5,BOT,TOP],["oben",.5,TOP,TOP]];
+}
+function hipThrustV(o){
+  const hands=()=>{const p=wp("pelvis");return {L:V(p.x+.3,.5,p.z-.5),R:V(p.x-.3,.5,p.z-.5)}};
+  const base={anchor:{b:"footL",z:.42},gx:[],hands,pole:{L:()=>V(1,.3,0),R:()=>V(-1,.3,0)}};
+  const legs=f=>({thighL:D(.1,f,.6),shinL:D(0,-.9,.44),footL:D(.03,-.12,1),thighR:D(-.1,f,.6),shinR:D(0,-.9,.44),footR:D(-.03,-.12,1)});
+  const DOWNP=ext(base,{pelvisDir:D(0,-.2,1),dir:{spine:D(0,.3,-.95),chest:D(0,.45,-.9),neck:D(0,.5,-.85),head:D(0,.4,-.9),...legs(.8)}});
+  const UPP=ext(base,{pelvisDir:D(0,.25,.97),dir:{spine:D(0,.05,-1),chest:D(0,.3,-.95),neck:D(0,.4,-.9),head:D(0,.3,-.95),
+    thighL:D(.08,.1,.99),shinL:D(0,-1,.1),footL:D(.03,-.12,1),thighR:D(-.08,.1,.99),shinR:D(0,-1,.1),footR:D(-.03,-.12,1)}});
+  return [["Becken hoch",1.3,DOWNP,UPP],["oben Gesäß fest",.9,UPP,UPP],["ablassen",1.3,UPP,DOWNP],["unten",.3,DOWNP,DOWNP]];
+}
+function thrustBench(){const p=wp("chest"),top=.42;
+  fTop.position.set(0,top-.025,p.z-.2);fTop.scale.set(.5,.05,.7);
+  fLeg1.position.set(0,(top-.05)/2,p.z);fLeg1.scale.set(.44,top-.05,.05);
+  fLeg2.position.set(0,(top-.05)/2,p.z-.4);fLeg2.scale.set(.44,top-.05,.05)}
+function hipHike(o){
+  const stand={a:V(.1,.17,0),pole:V(0,.15,1),f:D(.05,-.1,1)};
+  const base={abs:true,hands:handsOnHips,pole:hipPole,dir:{}};
+  const free=y=>({a:V(-.17,y,.04),pole:V(0,-.2,1),f:D(0,-.9,.35)});
+  const UPH=ext(base,{pelvisPos:V(.04,1.0,-.02),pelvisSide:V(1,.2,0),legs:{L:stand,R:free(.24)},
+    dir:{spine:D(-.04,1,.02),chest:D(-.02,1,.03),neck:D(0,1,.04),head:D(0,1,.05)}});
+  const DWN=ext(base,{pelvisPos:V(-.04,.81,-.02),pelvisSide:V(1,-.2,0),legs:{L:stand,R:free(.01)},
+    dir:{spine:D(.04,1,.02),chest:D(.02,1,.03),neck:D(0,1,.04),head:D(0,1,.05)}});
+  return [["Becken absenken",1.4,UPH,DWN],["unten",.3,DWN,DWN],["Becken heben",1.3,DWN,UPH],["oben",.4,UPH,UPH]];
+}
+function bandWalk(o){
+  const base={abs:true,hands:()=>{const c=wp("chest");return {L:V(c.x+.17,c.y-.05,c.z+.38),R:V(c.x-.17,c.y-.05,c.z+.38)}},
+    pole:{L:()=>V(.3,0,-1),R:()=>V(-.3,0,-1)},dir:{}};
+  const pose=(xl,xr)=>ext(base,{pelvisPos:V((xl+xr)/2,.68,-.12),
+    legs:{L:{a:V(xl,.045,0),pole:V(.3,.2,1),f:D(.05,-.1,1)},R:{a:V(xr,.045,0),pole:V(-.3,.2,1),f:D(-.05,-.1,1)}},
+    dir:{spine:D(0,1,.12),chest:D(0,1,.1)}});
+  const ENG=pose(.13,-.13),WEIT=pose(.44,-.13),WEIT2=pose(.44,-.44);
+  return [["Schritt zur Seite",1.1,ENG,WEIT],["Knie nach außen halten",.4,WEIT,WEIT],["nachziehen",1.1,WEIT,WEIT2],["Spannung halten",.4,WEIT2,WEIT2]];
+}
+function sideLegRaise(o){
+  /* Seitenlage: unteres Bein angewinkelt am Boden (wie der Seitstütz auf Knien),
+     Becken liegt auf, das obere Bein hebt und senkt. */
+  const up=D(0,.33,1),dn=up.clone().negate(),sd=latSide(up);
+  const sides={pelvisSide:sd.clone(),side:{spine:sd,chest:sd,neck:sd,head:sd,thighL:sd,thighR:sd,shinL:sd,shinR:sd}};
+  const hands=()=>{const u=wp("uarmL");return {L:V(u.x-.27,.05,u.z+.04),R:wp("pelvis").add(sd.clone().multiplyScalar(-.15)).add(V(-.06,.02,0))}};
+  const base={...sides,pelvisDir:dn,hands,pole:{L:()=>V(0,-1,0),R:()=>V(.3,.6,-.4)},anchor:{b:"pelvis",x:0,z:0},gx:[],skip:["footL","toeL"]};
+  const unten={thighL:dn,shinL:D(.95,-.05,-.3),footL:D(.3,0,-1)};
+  const kopf={spine:up,chest:up,neck:up,head:D(0,.38,1)};
+  const LOW=P({...base,dir:{...unten,thighR:dn.clone(),shinR:dn.clone(),footR:D(-1,-.15,-.2),...kopf}});
+  const HIGH=P({...base,dir:{...unten,thighR:D(0,.42,-.9),shinR:D(0,.42,-.9),footR:D(-.9,.2,-.4),...kopf}});
+  return [["Bein heben",1.3,LOW,HIGH],["oben halten",.5,HIGH,HIGH],["langsam senken",1.5,HIGH,LOW],["unten",.3,LOW,LOW]];
+}
+function sPlankLift(o){
+  const up=D(0,.22,1),dn=up.clone().negate(),sd=latSide(up);
+  const sides={pelvisSide:sd.clone(),side:{spine:sd,chest:sd,neck:sd,head:sd,thighL:sd,thighR:sd,shinL:sd,shinR:sd}};
+  const hands=()=>{const s=wp("uarmL");return {L:V(s.x-.27,.04,s.z+.02),R:wp("pelvis").add(sd.clone().multiplyScalar(-.17)).add(V(-.06,0,0))}};
+  const base={...sides,pelvisDir:dn,hands,pole:{L:()=>V(0,-1,0),R:()=>V(.3,.6,-.4)},anchor:{b:"pelvis",x:0,z:0},gx:[]};
+  const unten={thighL:dn,shinL:dn,footL:D(-1,-.15,-.2)};
+  const kopf={spine:up,chest:up,neck:up,head:D(0,.27,1)};
+  const LOW=P({...base,dir:{...unten,thighR:dn.clone(),shinR:dn.clone(),footR:D(-1,-.15,-.2),...kopf}});
+  const HIGH=P({...base,dir:{...unten,thighR:D(0,.3,-.95),shinR:D(0,.3,-.95),footR:D(-.9,.1,-.4),...kopf}});
+  return [["oberes Bein heben",1.2,LOW,HIGH],["oben",.5,HIGH,HIGH],["senken",1.3,HIGH,LOW],["Hüfte bleibt oben",.4,LOW,LOW]];
+}
+function dnsStar(o){
+  const up=D(0,.22,1),dn=up.clone().negate(),sd=latSide(up);
+  const flach=D(0,.02,1),fdn=flach.clone().negate(),fsd=latSide(flach);
+  const seiten=d=>({pelvisSide:latSide(d),side:{spine:latSide(d),chest:latSide(d),neck:latSide(d),head:latSide(d),
+    thighL:latSide(d),thighR:latSide(d),shinL:latSide(d),shinR:latSide(d)}});
+  const hands=()=>{const s=wp("uarmL");return {L:V(s.x-.27,.04,s.z+.02),R:wp("pelvis").add(sd.clone().multiplyScalar(-.17)).add(V(-.06,0,0))}};
+  const base={hands,pole:{L:()=>V(0,-1,0),R:()=>V(.3,.6,-.4)},anchor:{b:"pelvis",x:0,z:0},gx:[]};
+  const knie=d=>({thighL:d.clone().negate(),shinL:D(.95,-.05,-.3),footL:D(.3,0,-1)});
+  const DOWN=P({...base,...seiten(flach),pelvisDir:fdn,
+    dir:{...knie(flach),thighR:fdn.clone(),shinR:D(.9,-.2,-.3),footR:D(.3,0,-1),spine:flach,chest:flach,neck:flach,head:D(0,.06,1)}});
+  const HIP=P({...base,...seiten(up),pelvisDir:dn,
+    dir:{...knie(up),thighR:dn.clone(),shinR:D(.9,-.2,-.3),footR:D(.3,0,-1),spine:up,chest:up,neck:up,head:D(0,.27,1)}});
+  const STAR=P({...base,...seiten(up),pelvisDir:dn,
+    dir:{...knie(up),thighR:D(0,.32,-.95),shinR:D(0,.32,-.95),footR:D(-.9,.1,-.4),spine:up,chest:up,neck:up,head:D(0,.27,1)}});
+  return [["Hüfte hoch in den Seitstütz",1.5,DOWN,HIP],["oberes Bein heben",1.1,HIP,STAR],["halten",.6,STAR,STAR],["zurück auf den Boden",1.5,STAR,DOWN]];
+}
+
 /* =================== BAUCH =================== */
 const latSide=d=>V(0,-d.z,d.y).normalize();
 function qlExt(o){
@@ -877,7 +998,7 @@ const EX=[
  /* Video-Übungen (Squat University): yt/t = Quelle; trim:[a,b] = Vorschlag für den Abspielbereich des eigenen Clips (Sekunden ab Anfang der gelieferten Datei), null = ganzer Clip. Zahlen folgen. */
  {id:"sglbridgeband",muscle:"knie",group:V1,name:"Single-Leg Bridge with Band",de:"Glute Bridge einbeinig, Band um die Knie",gear:["Band","Matte"],src:"Squat University",weight:"none",perSide:true,yt:"DJ8TzflTuQc",t:48,trim:[15,69],
   def:{mode:"hold",secs:30,sets:3,reps:10,kg:0},opts:o=>[["mode","Ausführung",[["hold","Halten"],["reps","Wiederholungen"]]]],
-  cam:{y:.5,d:3.8,yaw:1.2,p:.14},build:videoStand,
+  cam:{y:.5,d:3.8,yaw:1.2,p:.14},build:o=>bridge({...o,legs:"single",kg:0}),
   tips:o=>["Band um beide Knie, Hüfte leicht gegen den Bandzug nach außen öffnen",
     "Hände seitlich ablegen, nur zum Ausbalancieren",
     "Standfuß kräftig in den Boden drücken",
@@ -885,7 +1006,7 @@ const EX=[
     "Das Band zieht das Knie nach innen – dagegenhalten weckt den Gluteus medius"]},
  {id:"dnsstar",muscle:"knie",group:V1,name:"DNS Star",de:"Seitstütz mit angehobenem Bein, Hüfte hinge",gear:["Matte"],src:"Squat University",weight:"none",perSide:true,yt:"DJ8TzflTuQc",t:156,trim:[15,45],
   def:{mode:"reps",reps:8,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.4,d:3.6,yaw:1.3,p:.18},build:videoStand,
+  cam:{y:.4,d:3.6,yaw:1.3,p:.18},build:dnsStar,
   tips:o=>["Auf dem Boden starten, Knie vorne angewinkelt",
     "Hüfte nach oben und vorne in den Seitstütz schieben",
     "Oberes Bein anheben, dann aus der Hüfte runter und wieder hoch",
@@ -893,7 +1014,7 @@ const EX=[
     "Die Hüfte nicht auf den Boden fallen lassen – sie bleibt oben"]},
  {id:"cossackband",muscle:"knie",group:V1,name:"Cossack Squat with Band",de:"Seitliche Kniebeuge, Band quer zum Körper",gear:["Band"],src:"Squat University",weight:"none",perSide:true,yt:"DJ8TzflTuQc",t:332,trim:[15,45],
   def:{mode:"reps",reps:8,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.6,d:4.2,yaw:1.1,p:.12},build:videoStand,
+  cam:{y:.6,d:4.2,yaw:1.1,p:.12},build:cossackBand,
   tips:o=>["Band um das Knie, Zug quer über den Körper",
     "Sehr breiter Stand, Füße zeigen eher nach vorne",
     "Hüfte nach hinten, Brust nach vorne – zur Seite absinken",
@@ -901,7 +1022,7 @@ const EX=[
     "So tief, wie es schmerzfrei geht – das Band führt nur"]},
  {id:"touchdownsq",muscle:"knie",group:V1,name:"Touchdown Squat",de:"Einbeinige Kniebeuge von der Box, Ferse tippt auf",gear:["Box oder Scheibe 5–10 cm"],src:"Squat University",weight:"none",perSide:true,yt:"DJ8TzflTuQc",t:483,trim:[15,107],
   def:{mode:"reps",reps:10,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.7,d:4.2,yaw:1.15,p:.1},build:videoStand,
+  cam:{y:.7,d:4.2,yaw:1.15,p:.1},build:touchdownSq,props:o=>({stepper:()=>stepAt(.1,.02,.09)}),
   tips:o=>["Auf eine Box oder Scheibe von 5–10 cm stellen",
     "Zuerst Hüfte nach hinten und Brust nach vorne – wie ein Kreuzheben",
     "Dann beugen, bis die Ferse des freien Beins den Boden berührt",
@@ -909,56 +1030,56 @@ const EX=[
     "Steigerung: höhere Box, dann 3 s unten halten"]},
  {id:"bandwalk",muscle:"huefte",group:V1,name:"Banded Side Walk",de:"Lateral Band Walk, Band um die Knie",gear:["Band"],src:"Squat University",weight:"none",yt:"HVp9ku40t2w",t:161,trim:[15,31],
   def:{mode:"reps",reps:10,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.6,d:4.2,yaw:.2,p:.1},build:videoStand,
+  cam:{y:.6,d:4.2,yaw:.2,p:.1},build:bandWalk,
   tips:o=>["Band um die Knie",
     "Tiefe Hocke halten",
     "Seitlich gehen, Knie fallen nicht nach innen",
     "Oberkörper ruhig, Füße bleiben hüftbreit"]},
  {id:"hiphike",muscle:"huefte",group:V1,name:"Hip Hike",de:"Becken auf der Stufe heben und senken",gear:["Stufe"],src:"Squat University",weight:"none",perSide:true,yt:"HVp9ku40t2w",t:218,trim:[15,40],
   def:{mode:"reps",reps:10,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.7,d:4.2,yaw:.2,p:.08},build:videoStand,
+  cam:{y:.7,d:4.2,yaw:.2,p:.08},build:hipHike,props:o=>({stepper:()=>stepAt(.1,.02,.17)}),
   tips:o=>["Auf eine Stufe stellen, das freie Bein hängt daneben",
     "Becken absenken und wieder heben",
     "Die Bewegung kommt aus der Hüfte des Standbeins",
     "Oberkörper bleibt aufrecht"]},
  {id:"sidelegraise",muscle:"huefte",group:V1,name:"Side Leg Raise",de:"Side Lying Leg Raise, in Seitenlage",gear:["Matte"],src:"Squat University",weight:"none",perSide:true,yt:"HVp9ku40t2w",t:281,trim:[15,39],
   def:{mode:"reps",reps:10,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.4,d:3.8,yaw:.3,p:.16},build:videoStand,
+  cam:{y:.45,d:3.4,yaw:1.35,p:.2},build:sideLegRaise,
   tips:o=>["Seitenlage, Becken nicht nach hinten kippen",
     "Bein leicht nach hinten geführt anheben",
     "Fußspitze zeigt nach vorne",
     "Langsam senken"]},
  {id:"splanklift",muscle:"huefte",group:V1,name:"Side Plank with Leg Lift",de:"Side Plank Leg Lift",gear:["Matte"],src:"Squat University",weight:"none",perSide:true,yt:"HVp9ku40t2w",t:313,trim:[15,55],
   def:{mode:"reps",reps:8,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.4,d:3.6,yaw:1.3,p:.18},build:videoStand,
+  cam:{y:.4,d:3.6,yaw:1.3,p:.18},build:sPlankLift,
   tips:o=>["Seitstütz auf dem Unterarm",
     "Hüfte oben halten",
     "Oberes Bein heben und senken",
     "Körper bleibt in einer Linie"]},
  {id:"hipthrust",muscle:"huefte",group:V1,name:"Hip Thrust",de:"Schultern auf der Bank, Becken heben",gear:["Bank"],src:"Squat University",weight:"none",yt:"HVp9ku40t2w",t:368,trim:[15,30],
   def:{mode:"reps",reps:10,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.5,d:3.8,yaw:1.2,p:.14},build:videoStand,
+  cam:{y:.5,d:3.8,yaw:1.2,p:.14},build:hipThrustV,props:o=>({flat:thrustBench}),
   tips:o=>["Schultern auf der Bank, Füße fest am Boden",
     "Kinn zur Brust",
     "Oben das Gesäß fest zusammendrücken",
     "Nicht ins Hohlkreuz gehen"]},
  {id:"slsquat",muscle:"knie",group:V1,name:"Single-Leg Squat",de:"Single Leg Squat, frei stehend",gear:[],src:"Squat University",weight:"none",perSide:true,yt:"HVp9ku40t2w",t:463,trim:[15,47],
   def:{mode:"reps",reps:8,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.7,d:4.2,yaw:1.15,p:.1},build:videoStand,
+  cam:{y:.7,d:4.2,yaw:1.15,p:.1},build:slSquatV,
   tips:o=>["Hüfte zuerst nach hinten",
     "Knie bleibt über den Zehen",
     "Knie darf nicht nach innen kippen",
     "So tief, wie es schmerzfrei geht"]},
  {id:"splitsquat",muscle:"knie",group:V1,name:"Split Squat",de:"Ausfallschritt-Stand, auf und ab",gear:[],src:"Squat University",weight:"none",perSide:true,yt:"HVp9ku40t2w",t:511,trim:[15,35],
   def:{mode:"reps",reps:10,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.7,d:4.2,yaw:1.15,p:.1},build:videoStand,
+  cam:{y:.7,d:4.2,yaw:1.15,p:.1},build:splitSquatV,
   tips:o=>["Langer Schritt nach vorne",
     "Hinteres Knie Richtung Boden",
     "Rumpf bleibt aufrecht",
     "Vorderes Knie über den Zehen"]},
  {id:"spanishsquat",muscle:"knie",group:V1,name:"Spanish Squat",de:"Band hinter den Knien, Kniebeuge am Zug",gear:["Band"],src:"Squat University",weight:"none",yt:"WqTdfqcw9Mw",t:94,trim:[15,31],
   def:{mode:"reps",reps:10,sets:3,secs:30,kg:0},opts:o=>[],
-  cam:{y:.6,d:4.2,yaw:1.1,p:.12},build:videoStand,
+  cam:{y:.6,d:4.2,yaw:1.1,p:.12},build:spanishSquat,
   tips:o=>["Band hinter den Knien, dagegenhalten",
     "Schienbeine bleiben senkrecht",
     "Gesäß nach hinten sinken lassen",
@@ -1027,7 +1148,7 @@ function mount(el){
 const thumbs={};
 /* Fertige Figurenbilder dauerhaft speichern (IndexedDB) → beim nächsten Öffnen nicht neu rendern.
    Schlüssel enthält Look, Schattierung und eine Prüfsumme der Bewegung – ändert sich eine Übung, wird neu gerendert. */
-const FIG_REV="1"; // hochzählen, wenn sich Figur/Requisiten/Kamera allgemein ändern
+const FIG_REV="2"; // hochzählen, wenn sich Figur/Requisiten/Kamera allgemein ändern
 const PC={mem:new Map(),db:null,ready:false,n:0};
 const lookId=()=>(LOOK?"L"+LOOK.base+LOOK.out+(LOOK.tint||0)+(LOOK.thumbOut||0):"D")+fillMat.uniforms.uMode.value;
 function sigOf(e,o){try{const t=JSON.stringify(e.build(o))+JSON.stringify(o);let h=0;for(let i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))|0;return h.toString(36)}catch(_){return "x"}}
