@@ -674,7 +674,8 @@ test("Zuordnen: alte Marke fällt weg, der Vorschlag aus dem Katalog gilt wieder
   await v.assign([vfile("Spanish Squat.mp4")]);
   const mk = await v.markGet("spanishsquat");
   assert.notEqual(JSON.stringify(mk), '{"a":3,"b":9}', "nicht mehr die eigene Marke");
-  assert.equal(JSON.stringify(mk), '{"a":15,"b":31}', "stattdessen der Vorschlag aus dem Katalog");
+  const t = h.F.EXB.spanishsquat.trim;
+  assert.equal(JSON.stringify(mk), JSON.stringify({ a: t[0], b: t[1] }), "stattdessen der Vorschlag aus dem Katalog");
 });
 
 test("Zuordnen: Fremddatei aus dem gezeigten Ordner wird still übersprungen", async () => {
@@ -699,4 +700,22 @@ test("Zuordnen: Endung in Großbuchstaben zählt auch", async () => {
   assert.equal(v.isVid({ name: "Split Squat.MP4", type: "" }), true);
   const r = await v.assign([{ name: "Split Squat.MP4", type: "" }]);
   assert.equal(r.ok.map(x => x[1]).join(","), "splitsquat");
+});
+
+test("Katalog: alle 43 gelieferten Clips haben einen brauchbaren Abspielbereich", () => {
+  const h = loadApp();
+  const soll = ["abwheel","atgsplit","backext","balance","bandwalk","birddog","butterfly","camel",
+    "cossackband","couch","deepsquat","dnsstar","drop_in","drop_out","grasshopper","hamcurl","heelsit",
+    "hfstretch","hipcars","hiphike","hipthrust","jefferson","kickout","nervefloss","pigeon","pigeonhold",
+    "rdl","revhyper","revsquat","rot9090","seatedgm","sglbridgeband","sidebend","sidelegraise","slrdl",
+    "slsquat","spanishsquat","splanklift","splitsquat","swing","tibialis","touchdownsq","walkback"];
+  assert.equal(soll.length, 43);
+  for (const id of soll) {
+    const e = h.F.EXB[id];
+    assert.ok(e, id + " fehlt im Katalog");
+    const t = e.trim;
+    assert.ok(Array.isArray(t) && t.length === 2, id + ": trim fehlt");
+    assert.ok(t[0] >= 0, id + ": Anfang vor null");
+    assert.ok(t[1] > t[0] + 0.5, id + ": Bereich zu kurz");
+  }
 });
