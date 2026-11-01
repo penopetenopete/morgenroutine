@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="71"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="72"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -580,10 +580,23 @@ function tvLoad(){
   });
 }
 /* Figur oder Video zeigen; die Seiten-Anzeige (hud) zieht mit um */
+/* Vollbild an- oder ausschalten. Gedreht wird nur, wenn der Clip quer und das Fenster hoch ist. */
+function tvFull(on){
+  TV.big=!!on;const sv=$("stagevid");
+  sv.classList.toggle("full",TV.big);
+  sv.classList.toggle("rot",TV.big&&tvQuer());
+  $("tvBig").setAttribute("aria-pressed",String(TV.big));
+  $("tvBig").innerHTML=TV.big?TV_SMALL:TV_BIG;
+  size();
+}
+/* Liegt das Bild quer und das Fenster hoch? Vor den Metadaten ist die Groesse noch unbekannt. */
+function tvQuer(){const v=tvV();return v.videoWidth>0&&v.videoWidth>v.videoHeight&&window.innerHeight>window.innerWidth}
+/* Die Drehung nachziehen, sobald die Videogroesse bekannt ist oder ein anderer Clip geladen wurde. */
+function tvRot(){if(TV.big)$("stagevid").classList.toggle("rot",tvQuer())}
 function tvMode(on){
   on=!!on;if(on===TV.on)return;
   TV.on=on;TV.tok++;
-  if(!on){TV.big=false;$("stagevid").classList.remove("big");$("tvBig").setAttribute("aria-pressed","false");$("tvBig").innerHTML=TV_BIG;tvFree()}
+  if(!on){tvFull(false);tvFree()}
   $("stage").hidden=on;$("stagevid").hidden=!on;
   (on?$("stagevid"):$("stage")).appendChild($("hud"));
   if(on){TV.idle=false;$("tvCtl").classList.remove("idle");tvBtn();tvLoad()}
@@ -631,7 +644,7 @@ function tvBarDown(e){
 }
 (function(){
   const v=tvV();
-  v.addEventListener("loadedmetadata",tvMeta);
+  v.addEventListener("loadedmetadata",()=>{tvMeta();tvRot()});
   v.addEventListener("play",tvBtn);v.addEventListener("pause",tvBtn);
   v.addEventListener("seeked",()=>{if(TV.want!=null)tvFlush()});
   v.addEventListener("ended",()=>{if(TV.on&&TV.dur&&!TV.drag){tvGo(TV.a);tvPlay()}});
@@ -639,7 +652,7 @@ function tvBarDown(e){
   $("tvBar").addEventListener("pointerdown",tvBarDown);
   $("tvPlay").onclick=()=>{TV.touch=now();const v=tvV();if(v.paused)tvPlay();else v.pause()};
   $("tvEdit").onclick=()=>{if(TV.ex)openVideoSheet(TV.ex)};
-  $("tvBig").onclick=()=>{TV.touch=now();TV.big=!TV.big;$("stagevid").classList.toggle("big",TV.big);$("tvBig").setAttribute("aria-pressed",String(TV.big));$("tvBig").innerHTML=TV.big?TV_SMALL:TV_BIG;size()};
+  $("tvBig").onclick=()=>{TV.touch=now();tvFull(!TV.big)};
   $("tvBig").innerHTML=TV_BIG;
   /* Der einzige Umschalter: die runden Symbole. Sie dürfen weder die Figur drehen noch die Fläche wecken. */
   [$("swFig"),$("swVid")].forEach(b=>{

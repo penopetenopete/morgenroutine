@@ -911,7 +911,10 @@ html[data-theme="hell"] .tlsw[aria-checked="true"] .tlswk::after{background:#fff
 .stagesw{position:absolute;right:8px;bottom:8px;z-index:2;width:44px;height:44px;padding:0;display:grid;place-items:center;border-radius:999px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 72%,transparent);color:var(--accent);cursor:pointer;-webkit-tap-highlight-color:transparent}
 .stagevid{position:relative;overflow:hidden;border-radius:18px;border:1px solid var(--line);background:black;touch-action:none}
 .stagevid.trans{border-color:var(--rest)}
-.stagevid.big{position:absolute;inset:0 -16px;width:auto;height:auto;border-radius:0;border-width:1px 0}
+/* Vollbild: liegt ueber allem. Ist der Clip querformatig und das Fenster hochformatig, dreht sich der ganze
+   Player (Bild und Bedienung zusammen), damit das Bild die ganze Hoehe nutzt statt eines schmalen Streifens. */
+.stagevid.full{position:fixed;inset:0;width:auto;height:auto;z-index:60;border:0;border-radius:0}
+.stagevid.full.rot{top:50%;left:50%;right:auto;bottom:auto;width:100vh;height:100vw;transform:translate(-50%,-50%) rotate(90deg);transform-origin:center}
 .stagevid video{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain;background:black;transition:filter .25s}
 .stagevid video.end{filter:brightness(0)}
 .stagevid .hud{z-index:1}
