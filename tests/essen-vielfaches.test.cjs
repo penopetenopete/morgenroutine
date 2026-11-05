@@ -450,3 +450,67 @@ test("Skill-Beispiel aus .claude/skills/essen/SKILL.md läuft durch die App", as
   assert.ok(e.every(x => x.n === 0.33 && x.g && x.g.name === "Lasagne"));
   assert.ok(K.nut(E.foods[e[0].food], e[0].amt, e[0].u).kcal > 0, "Nährwerte rechnen");
 });
+
+/* ---------- Einfügen dort, wo man gerade ist (05.11.2026) ---------- */
+
+const block = () => ({
+  v: 1,
+  foods: [{ name: "Hack", kcal: 250, p: 17, c: 0, f: 20 }],
+  meals: [{ name: "Bolo", slot: "ab", items: [{ food: "Hack", amt: 400 }] }],
+  add: [{ date: "2026-01-02", slot: "ab", meal: "Bolo" }],
+  acts: [{ name: "Tennis", kcal: 300 }]
+});
+
+test("Einfügen aus einem Tagesabschnitt: Abschnitt und Tag von dort gewinnen über das, was im Text steht", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E(), k = heute();
+  const p = K.pasteCtx(block(), { slot: "fr", date: k });
+  K.applyImport(await K.prepImport(p));
+  assert.ok(!E.days["2026-01-02"], "nicht am Tag aus dem Text");
+  assert.equal(E.days[k].e[0].slot, "fr", "sondern im Frühstück von heute");
+});
+
+test("Einfügen in die Vorlagen: nur Lebensmittel und Vorlage, nichts ins Tagebuch", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E();
+  const vorher = JSON.stringify(E.days);
+  K.applyImport(await K.prepImport(K.pasteCtx(block(), { onlyMeals: true })));
+  assert.ok(Object.values(E.meals).some(m => m.name === "Bolo"), "die Vorlage ist da");
+  assert.ok(Object.values(E.foods).some(f => f.name === "Hack"), "das Lebensmittel auch");
+  assert.equal(JSON.stringify(E.days), vorher, "am Tagebuch ändert sich nichts");
+});
+
+test("Einfügen in die Lebensmittel: nur das Lebensmittel, keine Vorlage", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E();
+  const vorherM = Object.keys(E.meals).length, vorherT = JSON.stringify(E.days);
+  K.applyImport(await K.prepImport(K.pasteCtx(block(), { onlyFoods: true })));
+  assert.ok(Object.values(E.foods).some(f => f.name === "Hack"));
+  assert.equal(Object.keys(E.meals).length, vorherM, "keine neue Vorlage");
+  assert.equal(JSON.stringify(E.days), vorherT);
+});
+
+test("Einfügen ohne Kontext bleibt, wie es war", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E();
+  const p = block();
+  assert.equal(K.pasteCtx(p, null), p, "ohne Kontext unverändert durchgereicht");
+  K.applyImport(await K.prepImport(p));
+  assert.ok(E.days["2026-01-02"], "der Tag aus dem Text zählt");
+});
+
+test("Direkt einfügen: Abschnitt aus der Uhrzeit, wenn der Text keinen nennt – und Rückgängig stellt alles her", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E(), k = heute();
+  h.ctx.scrollTo = () => {};
+  h.ctx.history.pushState = () => {};
+  const vorher = JSON.stringify(E.days);
+  const p = K.pasteCtx({ v: 1, foods: [{ name: "Hack", kcal: 250, p: 17, c: 0, f: 20 }], add: [{ items: [{ food: "Hack", amt: 200 }] }] }, { auto: true });
+  assert.equal(p.add[0].slot, K.slotNow(), "der Abschnitt kommt aus der Uhrzeit");
+  assert.equal(p.add[0].date, k, "und der Tag ist der angezeigte");
+  assert.ok(await K.pasteGo(p));
+  assert.equal(E.days[k].e.length, 1);
+  K.undo();
+  assert.equal(JSON.stringify(E.days), vorher, "nach Rückgängig wie vorher");
+});
+
+test("Direkt einfügen: nennt der Text selbst einen Abschnitt, gewinnt der Text", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const p = K.pasteCtx({ v: 1, add: [{ slot: "fr", items: [] }] }, { auto: true });
+  assert.equal(p.add[0].slot, "fr");
+});

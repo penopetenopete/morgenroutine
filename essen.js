@@ -180,7 +180,10 @@ function renderEssen0(){
     }
     sh+=`</section>`;
   });
+  sh+=`<button class="btn ghost epaste" id="dPaste">${PASTE}<span>Von Claude einfügen</span></button>`;
   $("eSlots").innerHTML=sh;
+  /* Einfügen direkt am Tag: ein Tipp, und das Diktierte steht da – im Abschnitt, der zur Uhrzeit passt. */
+  $("dPaste").onclick=()=>pasteEssen({auto:true,sofort:true});
   bindSlots();
   essenMeta();
 }
@@ -337,6 +340,7 @@ function bindUnits(inp,f,obj,onChange,done){
 const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
 const PLUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const CAM='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/><path d="M8 9v6M11 9v6M14 9v6M16.5 9v6"/></svg>';
+const PASTE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6H9zM9 12h6M9 16h4"/></svg>';
 const CALI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>';
 const DUP='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 9V6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15H9"/></svg>';
 const BIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
@@ -520,10 +524,12 @@ function calPop(onPick){
 
 /* Löschen mit Rückgängig */
 let undoT=null;
+let undoLast=null;
 function undoBar(text,restore){
   let u=$("eUndo");if(!u){u=document.createElement("div");u.id="eUndo";u.className="eundo";document.body.appendChild(u)}
   u.innerHTML=`<span>${esc(text)}</span><button>Rückgängig</button>`;u.hidden=false;
-  u.querySelector("button").onclick=()=>{u.hidden=true;restore()};
+  const b=u.querySelector("button");if(b)b.onclick=()=>{u.hidden=true;restore()};
+  undoLast=()=>{u.hidden=true;restore()}; // Testhaken: dieselbe Rücknahme wie der Knopf
   clearTimeout(undoT);undoT=setTimeout(()=>u.hidden=true,4000);
 }
 function delWithUndo(list){
@@ -657,7 +663,7 @@ let searchCtx=null,offRes=[],added={},addedN=0,edKey=null,sTab="f",ord=[]; // or
 function openSearch(ctx,keep){
   searchCtx=ctx;if(!keep){offRes=[];added={};addedN=0;edKey=null;sTab="f";ord=[]}
   const where=ctx.kind==="tpl"?E.meals[ctx.tid].name:ctx.kind==="grp"?"Zur Mahlzeit":SLOTN[ctx.slot]+(curDay===today()?"":" · "+dayLab(curDay));
-  openSheet("",where,`<div class="esbar"><input class="pksearch" id="eQ" type="search" placeholder="Suchen …" autocomplete="off" enterkeyhint="search"><button class="ic" id="eScan" aria-label="Barcode scannen">${CAM}</button><div class="seg etabs" id="eTabs"></div></div><div id="eRes"></div><div class="edone"><button class="btn primary big" id="eDone">Fertig</button></div>`,
+  openSheet("",where,`<div class="esbar"><input class="pksearch" id="eQ" type="search" placeholder="Suchen …" autocomplete="off" enterkeyhint="search"><button class="ic" id="eScan" aria-label="Barcode scannen">${CAM}</button><button class="ic" id="ePaste" aria-label="Von Claude einfügen">${PASTE}</button><div class="seg etabs" id="eTabs"></div></div><div id="eRes"></div><div class="edone"><button class="btn primary big" id="eDone">Fertig</button></div>`,
     {onClose:()=>{const c=searchCtx;searchCtx=null;renderEssen();if(c&&c.back)setTimeout(c.back,60);else if(c&&c.kind==="tpl")setTimeout(()=>tplSheet(c.tid),60)}});
   const q=$("eQ");let t=null;if(keep&&keep.q)q.value=keep.q;
   q.addEventListener("input",()=>{clearTimeout(t);offRes=[];t=setTimeout(drawRes,120)});
@@ -666,6 +672,11 @@ function openSearch(ctx,keep){
   // Behandlung wie beim Mengenfeld – erst wenn die Tastatur oben ist, die Leiste ins Bild holen.
   q.addEventListener("focus",()=>amtSicht(q));
   $("eScan").onclick=()=>scanSheet();
+  /* Einfügen gleich hier, statt den Umweg über das Menü: aus einem Tagesabschnitt landet es in genau diesem
+     Abschnitt, aus einer Vorlage heraus wird nur die Vorlage angelegt (05.11.2026). */
+  $("ePaste").onclick=()=>{const c=searchCtx;if(!c)return;
+    const zur=()=>openSearch(c,{q:$("eQ")?$("eQ").value:""});
+    if(c.kind==="tpl")pasteEssen({onlyMeals:true,sofort:true},zur);else pasteEssen({slot:c.slot,date:curDay,sofort:true},zur)};
   $("eDone").onclick=closeSheet;
   drawRes();loadBLS().then(()=>{if(searchCtx===ctx&&$("eQ"))drawRes()}).catch(()=>{});
 }
@@ -844,8 +855,9 @@ function tplList(){
   const ms=Object.values(E.meals);
   openSheet("Ernährung","Mahlzeiten-Vorlagen",`<div class="note">Vorlagen bleiben gleich, egal was du im Tagebuch änderst. Bearbeiten nur hier oder über „Vorlage überschreiben“.</div>
     <div class="list elist">${ms.map(m=>{const s=sumE(m.items);return `<button class="erow" data-tl="${m.id}"><span class="emid"><span class="nm">${esc(m.name)}</span><span class="val">${m.slot?SLOTN[m.slot]+" · ":""}${m.items.length} Zutaten · ${nf(s.kcal)} kcal · ${nf(s.p)} g E</span></span></button>`}).join("")||""}</div>
-    <button class="btn" id="tlNew">＋ Neue Vorlage</button>`);
+    <button class="btn" id="tlNew">＋ Neue Vorlage</button><button class="btn ghost" id="tlPaste">Von Claude einfügen</button>`);
   $("shBody").querySelectorAll("[data-tl]").forEach(b=>b.onclick=()=>tplSheet(b.dataset.tl));
+  $("tlPaste").onclick=()=>pasteEssen({onlyMeals:true,sofort:true},tplList);
   $("tlNew").onclick=()=>askName("Neue Vorlage","",n=>{const id=nid();E.meals[id]={id,name:n,items:[]};esave();tplSheet(id)});
 }
 /* Vorlage ansehen/bearbeiten. from = gemerkter Stand der Suche (dann „Hinzufügen“ + zurück zur Suche) */
@@ -870,8 +882,9 @@ function tplSheet(tid,from){
 }
 function foodList(){
   const fs=Object.values(E.foods).sort((a,b)=>a.name.localeCompare(b.name));
-  openSheet("Ernährung","Meine Lebensmittel",`<div class="list elist">${fs.map(f=>`<button class="erow" data-fl="${esc(f.id)}"><span class="emid"><span class="nm">${esc(f.name)}${f.brand?` <small>${esc(f.brand)}</small>`:""}</span><span class="val">${nf(f.kcal)} kcal · ${nf(f.p,1)} g E / ${f.base==="stk"?"Stück":"100 g"}</span></span></button>`).join("")}</div><button class="btn" id="flNew">＋ Eigenes Lebensmittel</button>`);
+  openSheet("Ernährung","Meine Lebensmittel",`<div class="list elist">${fs.map(f=>`<button class="erow" data-fl="${esc(f.id)}"><span class="emid"><span class="nm">${esc(f.name)}${f.brand?` <small>${esc(f.brand)}</small>`:""}</span><span class="val">${nf(f.kcal)} kcal · ${nf(f.p,1)} g E / ${f.base==="stk"?"Stück":"100 g"}</span></span></button>`).join("")}</div><button class="btn" id="flNew">＋ Eigenes Lebensmittel</button><button class="btn ghost" id="flPaste">Von Claude einfügen</button>`);
   $("shBody").querySelectorAll("[data-fl]").forEach(b=>b.onclick=()=>foodForm(E.foods[b.dataset.fl],()=>foodList()));
+  $("flPaste").onclick=()=>pasteEssen({onlyFoods:true,sofort:true},foodList);
   $("flNew").onclick=()=>foodForm({},()=>foodList());
 }
 
@@ -894,7 +907,7 @@ function moreSheet(){
   ["gK","gP","gF","gC","gKg"].forEach(id=>$(id).addEventListener("change",sv));
   $("gBurn").onchange=e=>{E.burnIn=e.target.checked;esave()};
   $("mTpl").onclick=tplList;$("mFood").onclick=foodList;
-  $("mPaste").onclick=pasteEssen;$("mShare").onclick=shareEssen;
+  $("mPaste").onclick=()=>pasteEssen({sofort:true});$("mShare").onclick=shareEssen;
 }
 
 /* ---------- Andockstelle für Claude ----------
@@ -955,7 +968,7 @@ function applyImport(c){
   esave();if(last)curDay=last;
 }
 let eImporting=false;
-async function offerEssen(p){
+async function offerEssen(p,back){
   let c;try{c=await prepImport(p)}catch(e){toast(e.message);return}
   const nF=Object.keys(c.extra).filter(id=>id.startsWith("own:")).length,lines=[];
   if(nF)lines.push(nF+" neue"+(nF===1?"s Lebensmittel":" Lebensmittel")+": "+Object.values(c.extra).filter(f=>f.id.startsWith("own:")).map(f=>f.name).join(", "));
@@ -967,8 +980,8 @@ async function offerEssen(p){
   if(!lines.length){toast("Link enthält nichts zum Übernehmen");return}
   eImporting=true;
   openSheet("Von Claude","Ernährung übernehmen?",`<div class="note">${lines.map(esc).join("<br>")}</div>${c.warn.length?`<div class="note warnbox">${c.warn.map(esc).join("<br>")}</div>`:""}<button class="btn primary big" id="eiOk">Übernehmen</button><button class="btn ghost" id="eiNo">Abbrechen</button>`,{onClose:()=>{eImporting=false}});
-  $("eiOk").onclick=()=>{applyImport(c);eImporting=false;closeSheet();if(K.screen()!=="essen")show("essen");else renderEssen();toast("Übernommen")};
-  $("eiNo").onclick=()=>{eImporting=false;closeSheet()};
+  $("eiOk").onclick=()=>{applyImport(c);eImporting=false;closeSheet();if(K.screen()!=="essen")show("essen");else renderEssen();toast("Übernommen");if(back)setTimeout(back,80)};
+  $("eiNo").onclick=()=>{eImporting=false;closeSheet();if(back)setTimeout(back,80)};
 }
 /* Nimmt den Link #e=… und genauso den nackten JSON-Text, den ein Skill in der Claude-App ausspuckt –
    am Handy ist Text kopieren der kurze Weg, ein Link müsste erst gepackt werden (05.11.2026).
@@ -985,11 +998,42 @@ async function checkEssen(){
   const h=location.hash;history.replaceState(history.state,"",location.pathname+location.search);
   try{offerEssen(await readE(h))}catch(e){toast("Link kaputt: "+e.message)}
 }
-async function pasteEssen(){
+/* Einfügen dort, wo man gerade ist (05.11.2026). ctx:
+     {slot,date}   – das Eingefügte landet in diesem Abschnitt und an diesem Tag, egal was im Text steht
+     {onlyMeals}   – nur Lebensmittel und Vorlagen anlegen, nichts ins Tagebuch
+     {onlyFoods}   – nur Lebensmittel
+   Ohne ctx bleibt alles wie bisher: der Text bestimmt selbst, wohin er gehört. */
+/* Welcher Abschnitt passt zur Uhrzeit? Nur ein Vorschlag für Eingefügtes, das selbst keinen nennt. */
+function slotNow(){const h=new Date().getHours();return h<11?"fr":h<15?"mi":h<21?"ab":"sn"}
+function pasteCtx(p,ctx){
+  if(!p||!ctx)return p;
+  const q=Object.assign({},p);
+  if(ctx.onlyFoods){delete q.meals;delete q.add;delete q.acts;return q}
+  if(ctx.onlyMeals){delete q.add;delete q.acts;return q}
+  /* auto: der Text darf seinen Abschnitt selbst nennen ("heute früh"); sagt er nichts, zählt die Uhrzeit. */
+  if(ctx.auto)q.add=(q.add||[]).map(a=>Object.assign({},a,SLOTN[a.slot]?{}:{slot:slotNow()},a.date?{}:{date:curDay}));
+  if(ctx.slot||ctx.date)q.add=(q.add||[]).map(a=>Object.assign({},a,ctx.slot?{slot:ctx.slot}:{},ctx.date?{date:ctx.date}:{}));
+  return q;
+}
+/* Sofort übernehmen, ohne Zwischenschritt: ein Tipp, und es steht im Tag. Statt vorher zu fragen,
+   lässt sich danach alles mit einem Tipp zurücknehmen (05.11.2026, vom Nutzer so gewollt). */
+async function pasteGo(p,back){
+  let c;try{c=await prepImport(p)}catch(e){toast(e.message);return false}
+  const snap=JSON.stringify({days:E.days,foods:E.foods,meals:E.meals});
+  applyImport(c);
+  if(K.screen()!=="essen")show("essen");else renderEssen();
+  const n=c.add.reduce((a,x)=>a+(x.items?x.items.length:1),0),nm=c.meals.length,nf2=Object.keys(c.extra).filter(id=>id.startsWith("own:")).length;
+  const was=n?(c.add[0].meal?c.add[0].meal.name:c.add[0].name||n+(n===1?" Eintrag":" Einträge")):nm?nm+(nm===1?" Vorlage":" Vorlagen"):nf2+(nf2===1?" Lebensmittel":" Lebensmittel");
+  undoBar(was+" eingefügt"+(c.warn.length?" · "+c.warn.length+" unbekannt":""),()=>{const o=JSON.parse(snap);E.days=o.days;E.foods=o.foods;E.meals=o.meals;esave();renderEssen()});
+  if(back)setTimeout(back,80);
+  return true;
+}
+async function pasteEssen(ctx,back){
+  const weiter=async t=>{const p=pasteCtx(await readE(t),ctx);if(ctx&&ctx.sofort)await pasteGo(p,back);else offerEssen(p,back)};
   let t="";try{t=await navigator.clipboard.readText()}catch(_){}
-  if(/[#&?]e=/.test(t)||t.trim().charAt(0)==="{"||/^```/.test(t.trim())){try{offerEssen(await readE(t));return}catch(_){}}
-  openSheet("Von Claude","Link einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Link oder Text von Claude hier einfügen"></textarea><button class="btn primary big" id="eiGo">Weiter</button>`);
-  $("eiGo").onclick=async()=>{try{const p=await readE($("eiTxt").value);closeSheet();setTimeout(()=>offerEssen(p),80)}catch(e){toast("Kein gültiger Link und kein lesbarer Text")}};
+  if(/[#&?]e=/.test(t)||t.trim().charAt(0)==="{"||/^```/.test(t.trim())){try{await weiter(t);return}catch(_){}}
+  openSheet("Von Claude","Einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Link oder Text von Claude hier einfügen"></textarea><button class="btn primary big" id="eiGo">Weiter</button>`);
+  $("eiGo").onclick=async()=>{const v=$("eiTxt").value;try{const p=pasteCtx(await readE(v),ctx);closeSheet();setTimeout(()=>{if(ctx&&ctx.sofort)pasteGo(p,back);else offerEssen(p,back)},80)}catch(e){toast("Kein gültiger Link und kein lesbarer Text")}};
 }
 async function shareEssen(){
   try{
@@ -1024,5 +1068,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,pasteCtx,pasteGo,slotNow,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();
