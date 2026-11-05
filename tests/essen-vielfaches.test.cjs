@@ -548,3 +548,13 @@ test("Einfügen: antwortet die Zwischenablage erst nach dem Chip-Tipp, zählt si
   loes('{"v":1}');                              // der Nutzer tippt den Chip an
   assert.equal(await frage.spaeter, '{"v":1}', "die späte Antwort ist noch da");
 });
+
+test("Einfügen: ohne Zwischenablage im Browser wird gar nicht erst gewartet", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  h.ctx.navigator.clipboard = undefined;
+  const f = K.clipFrage();
+  assert.equal(f.gefragt, false, "es gab nichts zu fragen");
+  assert.equal(await f.spaeter, "");
+  h.ctx.navigator.clipboard = { readText: async () => '{"v":1}' };
+  assert.equal(K.clipFrage().gefragt, true);
+});

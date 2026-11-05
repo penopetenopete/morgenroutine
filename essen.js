@@ -1035,15 +1035,20 @@ const pasteLike=t=>{const v=String(t||"").trim();return /[#&?]e=/.test(v)||v.cha
    Anfrage selbst zurück – nach kurzer Frist geht es ohne sie weiter, und kommt sie später doch, zählt sie
    immer noch (05.11.2026: der erste Tipp tat sonst nichts). */
 function clipFrage(){
-  let p=null;try{p=navigator.clipboard.readText()}catch(_){}
-  const sicher=Promise.resolve(p||"").then(v=>String(v||""),()=>"");
-  return {spaeter:sicher,kurz:ms=>Promise.race([sicher,new Promise(r=>setTimeout(()=>r(""),ms))])};
+  let p=null;
+  try{if(navigator.clipboard&&navigator.clipboard.readText)p=navigator.clipboard.readText()}catch(_){}
+  const sicher=Promise.resolve(p||"").then(v=>String(v||""),()=>""); // abgelehnt oder nicht vorhanden: sofort leer
+  return {gefragt:!!p,spaeter:sicher,kurz:ms=>Promise.race([sicher,new Promise(r=>setTimeout(()=>r(""),ms))])};
 }
 const clipText=ms=>clipFrage().kurz(ms); // kurzer Weg, für Aufrufer die nicht warten wollen
 async function pasteEssen(ctx,back){
   const weiter=async t=>{const p=pasteCtx(await readE(t),ctx);if(ctx&&ctx.sofort)await pasteGo(p,back);else offerEssen(p,back)};
+  /* Auf die Antwort warten, nicht auf eine Frist: iOS und Chrome zeigen hier ihre eigene Nachfrage
+     („Einsetzen“), und ein Fenster, das sich währenddessen aufschiebt, reisst sie weg – genau daran
+     scheiterte der erste Tipp (05.11.2026, am Gerät gemeldet). Die lange Grenze fängt nur den Fall ab,
+     dass gar keine Antwort kommt. Wurde nicht einmal gefragt, geht es ohne Warten weiter. */
   const frage=clipFrage();
-  const t=await frage.kurz(700);
+  const t=frage.gefragt?await frage.kurz(60000):"";
   if(pasteLike(t)){try{await weiter(t);return}catch(_){}}
   /* Kein Zwischenschritt mehr: das Feld steht offen und nimmt, was hineinkommt. Sobald etwas Brauchbares
      drinsteht – eingefügt, getippt oder über den Einfüge-Chip – wird es sofort übernommen (05.11.2026). */
