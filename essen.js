@@ -1028,12 +1028,41 @@ async function pasteGo(p,back){
   if(back)setTimeout(back,80);
   return true;
 }
+/* Sieht der Text nach etwas für uns aus? Nur dann lohnt der Versuch, ihn zu lesen. */
+const pasteLike=t=>{const v=String(t||"").trim();return /[#&?]e=/.test(v)||v.charAt(0)==="{"||/^```/.test(v)};
+/* Die Zwischenablage darf nicht bremsen: Chrome zeigt für readText erst einen Einfüge-Chip, und manchmal
+   antwortet sie gar nicht. Deshalb wird sie nur kurz gefragt; was länger braucht, zählt als „geht nicht“. */
+function clipText(ms){
+  return new Promise(res=>{
+    let fertig=false;const ende=v=>{if(fertig)return;fertig=true;res(v||"")};
+    setTimeout(()=>ende(""),ms);
+    try{navigator.clipboard.readText().then(ende,()=>ende(""))}catch(_){ende("")}
+  });
+}
 async function pasteEssen(ctx,back){
   const weiter=async t=>{const p=pasteCtx(await readE(t),ctx);if(ctx&&ctx.sofort)await pasteGo(p,back);else offerEssen(p,back)};
-  let t="";try{t=await navigator.clipboard.readText()}catch(_){}
-  if(/[#&?]e=/.test(t)||t.trim().charAt(0)==="{"||/^```/.test(t.trim())){try{await weiter(t);return}catch(_){}}
-  openSheet("Von Claude","Einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Link oder Text von Claude hier einfügen"></textarea><button class="btn primary big" id="eiGo">Weiter</button>`);
-  $("eiGo").onclick=async()=>{const v=$("eiTxt").value;try{const p=pasteCtx(await readE(v),ctx);closeSheet();setTimeout(()=>{if(ctx&&ctx.sofort)pasteGo(p,back);else offerEssen(p,back)},80)}catch(e){toast("Kein gültiger Link und kein lesbarer Text")}};
+  const t=await clipText(600);
+  if(pasteLike(t)){try{await weiter(t);return}catch(_){}}
+  /* Kein Zwischenschritt mehr: das Feld steht offen und nimmt, was hineinkommt. Sobald etwas Brauchbares
+     drinsteht – eingefügt, getippt oder über den Einfüge-Chip – wird es sofort übernommen (05.11.2026). */
+  openSheet("Von Claude","Einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Hier einfügen – es wird sofort übernommen" autofocus></textarea><button class="btn primary big" id="eiGo">Übernehmen</button>`);
+  const feld=$("eiTxt");
+  try{feld.focus({preventScroll:true})}catch(_){}
+  let lief=false;
+  const nimm=async v=>{
+    if(lief||!pasteLike(v))return false;
+    let p;try{p=pasteCtx(await readE(v),ctx)}catch(e){toast("Text nicht lesbar");return false}
+    lief=true;closeSheet();
+    setTimeout(()=>{if(ctx&&ctx.sofort)pasteGo(p,back);else offerEssen(p,back)},80);
+    return true;
+  };
+  feld.addEventListener("paste",e=>{
+    let v="";try{v=(e.clipboardData||window.clipboardData).getData("text")}catch(_){}
+    if(v&&pasteLike(v)){e.preventDefault();nimm(v)}
+    else setTimeout(()=>nimm(feld.value),0); // Browser ohne clipboardData: nach dem Einfügen nachsehen
+  });
+  feld.addEventListener("input",()=>{if(pasteLike(feld.value))nimm(feld.value)});
+  $("eiGo").onclick=async()=>{if(!await nimm(feld.value))toast("Kein gültiger Link und kein lesbarer Text")};
 }
 async function shareEssen(){
   try{
@@ -1068,5 +1097,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,pasteCtx,pasteGo,slotNow,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,pasteCtx,pasteGo,slotNow,pasteLike,clipText,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();

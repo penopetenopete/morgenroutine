@@ -514,3 +514,26 @@ test("Direkt einfügen: nennt der Text selbst einen Abschnitt, gewinnt der Text"
   const p = K.pasteCtx({ v: 1, add: [{ slot: "fr", items: [] }] }, { auto: true });
   assert.equal(p.add[0].slot, "fr");
 });
+
+test("Einfügen: nur was nach einem Block aussieht, wird überhaupt angefasst", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  assert.equal(K.pasteLike('{"v":1}'), true);
+  assert.equal(K.pasteLike('```json\n{"v":1}\n```'), true);
+  assert.equal(K.pasteLike("https://x.de/#e=AbC"), true);
+  assert.equal(K.pasteLike("Einkaufszettel: Milch, Brot"), false);
+  assert.equal(K.pasteLike(""), false);
+  assert.equal(K.pasteLike(null), false);
+});
+
+test("Einfügen: die Zwischenablage darf nicht bremsen – antwortet sie nicht, geht es trotzdem weiter", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  h.ctx.setTimeout = (fn, ms) => setTimeout(fn, ms);   // die Harness hält Timer sonst an
+  h.ctx.navigator.clipboard = { readText: () => new Promise(() => {}) };   // antwortet nie
+  const t0 = Date.now();
+  assert.equal(await K.clipText(60), "", "nach der kurzen Frist leer");
+  assert.ok(Date.now() - t0 < 1000, "und zwar schnell");
+  h.ctx.navigator.clipboard = { readText: () => Promise.reject(new Error("verboten")) };
+  assert.equal(await K.clipText(60), "", "abgelehnt zählt genauso");
+  h.ctx.navigator.clipboard = { readText: async () => '{"v":1}' };
+  assert.equal(await K.clipText(60), '{"v":1}');
+});

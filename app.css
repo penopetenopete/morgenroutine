@@ -456,7 +456,7 @@ img.eic{background:#fff}
 /* Vielfaches vorne in der Zeile (05.11.2026): steht an der Stelle des Bildes, zeigt immer den Faktor und
    oeffnet angetippt das Zahlenfeld. Die unsichtbare Flaeche darum herum macht ihn mit dem Daumen treffbar. */
 /* Einfügen am Ende des Tages (05.11.2026): ein Tipp, und das Diktierte steht im Abschnitt zur Uhrzeit. */
-.epaste{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px}
+.epaste{display:flex;align-items:center;justify-content:center;gap:9px;margin:18px auto 4px;width:auto;min-width:min(260px,74%);border-radius:999px;border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .epaste svg{width:19px;height:19px;flex:none}
 .efac{position:relative;flex:none;min-width:34px;height:34px;padding:0 6px;border-radius:999px;background:var(--bg);border:1px solid var(--line);display:grid;place-items:center;font-family:var(--f-display);font-size:.72rem;color:var(--muted)}
 .efac.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
