@@ -380,3 +380,43 @@ test("Menge von Hand eingetippt: der Faktor geht auf 1 zurück und die neue Meng
   assert.equal(e.b, 95);
   assert.ok(K.setFac([e], 2) && e.amt === 190, "ab jetzt zählt die neue Basis");
 });
+
+/* ---------- Diktierte Mahlzeit einfügen (05.11.2026) ----------
+   Ein Skill in der Claude-App liefert reinen JSON-Text; die App nimmt ihn genauso an wie den gepackten Link. */
+
+test("Einfügen: reiner JSON-Text wird angenommen, auch in einem Codeblock", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const txt = '{"v":1,"meals":[{"name":"Lasagne","items":[]}]}';
+  assert.equal((await K.readE(txt)).meals[0].name, "Lasagne");
+  assert.equal((await K.readE("```json\n" + txt + "\n```")).meals[0].name, "Lasagne", "Fences fallen weg");
+  assert.equal((await K.readE("  ```\n" + txt + "\n```  ")).v, 1);
+  await assert.rejects(() => K.readE("{kein json"), /nicht lesbar/);
+  await assert.rejects(() => K.readE("irgendein Text"), /Kein Ernährungs-Link/);
+});
+
+test("Einfügen: add mit n trägt die Mahlzeit mit dem Vielfachen ein, die volle Menge bleibt die Basis", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E(), k = heute();
+  const p = {
+    v: 1,
+    foods: [{ name: "Hack", kcal: 250, p: 17, c: 0, f: 20 }, { name: "Platten", kcal: 350, p: 12, c: 70, f: 2 }],
+    add: [{ date: k, slot: "mi", name: "Lasagne", n: 0.33, items: [{ food: "Hack", amt: 500 }, { food: "Platten", amt: 250 }] }]
+  };
+  K.applyImport(await K.prepImport(p));
+  const e = E.days[k].e;
+  assert.equal(e.length, 2);
+  assert.equal(e[0].b, 500, "die gelieferte Menge ist die Basis");
+  assert.equal(e[0].amt, 165, "500 × 0,33");
+  assert.equal(e[1].amt, 82.5);
+  assert.ok(e.every(x => x.n === 0.33));
+  assert.equal(e[0].g.n, 0.33, "die Mahlzeit merkt sich das Vielfache");
+  assert.ok(K.setFac(e, 1) && e[0].amt === 500, "ein Tipp zurück auf die ganze Portion");
+});
+
+test("Einfügen: fehlendes oder unsinniges n ändert nichts an der Menge", async () => {
+  for (const n of [undefined, 0, -1, "abc", 1000]) {
+    const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E(), k = heute();
+    const p = { v: 1, foods: [{ name: "Hack", kcal: 250, p: 17, c: 0, f: 20 }], add: [{ date: k, slot: "mi", n, items: [{ food: "Hack", amt: 500 }] }] };
+    K.applyImport(await K.prepImport(p));
+    assert.equal(E.days[k].e[0].amt, 500, String(n));
+  }
+});

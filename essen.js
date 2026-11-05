@@ -898,11 +898,12 @@ function moreSheet(){
 }
 
 /* ---------- Andockstelle für Claude ----------
-   Link: <App-URL>#e=<base64url(deflate-raw(JSON))>
+   Link: <App-URL>#e=<base64url(deflate-raw(JSON))> – oder dasselbe JSON als reiner Text, über „Von Claude“ eingefügt
    JSON {v:1,
      foods:[{name,brand?,base?:"g"|"stk",kcal,p,c,f,fib?,stkG?,def?,units?:[{t?,g}],upd?}],     neue Lebensmittel (Name+Marke = Schlüssel; upd:true überschreibt Werte)
      meals:[{name,slot?,items:[{food,amt,u?}]}],                                  Vorlagen anlegen/ersetzen (gleicher Name = ersetzen)
-     add:[{date?,slot,meal?|items?,name?}],                                       ins Tagebuch: meal = Vorlagen-Name, items = einzelne (name = als Mahlzeit-Gruppe)
+     add:[{date?,slot,meal?|items?,name?,n?}],                                    ins Tagebuch: meal = Vorlagen-Name, items = einzelne (name = als Mahlzeit-Gruppe)
+                                                                                  n = Vielfaches (0,01–99): die Mengen gelten als Basis, eingetragen wird Basis × n ("ein Drittel Lasagne")
      acts:[{date?,name,kcal}]}                                                    Aktivitäten ohne App (z. B. Tennis)
    food-Verweis: Name (ggf. „Name | Marke“), eine id aus „An Claude schicken“ oder „bls:<Code>“. */
 const findFood=(ref,extra)=>{
@@ -932,8 +933,9 @@ async function prepImport(p){
   const meals=(p.meals||[]).filter(m=>m&&m.name).map(m=>({name:String(m.name).slice(0,40),slot:SLOTN[m.slot]?m.slot:undefined,items:items(m.items)}));
   const t=today(),add=(p.add||[]).map(a=>{
     const k=/^\d{4}-\d\d-\d\d$/.test(a.date||"")?a.date:t,slot=SLOTN[a.slot]?a.slot:"sn";
-    if(a.meal){const nm=norm(a.meal),m=meals.find(x=>norm(x.name)===nm)||Object.values(E.meals).find(x=>norm(x.name)===nm);if(!m){warn.push("Vorlage fehlt: "+a.meal);return null}return {k,slot,meal:m}}
-    const its=items(a.items);return its.length?{k,slot,items:its,name:a.name}:null}).filter(Boolean);
+    const n=parseFac(a.n)||1; // fehlt oder unbrauchbar: volle Menge, der Eintrag bleibt wie bisher
+    if(a.meal){const nm=norm(a.meal),m=meals.find(x=>norm(x.name)===nm)||Object.values(E.meals).find(x=>norm(x.name)===nm);if(!m){warn.push("Vorlage fehlt: "+a.meal);return null}return {k,slot,meal:m,n}}
+    const its=items(a.items);return its.length?{k,slot,items:its,name:a.name,n}:null}).filter(Boolean);
   const acts=(p.acts||[]).filter(a=>a&&a.name&&+a.kcal>0).map(a=>({k:/^\d{4}-\d\d-\d\d$/.test(a.date||"")?a.date:t,name:String(a.name).slice(0,40),kcal:Math.round(+a.kcal)}));
   return {extra,upd,meals,add,acts,warn};
 }
@@ -943,8 +945,11 @@ function applyImport(c){
   c.meals.forEach(m=>{const old=Object.values(E.meals).find(x=>norm(x.name)===norm(m.name));const id=old?old.id:nid();E.meals[id]={id,name:m.name,slot:m.slot,items:m.items}});
   let last=null;
   c.add.forEach(a=>{
-    if(a.meal){const tpl=Object.values(E.meals).find(x=>norm(x.name)===norm(a.meal.name));if(tpl)insertTpl(tpl.id,a.k,a.slot,true)}
-    else{const gid=a.name?nid():null;day(a.k).e.push(...a.items.map(it=>{const x=Object.assign({id:nid(),slot:a.slot},it);if(gid)x.g={id:gid,name:a.name};return x}))}
+    /* Das Vielfache wirkt erst hier, auf die fertigen Einträge: die gelieferte Menge ist die Basis (b),
+       eingetragen wird b × n – so zeigt das Feld vorne „0,33×“ und man kommt mit einem Tipp zurück auf die ganze Portion. */
+    if(a.meal){const tpl=Object.values(E.meals).find(x=>norm(x.name)===norm(a.meal.name));if(tpl){const gid=insertTpl(tpl.id,a.k,a.slot,true);if(a.n&&a.n!==1&&gid)setFac(day(a.k).e.filter(x=>x.g&&x.g.id===gid),a.n)}}
+    else{const gid=a.name?nid():null;const neu=a.items.map(it=>{const x=Object.assign({id:nid(),slot:a.slot},it);if(gid)x.g={id:gid,name:a.name};return x});
+      day(a.k).e.push(...neu);if(a.n&&a.n!==1)setFac(neu,a.n)}
     last=a.k});
   c.acts.forEach(a=>{const d=day(a.k);(d.acts=d.acts||[]).push({name:a.name,kcal:a.kcal});last=a.k});
   esave();if(last)curDay=last;
@@ -965,8 +970,13 @@ async function offerEssen(p){
   $("eiOk").onclick=()=>{applyImport(c);eImporting=false;closeSheet();if(K.screen()!=="essen")show("essen");else renderEssen();toast("Übernommen")};
   $("eiNo").onclick=()=>{eImporting=false;closeSheet()};
 }
+/* Nimmt den Link #e=… und genauso den nackten JSON-Text, den ein Skill in der Claude-App ausspuckt –
+   am Handy ist Text kopieren der kurze Weg, ein Link müsste erst gepackt werden (05.11.2026).
+   Ein Markdown-Codeblock drumherum wird abgestreift, weil die App den Text so anbietet. */
 async function readE(t){
-  const m=String(t||"").match(/[#&?]e=([A-Za-z0-9_-]+)/)||String(t||"").trim().match(/^([A-Za-z0-9_-]{20,})$/);
+  const roh=String(t||"").trim().replace(/^```[a-z]*\s*/i,"").replace(/```\s*$/,"").trim();
+  if(roh.charAt(0)==="{"){let p;try{p=JSON.parse(roh)}catch(_){throw new Error("Text nicht lesbar")}return p}
+  const m=String(t||"").match(/[#&?]e=([A-Za-z0-9_-]+)/)||roh.match(/^([A-Za-z0-9_-]{20,})$/);
   if(!m)throw new Error("Kein Ernährungs-Link");
   return JSON.parse(await zip(b64u.dec(m[1]),true));
 }
@@ -977,9 +987,9 @@ async function checkEssen(){
 }
 async function pasteEssen(){
   let t="";try{t=await navigator.clipboard.readText()}catch(_){}
-  if(/[#&?]e=/.test(t)){try{offerEssen(await readE(t));return}catch(_){}}
-  openSheet("Von Claude","Link einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Link von Claude hier einfügen"></textarea><button class="btn primary big" id="eiGo">Weiter</button>`);
-  $("eiGo").onclick=async()=>{try{const p=await readE($("eiTxt").value);closeSheet();setTimeout(()=>offerEssen(p),80)}catch(e){toast("Kein gültiger Ernährungs-Link")}};
+  if(/[#&?]e=/.test(t)||t.trim().charAt(0)==="{"||/^```/.test(t.trim())){try{offerEssen(await readE(t));return}catch(_){}}
+  openSheet("Von Claude","Link einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Link oder Text von Claude hier einfügen"></textarea><button class="btn primary big" id="eiGo">Weiter</button>`);
+  $("eiGo").onclick=async()=>{try{const p=await readE($("eiTxt").value);closeSheet();setTimeout(()=>offerEssen(p),80)}catch(e){toast("Kein gültiger Link und kein lesbarer Text")}};
 }
 async function shareEssen(){
   try{
