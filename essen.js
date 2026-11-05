@@ -1030,51 +1030,34 @@ async function pasteGo(p,back){
 }
 /* Sieht der Text nach etwas für uns aus? Nur dann lohnt der Versuch, ihn zu lesen. */
 const pasteLike=t=>{const v=String(t||"").trim();return /[#&?]e=/.test(v)||v.charAt(0)==="{"||/^```/.test(v)};
-/* Die Zwischenablage darf nicht bremsen, aber ihre Antwort darf auch nicht verfallen: Chrome zeigt für
-   readText einen Einfüge-Chip, und bis der angetippt ist, vergehen Sekunden. Darum liefert clipFrage die
-   Anfrage selbst zurück – nach kurzer Frist geht es ohne sie weiter, und kommt sie später doch, zählt sie
-   immer noch (05.11.2026: der erste Tipp tat sonst nichts). */
-function clipFrage(){
-  let p=null;
-  try{if(navigator.clipboard&&navigator.clipboard.readText)p=navigator.clipboard.readText()}catch(_){}
-  const sicher=Promise.resolve(p||"").then(v=>String(v||""),()=>""); // abgelehnt oder nicht vorhanden: sofort leer
-  return {gefragt:!!p,spaeter:sicher,kurz:ms=>Promise.race([sicher,new Promise(r=>setTimeout(()=>r(""),ms))])};
-}
-const clipText=ms=>clipFrage().kurz(ms); // kurzer Weg, für Aufrufer die nicht warten wollen
+/* Einfügen: Fenster auf, Feld fokussiert, du setzt ein – fertig (05.11.2026, nach zwei Anläufen am Gerät).
+   Die Zwischenablage wird NICHT mehr von selbst gelesen: iOS und Chrome schieben dafür ihre eigene Nachfrage
+   („Einsetzen“) ein, und jedes Fenster, das sich währenddessen aufbaut, reisst sie weg. Der erste Tipp tat dann
+   nichts, der zweite öffnete ein zweites Fenster – und wenn die alte Anfrage Sekunden später doch noch antwortete,
+   ging das gerade geschlossene Fenster wieder auf. Genau das war das „geht nicht mehr zu“.
+   Sobald etwas Brauchbares im Feld steht – eingesetzt oder getippt –, wird es ohne weiteren Tipp übernommen. */
+let pasteOffen=false;
 async function pasteEssen(ctx,back){
-  const weiter=async t=>{const p=pasteCtx(await readE(t),ctx);if(ctx&&ctx.sofort)await pasteGo(p,back);else offerEssen(p,back)};
-  /* Auf die Antwort warten, nicht auf eine Frist: iOS und Chrome zeigen hier ihre eigene Nachfrage
-     („Einsetzen“), und ein Fenster, das sich währenddessen aufschiebt, reisst sie weg – genau daran
-     scheiterte der erste Tipp (05.11.2026, am Gerät gemeldet). Die lange Grenze fängt nur den Fall ab,
-     dass gar keine Antwort kommt. Wurde nicht einmal gefragt, geht es ohne Warten weiter. */
-  const frage=clipFrage();
-  const t=frage.gefragt?await frage.kurz(60000):"";
-  if(pasteLike(t)){try{await weiter(t);return}catch(_){}}
-  /* Kein Zwischenschritt mehr: das Feld steht offen und nimmt, was hineinkommt. Sobald etwas Brauchbares
-     drinsteht – eingefügt, getippt oder über den Einfüge-Chip – wird es sofort übernommen (05.11.2026). */
-  openSheet("Von Claude","Einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Hier einfügen – es wird sofort übernommen" autofocus></textarea><button class="btn" id="eiClip">Aus der Zwischenablage holen</button><button class="btn primary big" id="eiGo">Übernehmen</button>`);
+  if(pasteOffen)return;            // ein Fenster genügt, zwei haben sich gegenseitig aufgehalten
+  pasteOffen=true;
+  openSheet("Von Claude","Einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Hier einsetzen – wird sofort übernommen" autofocus></textarea><button class="btn primary big" id="eiGo">Übernehmen</button>`,{onClose:()=>{pasteOffen=false}});
   const feld=$("eiTxt");
   try{feld.focus({preventScroll:true})}catch(_){}
   let lief=false;
   const nimm=async v=>{
     if(lief||!pasteLike(v))return false;
     let p;try{p=pasteCtx(await readE(v),ctx)}catch(e){toast("Text nicht lesbar");return false}
-    lief=true;closeSheet();
+    lief=true;pasteOffen=false;closeSheet();
     setTimeout(()=>{if(ctx&&ctx.sofort)pasteGo(p,back);else offerEssen(p,back)},80);
     return true;
   };
   feld.addEventListener("paste",e=>{
     let v="";try{v=(e.clipboardData||window.clipboardData).getData("text")}catch(_){}
     if(v&&pasteLike(v)){e.preventDefault();nimm(v)}
-    else setTimeout(()=>nimm(feld.value),0); // Browser ohne clipboardData: nach dem Einfügen nachsehen
+    else setTimeout(()=>nimm(feld.value),0); // Browser ohne clipboardData: nach dem Einsetzen nachsehen
   });
   feld.addEventListener("input",()=>{if(pasteLike(feld.value))nimm(feld.value)});
-  /* Kommt die Zwischenablage erst jetzt (der Chip wurde angetippt), zählt sie trotzdem. */
-  frage.spaeter.then(v=>{if(pasteLike(v))nimm(v)},()=>{});
-  /* Zweiter Anlauf, ohne das Fenster zu schliessen: iOS und Chrome fragen beim Lesen jedes Mal nach
-     („Einsetzen“), und diese Frage darf man auslösen dürfen, wenn der erste Versuch ins Leere lief. */
-  $("eiClip").onclick=async()=>{const v=await clipFrage().spaeter;if(!await nimm(v))toast(v?"Darin steht nichts für uns":"Die Zwischenablage bleibt zu – halte ins Feld und setze ein")};
-  $("eiGo").onclick=async()=>{if(await nimm(feld.value))return;toast(feld.value.trim()?"Kein gültiger Link und kein lesbarer Text":"Noch nichts eingefügt")};
+  $("eiGo").onclick=async()=>{if(await nimm(feld.value))return;toast(feld.value.trim()?"Kein gültiger Link und kein lesbarer Text":"Noch nichts eingesetzt")};
 }
 async function shareEssen(){
   try{
@@ -1109,5 +1092,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,pasteCtx,pasteGo,slotNow,pasteLike,clipText,clipFrage,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();

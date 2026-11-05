@@ -525,36 +525,15 @@ test("Einfügen: nur was nach einem Block aussieht, wird überhaupt angefasst", 
   assert.equal(K.pasteLike(null), false);
 });
 
-test("Einfügen: die Zwischenablage darf nicht bremsen – antwortet sie nicht, geht es trotzdem weiter", async () => {
+test("Einfügen: ein zweiter Tipp öffnet kein zweites Fenster", async () => {
   const h = loadApp({}, OPT), K = h.ctx.__essen;
-  h.ctx.setTimeout = (fn, ms) => setTimeout(fn, ms);   // die Harness hält Timer sonst an
-  h.ctx.navigator.clipboard = { readText: () => new Promise(() => {}) };   // antwortet nie
-  const t0 = Date.now();
-  assert.equal(await K.clipText(60), "", "nach der kurzen Frist leer");
-  assert.ok(Date.now() - t0 < 1000, "und zwar schnell");
-  h.ctx.navigator.clipboard = { readText: () => Promise.reject(new Error("verboten")) };
-  assert.equal(await K.clipText(60), "", "abgelehnt zählt genauso");
-  h.ctx.navigator.clipboard = { readText: async () => '{"v":1}' };
-  assert.equal(await K.clipText(60), '{"v":1}');
-});
-
-test("Einfügen: antwortet die Zwischenablage erst nach dem Chip-Tipp, zählt sie trotzdem noch", async () => {
-  const h = loadApp({}, OPT), K = h.ctx.__essen;
-  h.ctx.setTimeout = (fn, ms) => setTimeout(fn, ms);
-  let loes;
-  h.ctx.navigator.clipboard = { readText: () => new Promise(r => { loes = r; }) };
-  const frage = K.clipFrage();
-  assert.equal(await frage.kurz(40), "", "die kurze Frist wartet nicht");
-  loes('{"v":1}');                              // der Nutzer tippt den Chip an
-  assert.equal(await frage.spaeter, '{"v":1}', "die späte Antwort ist noch da");
-});
-
-test("Einfügen: ohne Zwischenablage im Browser wird gar nicht erst gewartet", async () => {
-  const h = loadApp({}, OPT), K = h.ctx.__essen;
-  h.ctx.navigator.clipboard = undefined;
-  const f = K.clipFrage();
-  assert.equal(f.gefragt, false, "es gab nichts zu fragen");
-  assert.equal(await f.spaeter, "");
-  h.ctx.navigator.clipboard = { readText: async () => '{"v":1}' };
-  assert.equal(K.clipFrage().gefragt, true);
+  let auf = 0;
+  const echt = h.ctx.__app ? null : null;
+  h.el("scrim").hidden = true;
+  const offen = () => !h.el("scrim").hidden;
+  await K.paste({ sofort: true });
+  assert.equal(offen(), true, "das Fenster steht offen");
+  const inhalt = h.el("shBody").innerHTML;
+  await K.paste({ sofort: true });
+  assert.equal(h.el("shBody").innerHTML, inhalt, "der zweite Tipp baut nichts neu auf");
 });
