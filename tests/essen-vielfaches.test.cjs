@@ -420,3 +420,33 @@ test("Einfügen: fehlendes oder unsinniges n ändert nichts an der Menge", async
     assert.equal(E.days[k].e[0].amt, 500, String(n));
   }
 });
+
+test("Skill-Beispiel aus .claude/skills/essen/SKILL.md läuft durch die App", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E(), k = heute();
+  /* genau der Block, den der Skill für „Lasagne gekocht, ein Drittel gegessen“ ausgibt */
+  const txt = '```json\n' + JSON.stringify({
+    v: 1,
+    foods: [
+      { name: "Rinderhack", base: "g", kcal: 250, p: 17, c: 0, f: 20, fib: 0 },
+      { name: "Nudelplatten", base: "g", kcal: 350, p: 12, c: 70, f: 2, fib: 3 },
+      { name: "Tomaten passiert", base: "g", kcal: 35, p: 1.5, c: 6, f: 0.2, fib: 1.5 },
+      { name: "Gouda", base: "g", kcal: 356, p: 25, c: 0, f: 28, fib: 0 }
+    ],
+    meals: [{ name: "Lasagne", slot: "mi", items: [
+      { food: "Rinderhack", amt: 500 }, { food: "Nudelplatten", amt: 250 },
+      { food: "Tomaten passiert", amt: 400 }, { food: "Gouda", amt: 200 }] }],
+    add: [{ slot: "mi", meal: "Lasagne", n: 0.33 }]
+  }) + '\n```';
+  const c = await K.prepImport(await K.readE(txt));
+  assert.equal(c.warn.length, 0, "keine unbekannten Zutaten");
+  K.applyImport(c);
+  const vorlage = Object.values(E.meals).find(m => m.name === "Lasagne");
+  assert.ok(vorlage, "die Vorlage liegt im Repertoire");
+  assert.equal(vorlage.items.length, 4);
+  assert.equal(vorlage.items[0].amt, 500, "die Vorlage behält die ganze Portion");
+  const e = E.days[k].e;
+  assert.equal(e.length, 4);
+  assert.equal(e[0].amt, 165, "im Tag steht ein Drittel");
+  assert.ok(e.every(x => x.n === 0.33 && x.g && x.g.name === "Lasagne"));
+  assert.ok(K.nut(E.foods[e[0].food], e[0].amt, e[0].u).kcal > 0, "Nährwerte rechnen");
+});
