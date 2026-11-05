@@ -1047,7 +1047,7 @@ async function pasteEssen(ctx,back){
   if(pasteLike(t)){try{await weiter(t);return}catch(_){}}
   /* Kein Zwischenschritt mehr: das Feld steht offen und nimmt, was hineinkommt. Sobald etwas Brauchbares
      drinsteht – eingefügt, getippt oder über den Einfüge-Chip – wird es sofort übernommen (05.11.2026). */
-  openSheet("Von Claude","Einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Hier einfügen – es wird sofort übernommen" autofocus></textarea><button class="btn primary big" id="eiGo">Übernehmen</button>`);
+  openSheet("Von Claude","Einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Hier einfügen – es wird sofort übernommen" autofocus></textarea><button class="btn" id="eiClip">Aus der Zwischenablage holen</button><button class="btn primary big" id="eiGo">Übernehmen</button>`);
   const feld=$("eiTxt");
   try{feld.focus({preventScroll:true})}catch(_){}
   let lief=false;
@@ -1066,7 +1066,10 @@ async function pasteEssen(ctx,back){
   feld.addEventListener("input",()=>{if(pasteLike(feld.value))nimm(feld.value)});
   /* Kommt die Zwischenablage erst jetzt (der Chip wurde angetippt), zählt sie trotzdem. */
   frage.spaeter.then(v=>{if(pasteLike(v))nimm(v)},()=>{});
-  $("eiGo").onclick=async()=>{if(!await nimm(feld.value))toast("Kein gültiger Link und kein lesbarer Text")};
+  /* Zweiter Anlauf, ohne das Fenster zu schliessen: iOS und Chrome fragen beim Lesen jedes Mal nach
+     („Einsetzen“), und diese Frage darf man auslösen dürfen, wenn der erste Versuch ins Leere lief. */
+  $("eiClip").onclick=async()=>{const v=await clipFrage().spaeter;if(!await nimm(v))toast(v?"Darin steht nichts für uns":"Die Zwischenablage bleibt zu – halte ins Feld und setze ein")};
+  $("eiGo").onclick=async()=>{if(await nimm(feld.value))return;toast(feld.value.trim()?"Kein gültiger Link und kein lesbarer Text":"Noch nichts eingefügt")};
 }
 async function shareEssen(){
   try{
