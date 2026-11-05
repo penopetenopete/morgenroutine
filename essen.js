@@ -1040,9 +1040,12 @@ let pasteOffen=false;
 async function pasteEssen(ctx,back){
   if(pasteOffen)return;            // ein Fenster genügt, zwei haben sich gegenseitig aufgehalten
   pasteOffen=true;
-  openSheet("Von Claude","Einfügen",`<textarea class="pksearch" id="eiTxt" rows="4" placeholder="Hier einsetzen – wird sofort übernommen" autofocus></textarea><button class="btn primary big" id="eiGo">Übernehmen</button>`,{onClose:()=>{pasteOffen=false}});
+  openSheet("Von Claude","Einfügen",`<textarea class="pksearch epaster" id="eiTxt" rows="3" placeholder="Hier einsetzen – wird sofort übernommen" autofocus></textarea><button class="btn primary big" id="eiGo">Übernehmen</button>`,{onClose:()=>{pasteOffen=false}});
   const feld=$("eiTxt");
+  /* Fokus sofort im Tipp (sonst öffnet iOS keine Tastatur), und danach das Feld über die Tastatur holen –
+     dieselbe Behandlung wie beim Mengenfeld, sonst liegt es darunter und man tippt ins Blinde. */
   try{feld.focus({preventScroll:true})}catch(_){}
+  amtSicht(feld);
   let lief=false;
   const nimm=async v=>{
     if(lief||!pasteLike(v))return false;
