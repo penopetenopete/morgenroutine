@@ -537,3 +537,14 @@ test("Einfügen: die Zwischenablage darf nicht bremsen – antwortet sie nicht, 
   h.ctx.navigator.clipboard = { readText: async () => '{"v":1}' };
   assert.equal(await K.clipText(60), '{"v":1}');
 });
+
+test("Einfügen: antwortet die Zwischenablage erst nach dem Chip-Tipp, zählt sie trotzdem noch", async () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  h.ctx.setTimeout = (fn, ms) => setTimeout(fn, ms);
+  let loes;
+  h.ctx.navigator.clipboard = { readText: () => new Promise(r => { loes = r; }) };
+  const frage = K.clipFrage();
+  assert.equal(await frage.kurz(40), "", "die kurze Frist wartet nicht");
+  loes('{"v":1}');                              // der Nutzer tippt den Chip an
+  assert.equal(await frage.spaeter, '{"v":1}', "die späte Antwort ist noch da");
+});

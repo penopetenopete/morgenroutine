@@ -1030,18 +1030,20 @@ async function pasteGo(p,back){
 }
 /* Sieht der Text nach etwas für uns aus? Nur dann lohnt der Versuch, ihn zu lesen. */
 const pasteLike=t=>{const v=String(t||"").trim();return /[#&?]e=/.test(v)||v.charAt(0)==="{"||/^```/.test(v)};
-/* Die Zwischenablage darf nicht bremsen: Chrome zeigt für readText erst einen Einfüge-Chip, und manchmal
-   antwortet sie gar nicht. Deshalb wird sie nur kurz gefragt; was länger braucht, zählt als „geht nicht“. */
-function clipText(ms){
-  return new Promise(res=>{
-    let fertig=false;const ende=v=>{if(fertig)return;fertig=true;res(v||"")};
-    setTimeout(()=>ende(""),ms);
-    try{navigator.clipboard.readText().then(ende,()=>ende(""))}catch(_){ende("")}
-  });
+/* Die Zwischenablage darf nicht bremsen, aber ihre Antwort darf auch nicht verfallen: Chrome zeigt für
+   readText einen Einfüge-Chip, und bis der angetippt ist, vergehen Sekunden. Darum liefert clipFrage die
+   Anfrage selbst zurück – nach kurzer Frist geht es ohne sie weiter, und kommt sie später doch, zählt sie
+   immer noch (05.11.2026: der erste Tipp tat sonst nichts). */
+function clipFrage(){
+  let p=null;try{p=navigator.clipboard.readText()}catch(_){}
+  const sicher=Promise.resolve(p||"").then(v=>String(v||""),()=>"");
+  return {spaeter:sicher,kurz:ms=>Promise.race([sicher,new Promise(r=>setTimeout(()=>r(""),ms))])};
 }
+const clipText=ms=>clipFrage().kurz(ms); // kurzer Weg, für Aufrufer die nicht warten wollen
 async function pasteEssen(ctx,back){
   const weiter=async t=>{const p=pasteCtx(await readE(t),ctx);if(ctx&&ctx.sofort)await pasteGo(p,back);else offerEssen(p,back)};
-  const t=await clipText(600);
+  const frage=clipFrage();
+  const t=await frage.kurz(700);
   if(pasteLike(t)){try{await weiter(t);return}catch(_){}}
   /* Kein Zwischenschritt mehr: das Feld steht offen und nimmt, was hineinkommt. Sobald etwas Brauchbares
      drinsteht – eingefügt, getippt oder über den Einfüge-Chip – wird es sofort übernommen (05.11.2026). */
@@ -1062,6 +1064,8 @@ async function pasteEssen(ctx,back){
     else setTimeout(()=>nimm(feld.value),0); // Browser ohne clipboardData: nach dem Einfügen nachsehen
   });
   feld.addEventListener("input",()=>{if(pasteLike(feld.value))nimm(feld.value)});
+  /* Kommt die Zwischenablage erst jetzt (der Chip wurde angetippt), zählt sie trotzdem. */
+  frage.spaeter.then(v=>{if(pasteLike(v))nimm(v)},()=>{});
   $("eiGo").onclick=async()=>{if(!await nimm(feld.value))toast("Kein gültiger Link und kein lesbarer Text")};
 }
 async function shareEssen(){
@@ -1097,5 +1101,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,pasteCtx,pasteGo,slotNow,pasteLike,clipText,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,pasteCtx,pasteGo,slotNow,pasteLike,clipText,clipFrage,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();
