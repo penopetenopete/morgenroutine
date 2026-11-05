@@ -315,3 +315,68 @@ test("Pfeil › kopiert weiter in den Folgetag (heute unverändert) – der alte
   const morgen = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   assert.equal(a.E.days[morgen].e.length, 1, "Kopie liegt morgen");
 });
+
+/* ---------- Vielfaches als Faktor am Eintrag (05.11.2026) ----------
+   n = Faktor, b = Menge bei Faktor 1. Alte Einträge ohne beides zählen als 1× mit der eingetragenen Menge als Basis. */
+
+test("Faktor: 0,5 halbiert die Menge, 2 verdoppelt sie – immer von der Basis aus, nicht vom letzten Wert", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const e = { id: "x1", amt: 80 };
+  assert.equal(K.facN(e), 1, "ohne n gilt 1×");
+  assert.equal(K.facB(e), 80, "ohne b ist die Menge selbst die Basis");
+  assert.ok(K.setFac([e], 0.5));
+  assert.equal(e.amt, 40);
+  assert.equal(e.n, 0.5);
+  assert.equal(e.b, 80, "die Basis bleibt stehen");
+  assert.ok(K.setFac([e], 2), "jetzt ×2 – von der Basis, nicht von den 40 g");
+  assert.equal(e.amt, 160);
+  assert.ok(K.setFac([e], 0.25) && e.amt === 20);
+});
+
+test("Faktor: Komma statt Punkt wird genommen, Grenzen und Unsinn nicht", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  assert.equal(K.parseFac("0,5"), 0.5);
+  assert.equal(K.parseFac(" 1.25 "), 1.25);
+  for (const schlecht of [0, -1, 100, NaN, Infinity, "abc", "", undefined, null]) {
+    assert.equal(K.parseFac(schlecht), null, String(schlecht));
+    const e = { amt: 100 };
+    assert.equal(K.setFac([e], schlecht), false);
+    assert.equal(e.amt, 100, "nichts verändert");
+  }
+});
+
+test("Faktor auf einer Mahlzeit: alle Zutaten rechnen mit, der Faktor steht an der Gruppe", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const g = { id: "g1", name: "Lasagne" };
+  const l = [{ id: "a", amt: 300, g }, { id: "b", amt: 150, g }, { id: "c", amt: 60, g }];
+  assert.ok(K.setFac(l, 1 / 3 > 0 ? 0.33 : 1));
+  assert.equal(l[0].amt, 99);
+  assert.equal(l[1].amt, 49.5);
+  assert.equal(l[2].amt, 19.8);
+  assert.equal(g.n, 0.33, "die Gruppe merkt sich den Faktor");
+  assert.ok(l.every(x => x.n === 0.33));
+  assert.ok(K.setFac(l, 1), "zurück auf 1× ergibt wieder die Ausgangsmengen");
+  assert.deepEqual(l.map(x => x.amt), [300, 150, 60]);
+});
+
+test("Faktor auf einer Mahlzeit: wäre eine Zutat danach ungültig, bleibt die ganze Mahlzeit unverändert", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const g = { id: "g2", name: "Groß" };
+  const l = [{ id: "a", amt: 100, g }, { id: "b", amt: 60000, g }];
+  assert.equal(K.setFac(l, 2), false);
+  assert.equal(l[0].amt, 100, "die gültige Zutat wird nicht allein umgerechnet");
+  assert.equal(l[1].amt, 60000);
+  assert.ok(!("n" in g), "die Gruppe merkt sich nichts");
+});
+
+test("Menge von Hand eingetippt: der Faktor geht auf 1 zurück und die neue Menge ist die Basis", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  const e = { id: "x2", amt: 80 };
+  K.setFac([e], 2);
+  assert.equal(e.amt, 160);
+  e.amt = 95;              // so, wie das Gramm-Feld es setzt
+  K.facReset(e);
+  assert.equal(e.n, 1);
+  assert.equal(e.b, 95);
+  assert.ok(K.setFac([e], 2) && e.amt === 190, "ab jetzt zählt die neue Basis");
+});

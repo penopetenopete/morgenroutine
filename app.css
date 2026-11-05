@@ -453,6 +453,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .erow.lifted{opacity:.35}
 .eic{flex:none;width:30px;height:30px;border-radius:8px;background:var(--bg);display:grid;place-items:center;font-size:1rem;object-fit:cover}
 img.eic{background:#fff}
+/* Vielfaches vorne in der Zeile (05.11.2026): steht an der Stelle des Bildes, zeigt immer den Faktor und
+   oeffnet angetippt das Zahlenfeld. Die unsichtbare Flaeche darum herum macht ihn mit dem Daumen treffbar. */
+.efac{position:relative;flex:none;min-width:34px;height:34px;padding:0 6px;border-radius:999px;background:var(--bg);border:1px solid var(--line);display:grid;place-items:center;font-family:var(--f-display);font-size:.72rem;color:var(--muted)}
+.efac.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.efac::after{content:"";position:absolute;inset:-8px -6px}
 .enm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
 .enm small{color:var(--muted)}
 .epill{flex:none;font-family:var(--f-display);font-size:.75rem;color:var(--muted);padding:3px 9px;border-radius:999px;background:var(--bg)}

@@ -126,7 +126,7 @@ function iconOf(f){
 }
 
 /* ---------- Bildschirm ---------- */
-let curDay=today(),open={},editId=null,nutId=null,macro=null; // nutId = Eintrag, unter dem die Nährwerte aufgeklappt sind (24.10.2026) – wie editId nur einer zugleich, und nie beide
+let curDay=today(),open={},editId=null,nutId=null,facId=null,facGo=false,macro=null; // nutId = Eintrag mit aufgeklappten Nährwerten, facId = Zeile mit aufgeklapptem Vielfachen ("e:id" oder "g:id") – immer nur einer von dreien
 const MET={kcal:{n:"Kalorien",u:"kcal",c:"var(--accent)",goal:"kcal"},c:{n:"Kohlenhydrate",s:"KH",u:"g",c:"#FF5C93",goal:"c"},p:{n:"Eiweiß",s:"Eiweiß",u:"g",c:"#4DA3FF",goal:"p"},f:{n:"Fett",s:"Fett",u:"g",c:"#FF8A4C",goal:"f"}};
 const RC=2*Math.PI*34;
 function ringSvg(v,goal){const p=goal?Math.min(1,v/goal):0;return `<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" class="rbg"/><circle cx="40" cy="40" r="34" class="rfg" stroke-dasharray="${RC.toFixed(1)}" stroke-dashoffset="${(RC*(1-p)).toFixed(1)}"/></svg>`}
@@ -155,7 +155,7 @@ function renderEssen0(){
     const lab=i===0?"Heute":i===-1?"Gestern":i===1?"Morgen":dt.toLocaleDateString("de-DE",{weekday:"short"}).replace(".","");
     h+=`<button class="dtab eday${(E.days[k]&&E.days[k].e.length)?" has":""}" role="tab" data-d="${k}" aria-selected="${k===curDay}"><span class="nx">${lab}</span>${dt.getDate()}.</button>`}
   $("eDays").innerHTML=h;
-  $("eDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{curDay=b.dataset.d;editId=nutId=null;renderEssen()});
+  $("eDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{curDay=b.dataset.d;editId=nutId=facId=null;renderEssen()});
   const sd=$("eDays").querySelector('[aria-selected="true"]'),bar=$("eDays");if(sd)bar.scrollLeft=sd.offsetLeft-bar.offsetLeft-(bar.clientWidth-sd.offsetWidth)/2; // nur waagerecht, Seite bleibt stehen
   if(macro){renderMacro();renderSelBar();essenMeta();return}
   renderSum();
@@ -171,7 +171,7 @@ function renderEssen0(){
         if(en.g){if(done[en.g.id])return;done[en.g.id]=1;
           const gl=list.filter(x=>x.g&&x.g.id===en.g.id),gs=sumE(gl),op=!!open[en.g.id];
           const strip=gl.slice(0,6).map(x=>iconOf(E.foods[x.food]).replace('class="eic"','class="emini"')).join("")+(gl.length>6?`<span class="emore">+${gl.length-6}</span>`:"");
-          sh+=`<div class="egrp${op?" open":""}"><div class="erow eghead${gl.every(x=>sel.has(x.id))?" sel":""}" data-gt="${en.g.id}"><span class="emeal"><span class="enm">${esc(en.g.name)}</span><span class="estrip">${strip}</span></span><span class="ev">${nf(gs.kcal)}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>`;
+          sh+=`<div class="egrp${op?" open":""}"><div class="erow eghead${gl.every(x=>sel.has(x.id))?" sel":""}" data-gt="${en.g.id}">${facBtn("g:"+en.g.id,en)}<span class="emeal"><span class="enm">${esc(en.g.name)}</span><span class="estrip">${strip}</span></span><span class="ev">${nf(gs.kcal)}</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>${facId==="g:"+en.g.id?facH(en):""}`;
           if(op)sh+=`<div class="egin">`+gl.map(x=>rowH(x,true)).join("")+`<div class="egfoot"><button class="eaddin" data-gadd="${en.g.id}">＋ Zutat</button><button class="egm" data-gm="${en.g.id}" aria-label="Mahlzeit: mehr">${DOTS}</button></div></div>`;
           sh+=`</div>`;
         }else sh+=rowH(en);
@@ -343,7 +343,7 @@ const BIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wid
 let sel=new Set();
 function rowH(en,sub){
   const f=E.foods[en.food],n=nut(f,en.amt,en.u),pcs=(f&&f.base==="stk")||en.u==="stk",unit=pcs?"Stk":"g",ed=editId===en.id;
-  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}${sel.has(en.id)?" sel":""}" data-e="${en.id}">${iconOf(f)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}" data-pill="${en.id}">${nf(en.amt,1)} ${unit}</span><span class="ev">${nf(n.kcal)}</span></div></div>${ed?amtH(pcs,en.amt,true,unH(f,en)):""}${nutId===en.id?nutH(f,en):""}`;
+  return `<div class="eswipe"><div class="ebin">Löschen</div><div class="erow${sub?" sub":""}${ed?" editing":""}${sel.has(en.id)?" sel":""}" data-e="${en.id}">${facBtn("e:"+en.id,en)}<span class="enm">${esc(foodName(f))}</span><span class="epill${ed?" on":""}" data-pill="${en.id}">${nf(en.amt,1)} ${unit}</span><span class="ev">${nf(n.kcal)}</span></div></div>${ed?amtH(pcs,en.amt,true,unH(f,en)):""}${facId==="e:"+en.id?facH(en):""}${nutId===en.id?nutH(f,en):""}`;
 }
 /* Nährwerte unter der Zeile (24.10.2026), aufgeklappt wie das Mengenfeld, kein eigenes Fenster. Zweite Runde: nur noch der Block
    pro 100 g bzw. pro Stück (nutBlock) – die Werte für die eingetragene Menge entfallen, und die Vielfach-Knöpfe sind am einzelnen
@@ -363,6 +363,31 @@ function scaleEntries(list,factor){
   list.forEach((x,i)=>{x.amt=nv[i]});esave();return true;
 }
 const mulH=()=>`<div class="emul">${MULS.map(([k,t])=>`<button type="button" class="emulb" data-mul="${k}" aria-label="Menge mal ${String(k).replace(".",",")}">${t}</button>`).join("")}</div>`;
+/* ---------- Vielfaches je Eintrag (05.11.2026) ----------
+   n = Faktor (0,01 bis FMAX), b = Menge bei Faktor 1. Fehlen beide, ist der Eintrag 1× und die eingetragene Menge
+   selbst die Basis – deshalb braucht es keine Migration, alte Einträge lesen sich als n=1, b=amt.
+   Gedacht für „zwei Scheiben Brot“ oder „ein Drittel Lasagne“, ohne Gramm im Kopf umzurechnen. */
+const FMAX=99;
+const facN=en=>{const v=Number(en&&en.n);return v>0&&v<=FMAX?v:1};
+const facB=en=>{const v=Number(en&&en.b);return v>0?v:(+en.amt||0)};
+function parseFac(raw){const v=Math.round(Number(String(raw).trim().replace(",","."))*100)/100;return v>0&&v<=FMAX?v:null}
+const facShow=v=>nf(v,2)+"×";
+/* Faktor setzen: die Menge folgt der Basis (amt = b × n). Alles oder nichts wie scaleEntries – wäre eine Zutat
+   danach ungültig, bleibt die ganze Liste unverändert, sonst stimmt das Verhältnis der Mahlzeit nicht mehr. */
+function setFac(list,raw){
+  const n=parseFac(raw);if(n===null||!Array.isArray(list)||!list.length)return false;
+  const nv=list.map(x=>x?parseAmt(facB(x)*n):null);if(nv.some(v=>v===null))return false;
+  list.forEach((x,i)=>{x.b=facB(x);x.amt=nv[i];x.n=n;if(x.g)x.g.n=n});
+  esave();return true;
+}
+/* Menge von Hand eingetippt: das ist die neue Basis, der Faktor geht auf 1 zurück. Sonst hiesse „80 g“ bei
+   Faktor 2 plötzlich 160 g, und die angezeigte Zahl wäre nicht die, die man eingetippt hat. */
+function facReset(en){if(!en)return;en.b=+en.amt||0;en.n=1;if(en.g)en.g.n=1}
+const facKey=en=>en&&en.g?"g:"+en.g.id:"e:"+(en&&en.id);
+const facList=key=>{const d=dayGet(curDay);return String(key||"").slice(0,2)==="g:"?d.e.filter(x=>x.g&&x.g.id===String(key).slice(2)):d.e.filter(x=>x.id===String(key).slice(2))};
+const facBtn=(key,en)=>`<span class="efac${facN(en)!==1?" on":""}" data-fac="${esc(key)}">${facShow(facN(en))}</span>`;
+const facH=en=>`<div class="eamtrow in"><input class="eamt efacin" type="number" inputmode="decimal" step="0.25" min="0" value="${amtShow(facN(en))}" aria-label="Vielfaches"><span class="eau">×</span></div>`;
+const onFac=e=>!!(e&&e.target&&typeof e.target.closest==="function"&&e.target.closest("[data-fac]"));
 const onPill=e=>!!(e&&e.target&&typeof e.target.closest==="function"&&e.target.closest("[data-pill]"));
 function bindSlots(){
   const S2=$("eSlots"),d=dayGet(curDay);
@@ -376,24 +401,39 @@ function bindSlots(){
     gesture(r,{
       tap:e=>{
         if(sel.size){const a=ids(),all=a.every(i=>sel.has(i));a.forEach(i=>all?sel.delete(i):sel.add(i));renderEssen();return}
+        /* Das Vielfache liegt vorne in der Zeile und klappt für sich auf: bei einer Mahlzeit darf der Tipp darauf
+           die Gruppe weder auf- noch zuklappen, sonst käme man an den Faktor nur über einen Umweg (05.11.2026). */
+        if(onFac(e)){const key=r.dataset.gt?"g:"+r.dataset.gt:"e:"+r.dataset.e;editId=nutId=null;facId=facId===key?null:key;if(facId)facGo=true;renderEssen();return}
         if(r.dataset.gt){open[r.dataset.gt]=!open[r.dataset.gt];renderEssen();return}
         /* 24.10.2026: Tipp auf die Gramm-Pille = Mengenfeld (wie bisher), Tipp auf den Rest der Zeile = Nährwerte.
            Eine Zeile gleichzeitig, und nie beides: das eine schließt das andere. */
-        if(onPill(e)){nutId=null;editId=editId===r.dataset.e?null:r.dataset.e;if(editId)amtGo=true}
-        else{editId=null;nutId=nutId===r.dataset.e?null:r.dataset.e}
+        if(onPill(e)){nutId=facId=null;editId=editId===r.dataset.e?null:r.dataset.e;if(editId)amtGo=true}
+        else{editId=facId=null;nutId=nutId===r.dataset.e?null:r.dataset.e}
         renderEssen();
       },
-      long:()=>{buzz();editId=nutId=null;ids().forEach(i=>sel.add(i));renderEssen()},
+      long:()=>{buzz();editId=nutId=facId=null;ids().forEach(i=>sel.add(i));renderEssen()},
       swipe:r.dataset.e?()=>delWithUndo(d.e.filter(x=>x.id===r.dataset.e)):null
     });
   });
-  const ai=S2.querySelector(".eamt");
+  const ai=S2.querySelector(".eamt:not(.efacin)");
   if(ai){const en=d.e.find(x=>x.id===editId),f=E.foods[en.food],pcs=(f&&f.base==="stk")||en.u==="stk",row=S2.querySelector(`[data-e="${editId}"]`);
-    const chg=()=>{row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
+    const chg=()=>{facReset(en);esave();const fb=row.querySelector("[data-fac]");if(fb){fb.textContent=facShow(1);fb.classList.remove("on")}
+      row.querySelector(".epill").textContent=nf(en.amt,1)+(pcs?" Stk":" g");row.querySelector(".ev").textContent=nf(nut(f,en.amt,en.u).kcal);renderSum();
       const sec=row.closest("[data-slothead]");if(!sec)return;const sl=sec.dataset.slothead;sec.querySelector(".esk").textContent=nf(sumE(dayGet(curDay).e.filter(x=>x.slot===sl)).kcal)+" kcal"};
     const zu=()=>{const mein=editId;setTimeout(()=>{if(editId===mein&&mein!=null&&!unHold()){editId=null;renderEssen()}},120)};
     bindAmtObj(ai,en,chg,zu);
     bindUnits(ai,f,en,chg,zu); // Tipp auf eine Einheit: übernehmen und zuklappen (V60)
+  }
+  /* Vielfaches: dasselbe Zahlenfeld wie die Menge, nur dass es die ganze Zeile (oder Mahlzeit) umrechnet.
+     Nach dem Umrechnen baut die Liste neu auf – Mengen, Kalorien und Summen hängen alle daran. */
+  const fi=S2.querySelector(".efacin");
+  if(fi){
+    const list=()=>facList(facId),jetzt=()=>facN(list()[0]);
+    if(facGo){facGo=false;try{fi.focus({preventScroll:true});fi.select()}catch(_){}amtSicht(fi)}
+    const nimm=()=>{const n=parseFac(fi.value);if(n===null||n===jetzt())return;if(!setFac(list(),n))toast("Zu groß")};
+    fi.addEventListener("change",()=>{nimm();renderEssen()});
+    fi.addEventListener("blur",()=>{nimm();const mein=facId;setTimeout(()=>{if(facId===mein){facId=null;renderEssen()}},120)});
+    fi.addEventListener("keydown",e=>{if(e.key!=="Enter")return;e.preventDefault();nimm();facId=null;renderEssen()});
   }
   renderSelBar();
 }
@@ -488,7 +528,7 @@ function undoBar(text,restore){
 }
 function delWithUndo(list){
   const dd=day(curDay),k=curDay,snap=dd.e.slice();
-  dd.e=dd.e.filter(x=>!list.includes(x));tidyDay(k);esave();editId=nutId=null;renderEssen();
+  dd.e=dd.e.filter(x=>!list.includes(x));tidyDay(k);esave();editId=nutId=facId=null;renderEssen();
   undoBar((list.length===1?foodName(E.foods[list[0].food]):list.length+" Einträge")+" gelöscht",()=>{day(k).e=snap;esave();renderEssen()});
 }
 
@@ -954,7 +994,7 @@ async function shareEssen(){
   }catch(e){toast("Teilen ging nicht: "+e.message)}
 }
 window.addEventListener("hashchange",checkEssen);
-window.addEventListener("popstate",()=>setTimeout(()=>{if($("essen").hidden){editId=nutId=null;sel.clear();renderSelBar()}},0));
+window.addEventListener("popstate",()=>setTimeout(()=>{if($("essen").hidden){editId=nutId=facId=null;sel.clear();renderSelBar()}},0));
 
 /* ---------- Hauptmenü-Karte, Navigation, Datenübertragung ---------- */
 function essenMeta(){
@@ -971,8 +1011,8 @@ $("openEssen").onclick=()=>{curDay=today();show("essen")};
 $("eMore").onclick=moreSheet;
 /* Wischen = Tag vor/zurück (nicht auf den Zeilen – dort ist Wischen = löschen) */
 if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk=addDays(curDay,d);if(nk<addDays(t,-14)||nk>addDays(t,1))return;
-  curDay=nk;editId=nutId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
+  curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,prepImport,applyImport,readE,parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();
