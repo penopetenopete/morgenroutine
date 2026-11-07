@@ -108,11 +108,28 @@ function usage(slot){
 /* Vorschläge (07.11.2026, zweite Runde): bewusst wenige – die alte Liste war zu voll.
    Frühstück zeigt die Frühstücks-Vorlagen („Mein Frühstück“) und „wie gestern“,
    Mittag und Abendessen nur „wie gestern“, Snacks gar nichts. */
+/* Welchen Abschnitten eine Vorlage zugeordnet ist (07.11.2026): früher war es genau einer (tpl.slot),
+   jetzt dürfen es mehrere sein (tpl.slots) – Pizza passt mittags wie abends. tpl.slot bleibt erhalten
+   und zeigt auf den ersten, damit ältere Stände und der Austausch per Link weiterlaufen. */
+function tplSlots(m){
+  if(!m)return [];
+  const a=Array.isArray(m.slots)?m.slots.filter(x=>SLOTN[x]):(SLOTN[m.slot]?[m.slot]:[]);
+  return SLOTS.map(([sl])=>sl).filter(sl=>a.includes(sl));
+}
+function tplSlotSet(m,sl){
+  if(!m)return [];
+  if(!SLOTN[sl])return tplSlots(m);
+  const a=tplSlots(m),i=a.indexOf(sl);
+  if(i>=0)a.splice(i,1);else a.push(sl);
+  m.slots=SLOTS.map(([x])=>x).filter(x=>a.includes(x));
+  m.slot=m.slots[0];                      // Rückfalldatum für ältere Stände und den Austausch per Link
+  if(!m.slots.length)delete m.slots;
+  esave();return tplSlots(m);
+}
 function suggestions(slot,k){
-  if(slot==="sn")return [];
   const out=[];
-  if(slot==="fr"){const u=usage(slot);
-    Object.values(E.meals).filter(m=>m.slot==="fr").sort((a,b)=>(u.me[b.id]||0)-(u.me[a.id]||0)).slice(0,2).forEach(m=>out.push({t:"tpl",id:m.id,label:m.name}))}
+  if(SLOTN[slot]){const u=usage(slot);
+    Object.values(E.meals).filter(m=>tplSlots(m).includes(slot)).sort((a,b)=>(u.me[b.id]||0)-(u.me[a.id]||0)).slice(0,3).forEach(m=>out.push({t:"tpl",id:m.id,label:m.name}))}
   const ye=dayGet(addDays(k,-1)).e.filter(en=>en.slot===slot);
   if(ye.length)out.push({t:"yday",label:"wie gestern",n:ye.length});
   return out;
@@ -903,8 +920,14 @@ function foodForm(f0,after){
 /* ---------- Vorlagen verwalten ---------- */
 function tplList(){
   const ms=Object.values(E.meals);
-  openSheet("Ernährung","Mahlzeiten-Vorlagen",`<div class="note">Vorlagen bleiben gleich, egal was du im Tagebuch änderst. Bearbeiten nur hier oder über „Vorlage überschreiben“.</div>
-    <div class="list elist">${ms.map(m=>{const s=sumE(m.items);return `<button class="erow" data-tl="${m.id}"><span class="emid"><span class="nm">${esc(m.name)}</span><span class="val">${m.slot?SLOTN[m.slot]+" · ":""}${m.items.length} Zutaten · ${nf(s.kcal)} kcal · ${nf(s.p)} g E</span></span></button>`}).join("")||""}</div>
+  /* Nach Abschnitt geordnet: so sieht man auf einen Blick, was wann vorgeschlagen wird.
+     Eine Vorlage für zwei Abschnitte steht unter beiden – genau dort taucht sie ja auch auf. */
+  const zeile=m=>{const s=sumE(m.items);
+    return `<button class="erow" data-tl="${m.id}"><span class="emid"><span class="nm">${esc(m.name)}</span><span class="val">${m.items.length} Zutaten · ${nf(s.kcal)} kcal · ${nf(s.p)} g E</span></span></button>`};
+  const grp=(titel,liste)=>liste.length?`<div class="eshead tlhd"><h3>${esc(titel)}</h3></div><div class="list elist">${liste.map(zeile).join("")}</div>`:"";
+  const frei=ms.filter(m=>!tplSlots(m).length);
+  openSheet("Ernährung","Mahlzeiten-Vorlagen",
+    `${SLOTS.map(([sl,n])=>grp(n,ms.filter(m=>tplSlots(m).includes(sl)))).join("")}${grp("Ohne Abschnitt",frei)}
     <button class="btn" id="tlNew">＋ Neue Vorlage</button><button class="btn ghost" id="tlPaste">Von Claude einfügen</button>`);
   $("shBody").querySelectorAll("[data-tl]").forEach(b=>b.onclick=()=>tplSheet(b.dataset.tl));
   $("tlPaste").onclick=()=>pasteEssen({onlyMeals:true,sofort:true},tplList);
@@ -917,13 +940,13 @@ function tplSheet(tid,from){
   mealSheet({eyebrow:"Mahlzeit",title:()=>m.name,items:()=>m.items,keepEmpty:true,
     remove:it=>{const i=m.items.indexOf(it);if(i>=0)m.items.splice(i,1)},
     snap:()=>{const s=m.items.slice();return ()=>{m.items.splice(0,m.items.length,...s)}},
-    add:()=>openSearch({kind:"tpl",tid,slot:m.slot||"sn",back:()=>tplSheet(tid,from)}),
+    add:()=>openSearch({kind:"tpl",tid,slot:tplSlots(m)[0]||"sn",back:()=>tplSheet(tid,from)}),
     onClose:()=>renderEssen(),
-    top:()=>`<div class="seg eslotseg emslot">${SLOTS.map(([sl,n])=>`<button class="sbtn" data-ts="${sl}" aria-pressed="${m.slot===sl}">${n}</button>`).join("")}</div>`,
+    top:()=>`<div class="seg eslotseg emslot">${SLOTS.map(([sl,n])=>`<button class="sbtn" data-ts="${sl}" aria-pressed="${tplSlots(m).includes(sl)}">${n}</button>`).join("")}</div>`,
     actions:()=>(from?`<button class="btn primary big" id="tUse">${from.added["t:"+tid]?"Nochmal hinzufügen":"Hinzufügen"}</button>`:"")+
       `<div class="emact"><button class="btn" id="tRen">Umbenennen</button><button class="btn danger" id="tDel">Löschen</button></div><button class="btn ghost" id="tBack">‹ ${from?"Zurück":"Alle Mahlzeiten"}</button>`,
     bind:(body,draw)=>{
-      body.querySelectorAll("[data-ts]").forEach(b=>b.onclick=()=>{m.slot=m.slot===b.dataset.ts?undefined:b.dataset.ts;esave();draw(true)});
+      body.querySelectorAll("[data-ts]").forEach(b=>b.onclick=()=>{tplSlotSet(m,b.dataset.ts);draw(true)});
       if($("tUse"))$("tUse").onclick=()=>{if(!m.items.length){toast("Mahlzeit ist leer");return}const was=from.added["t:"+tid];from.added["t:"+tid]=insertTpl(tid,curDay,from.ctx.slot,true);if(!was)from.addedN++;restoreSearch(from)};
       $("tRen").onclick=()=>askName("Umbenennen",m.name,n=>{m.name=n;esave();tplSheet(tid,from)});
       let arm=false;$("tDel").onclick=e=>{if(!arm){arm=true;e.target.textContent="Wirklich löschen?";return}delete E.meals[tid];esave();toast("„"+m.name+"“ gelöscht");back()};
@@ -1145,5 +1168,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,BRAT,bratAdd,bratH,bratSlot,suggestions,animSum,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,tplSlots,tplSlotSet,tplList,BRAT,bratAdd,bratH,bratSlot,suggestions,animSum,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();

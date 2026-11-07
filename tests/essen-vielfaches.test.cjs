@@ -609,20 +609,49 @@ test("Braten: die Knöpfe stehen in der Tagesansicht bei Mittag und Abend", () =
 
 /* ---------- Tagesansicht ruhiger (07.11.2026) ---------- */
 
-test("Vorschläge: Frühstück zeigt die Frühstücks-Vorlage und „wie gestern“, sonst nur „wie gestern“", () => {
+test("Vorschläge: jeder Abschnitt zeigt seine zugeordneten Vorlagen und „wie gestern“", () => {
   const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E(), k = heute(), g = gestern();
+  Object.keys(E.meals).forEach(id => delete E.meals[id]);
   E.meals.m1 = { id: "m1", name: "Mein Frühstück", slot: "fr", items: [{ food: "quark", amt: 250 }] };
-  E.meals.m2 = { id: "m2", name: "Reispfanne", slot: "mi", items: [{ food: "quark", amt: 100 }] };
-  E.days[g] = { e: [{ id: "a", slot: "fr", food: "quark", amt: 100 }, { id: "b", slot: "mi", food: "quark", amt: 100 }], acts: [] };
+  E.meals.m2 = { id: "m2", name: "Pizza", slots: ["mi", "ab"], items: [{ food: "quark", amt: 100 }] };
+  E.meals.m3 = { id: "m3", name: "Ungenutzt", items: [{ food: "quark", amt: 50 }] };
+  E.days[g] = { e: [{ id: "a", slot: "fr", food: "quark", amt: 100 }], acts: [] };
   const lab = sl => K.suggestions(sl, k).map(x => x.label).join(" | ");
-  const fr = K.suggestions("fr", k);
-  assert.ok(fr.length <= 3, "höchstens drei Vorschläge, war " + fr.length);
-  assert.ok(fr.some(x => x.t === "tpl" && x.label.includes("Frühstück")), "die Frühstücks-Vorlage ist dabei");
-  assert.equal(fr[fr.length - 1].label, "wie gestern", "„wie gestern“ steht am Ende");
-  assert.ok(!fr.some(x => x.label === "Reispfanne"), "fremde Abschnitte bleiben draußen");
-  assert.equal(lab("mi"), "wie gestern", "keine Vorlagen bei Mittag");
-  assert.equal(lab("ab"), "", "gestern gab es abends nichts");
-  assert.equal(lab("sn"), "", "Snacks schlagen nie etwas vor");
+  assert.equal(lab("fr"), "Mein Frühstück | wie gestern", "alter Einzelwert gilt weiter");
+  assert.equal(lab("mi"), "Pizza", "gestern gab es mittags nichts");
+  assert.equal(lab("ab"), "Pizza", "dieselbe Vorlage darf in zwei Abschnitten stehen");
+  assert.equal(lab("sn"), "", "ohne Zuordnung wird nichts vorgeschlagen");
+});
+
+test("Vorlagen: Abschnitte an- und abwählen, tpl.slot bleibt als Rückfall erhalten", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E();
+  E.meals.m1 = { id: "m1", name: "Pizza", slot: "fr", items: [] };
+  const m = E.meals.m1;
+  assert.equal(K.tplSlots(m).join(","), "fr", "der alte Einzelwert zählt als Zuordnung");
+  K.tplSlotSet(m, "fr");
+  assert.equal(K.tplSlots(m).length, 0, "nochmal tippen nimmt sie weg");
+  assert.equal(m.slot, undefined);
+  K.tplSlotSet(m, "ab");
+  K.tplSlotSet(m, "mi");
+  assert.equal(K.tplSlots(m).join(","), "mi,ab", "Reihenfolge wie im Tag, nicht wie angetippt");
+  assert.equal(m.slot, "mi", "slot zeigt auf den ersten – ältere Stände lesen das");
+  assert.equal(K.tplSlotSet(m, "xx").join(","), "mi,ab", "unbekannter Abschnitt ändert nichts");
+  assert.equal(JSON.parse(h.dump().essen_v1).meals.m1.slots.join(","), "mi,ab", "gespeichert");
+});
+
+test("Vorlagen-Liste: nach Abschnitt geordnet, ohne Erklärtext", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E();
+  Object.keys(E.meals).forEach(id => delete E.meals[id]);
+  E.meals.m1 = { id: "m1", name: "Mein Frühstück", slots: ["fr"], items: [] };
+  E.meals.m2 = { id: "m2", name: "Pizza", slots: ["mi", "ab"], items: [] };
+  E.meals.m3 = { id: "m3", name: "Irgendwas", items: [] };
+  K.tplList();
+  const htm = h.el("shBody").innerHTML;
+  assert.ok(!htm.includes('class="note"'), "der Erklärtext ist weg");
+  assert.ok(htm.includes("Ohne Abschnitt"), "Unzugeordnete stehen am Ende");
+  assert.equal((htm.match(/data-tl="m2"/g) || []).length, 2, "Pizza steht unter Mittag und Abend");
+  assert.ok(htm.indexOf("Frühstück") < htm.indexOf("Ohne Abschnitt"));
+  assert.ok(htm.indexOf('data-tl="m1"') < htm.indexOf('data-tl="m3"'));
 });
 
 test("Tagesansicht: keine Kalorienzahl mehr an der Abschnitts-Überschrift", () => {

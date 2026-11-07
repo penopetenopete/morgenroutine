@@ -647,6 +647,14 @@ img.emini{background:#fff}
 .egrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .egrid .field input{width:100%;min-width:0}
 .eslotseg{flex-wrap:wrap}.eslotseg .sbtn{flex:1 1 40%}
+/* Zweizeilige Zeile in den Listen „Mahlzeiten-Vorlagen“ und „Meine Lebensmittel“:
+   Name oben, Kennzahlen klein darunter – vorher klebte beides aneinander. */
+.emid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:left}
+.emid .nm{font-family:var(--f-display);font-size:.95rem;color:var(--fg)}
+.emid .val{font-size:.75rem;color:var(--muted);line-height:1.3}
+/* Überschrift je Abschnitt in der Vorlagen-Liste */
+.tlhd{min-height:30px;margin-top:6px}
+.tlhd h3{flex:1}
 .ecdays .dtab{min-width:auto}
 .escan{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:14px;border:1px solid var(--line);background:#000}
 .esrc{font-size:.75rem!important;opacity:.8}
