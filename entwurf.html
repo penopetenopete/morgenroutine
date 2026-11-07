@@ -47,20 +47,21 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 .band .zeile span{color:var(--muted);font-size:.78rem;font-family:var(--f-display)}
 
 .lg{position:relative;min-height:52px;padding:0 20px;border-radius:999px;font-family:var(--f-display);font-weight:600;
-  color:var(--fg);isolation:isolate;will-change:transform;
+  /* Schrift dunkelt mit dem Druck mit, sonst verschwindet sie auf der hellen Fläche */
+  color:color-mix(in srgb,#0B0F14 calc(var(--glanz) * 88%),var(--fg));
+  isolation:isolate;will-change:transform;
   /* ganz schwacher Verlauf in der Fläche – oben eine Spur heller, wie Licht auf Glas */
   background:linear-gradient(to bottom,rgba(255,255,255,.075),rgba(255,255,255,.028));
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
   /* Grundring kaum zu sehen; dahinter der Schein, der beim Drücken nach außen tritt.
      Kein filter: drop-shadow – das würde das backdrop-filter des Glases aushebeln. */
   --glanz:0;
-  box-shadow:inset 0 0 0 .5px rgba(255,255,255,.035),
-             0 0 calc(var(--glanz) * 10px) rgba(255,255,255,calc(var(--glanz) * .18))}
+  box-shadow:inset 0 0 0 .5px rgba(255,255,255,.035)}
 /* Die Lichtkante. Der Ring ist 1,6 px dick, aber seine Farbe läuft über den Umlauf von kräftig
    nach fast nichts – dadurch wirkt er oben links dick und unten rechts verschwunden,
    statt überall gleich stark wie eine gezeichnete Linie. */
 .lg::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  padding:.9px;
+  padding:.6px;
   background:linear-gradient(146deg,
     rgba(255,255,255,.62) 0%,
     rgba(255,255,255,.3)  16%,
@@ -72,21 +73,21 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
   -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
   mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
   -webkit-mask-composite:xor;mask-composite:exclude}
-/* Beim Drücken leuchtet der ganze Rand auf, rundherum gleich – nicht nur die Oberkante */
-.lg::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  padding:1.1px;
-  background:rgba(255,255,255,.9);
-  opacity:calc(var(--glanz,0) * .6);
-  -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
-  mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
-  -webkit-mask-composite:xor;mask-composite:exclude}
+/* Beim Drücken füllt sich die ganze Fläche mit einem hellen, neutralgrauen Verlauf –
+   oben links fast weiß, nach unten rechts mittelgrau. Keine Tönung, kein Schein nach außen.
+   z-index -1 legt die Schicht über den Hintergrund, aber unter Text und Symbol. */
+.lg::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
+  background:linear-gradient(145deg,rgba(255,255,255,.82),rgba(255,255,255,.52) 42%,rgba(255,255,255,.3));
+  opacity:var(--glanz,0)}
 
-.lg.voll{background:linear-gradient(to bottom,rgba(0,229,255,.21),rgba(0,229,255,.12));color:#CFF9FF;
-  box-shadow:inset 0 0 0 .5px rgba(0,229,255,.18),
-             0 0 calc(var(--glanz) * 12px) rgba(0,229,255,calc(var(--glanz) * .32))}
+.lg.voll{background:linear-gradient(to bottom,rgba(0,229,255,.21),rgba(0,229,255,.12));
+  color:color-mix(in srgb,#021A1F calc(var(--glanz) * 88%),#CFF9FF);
+  box-shadow:inset 0 0 0 .5px rgba(0,229,255,.18)}
 .lg.voll::before{background:linear-gradient(146deg,
     rgba(214,251,255,.7) 0%, rgba(214,251,255,.32) 16%, rgba(214,251,255,.07) 38%,
     rgba(214,251,255,.02) 54%, rgba(214,251,255,.06) 72%, rgba(214,251,255,.26) 92%, rgba(214,251,255,.45) 100%)}
+/* Auf der hellen Druckfläche muss die Schrift mitdunkeln, sonst ist sie weg */
+.lg>*{position:relative;z-index:1}
 .lgreihe{display:flex;gap:10px}
 .lgic{min-height:52px;width:52px;padding:0;display:grid;place-items:center}
 .lgic svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
@@ -107,7 +108,7 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
   box-shadow:inset 0 0 0 .5px rgba(255,255,255,.06),0 1px 5px rgba(0,0,0,.26);
   will-change:transform,width}
 .seg .knopf::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  padding:.8px;
+  padding:.55px;
   background:linear-gradient(146deg,
     rgba(255,255,255,.58) 0%, rgba(255,255,255,.26) 18%, rgba(255,255,255,.06) 40%,
     rgba(255,255,255,.015) 56%, rgba(255,255,255,.05) 74%, rgba(255,255,255,.2) 92%, rgba(255,255,255,.36) 100%);
@@ -197,7 +198,17 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 </div>
 
 <h2>1b · Liquid Glass — und der Knopf wächst</h2>
-<p class="hint">Hier wird der Knopf beim Drücken <b>größer</b>, nicht kleiner: das Glas wölbt sich unter dem Finger, und der <b>ganze Rand leuchtet auf</b>, rundherum gleich, mit einem schwachen Schein nach außen. Gedrückt halten und wegziehen — er geht zurück, ohne auszulösen. Die Kante ist dünner (0,9 px) und <b>ungleichmäßig</b>: oben links kräftig, nach rechts unten läuft sie fast auf null aus und kommt am Ende schwach zurück — so fällt Licht auf eine echte Glaskante. Vorher war der Ring überall gleich stark und sah dadurch gezeichnet aus. In der Fläche liegt ein ganz schwacher Verlauf.</p>
+<p class="hint" style="margin-bottom:8px">Zum Abgleich mit deinem Bild: links der Knopf in Ruhe, rechts <b>fest auf gedrückt gestellt</b>, damit du ihn neben den Screenshot halten kannst.</p>
+<div class="band" style="margin-bottom:14px">
+  <div class="zeile"><b>Zum Vergleich</b><span>Ruhe · gedrückt</span></div>
+  <div class="lgreihe">
+    <button class="lg lgic"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/></svg></button>
+    <button class="lg lgic" style="--glanz:1;transform:scale(1.1)"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/></svg></button>
+    <button class="lg" style="flex:1">In Ruhe</button>
+    <button class="lg" style="flex:1;--glanz:1;transform:scale(1.06)">Gedrückt</button>
+  </div>
+</div>
+<p class="hint">Hier wird der Knopf beim Drücken <b>größer</b>, nicht kleiner: das Glas wölbt sich unter dem Finger, und die <b>ganze Fläche füllt sich mit einem hellen neutralgrauen Verlauf</b> — oben links fast weiß, nach unten rechts mittelgrau, wie auf deinem Bild. Die Schrift dunkelt mit. Gedrückt halten und wegziehen — er geht zurück, ohne auszulösen. Die Kante ist dünner (0,9 px) und <b>ungleichmäßig</b>: oben links kräftig, nach rechts unten läuft sie fast auf null aus und kommt am Ende schwach zurück — so fällt Licht auf eine echte Glaskante. Vorher war der Ring überall gleich stark und sah dadurch gezeichnet aus. In der Fläche liegt ein ganz schwacher Verlauf.</p>
 <div class="band">
   <div class="zeile"><b>Haferflocken</b><span>80 g · 304 kcal</span></div>
   <div class="zeile"><b>Magerquark</b><span>250 g · 170 kcal</span></div>
