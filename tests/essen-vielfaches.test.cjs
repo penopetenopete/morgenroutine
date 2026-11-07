@@ -537,3 +537,74 @@ test("Einfügen: ein zweiter Tipp öffnet kein zweites Fenster", async () => {
   await K.paste({ sofort: true });
   assert.equal(h.el("shBody").innerHTML, inhalt, "der zweite Tipp baut nichts neu auf");
 });
+
+/* ---------- Braten: Öl mit einem Tipp (07.11.2026) ---------- */
+
+test("Braten: ein Tipp legt 10 g Öl im richtigen Abschnitt an", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, k = heute();
+  const ne = K.bratAdd("oil_oliv", "mi");
+  assert.ok(ne, "der Eintrag entsteht");
+  assert.equal(ne.slot, "mi");
+  assert.equal(ne.amt, 10);
+  const d = K.E().days[k];
+  assert.equal(d.e.filter(x => x.food === "oil_oliv").length, 1);
+  const f = K.E().foods.oil_oliv;
+  assert.ok(f, "das Lebensmittel wird dabei angelegt");
+  assert.equal(f.base, "g");
+  assert.ok(f.kcal > 800 && f.kcal < 920, "Öl hat ~880 kcal pro 100 g");
+  assert.ok(f.f > 95, "fast reines Fett");
+  assert.ok(nah(K.nut(f, 10).kcal, f.kcal / 10), "10 g sind ein Zehntel der 100-g-Werte");
+});
+
+test("Braten: beide Öle, und die Werte landen in der Tagessumme", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, k = heute();
+  assert.equal(K.BRAT.map(f => f.id).join(","), "oil_oliv,oil_sonne");
+  K.BRAT.forEach(f => assert.equal(f.def, 10, f.name + " steht auf 10 g"));
+  K.bratAdd("oil_oliv", "mi");
+  K.bratAdd("oil_sonne", "ab");
+  const d = K.E().days[k];
+  assert.equal(d.e.length, 2);
+  assert.equal(d.e.map(x => x.slot).join(","), "mi,ab");
+  const kcal = d.e.reduce((a, x) => a + K.nut(K.E().foods[x.food], x.amt, x.u).kcal, 0);
+  assert.ok(kcal > 170 && kcal < 180, "zwei mal 10 g Öl sind ~177 kcal, war " + kcal);
+});
+
+test("Braten: nur Mittag und Abend, nicht Frühstück oder Snacks", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  assert.equal(Object.keys(K.BRATSL).sort().join(","), "ab,mi");
+  ["mi", "ab"].forEach(sl => assert.equal(K.bratH(sl).length, 2, sl + " zeigt zwei Knöpfe"));
+  ["fr", "sn"].forEach(sl => assert.equal(K.bratH(sl).length, 0, sl + " zeigt keine"));
+  assert.equal(K.bratAdd("oil_oliv", "fr"), null, "beim Frühstück wird nichts angelegt");
+  assert.equal(K.bratAdd("quark", "mi"), null, "fremde Kennung legt nichts an");
+  assert.equal(K.E().days[heute()], undefined);
+});
+
+test("Braten: Rückgängig nimmt genau diesen Eintrag zurück", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, k = heute();
+  K.bratAdd("oil_oliv", "mi");
+  K.bratAdd("oil_oliv", "ab");
+  assert.equal(K.E().days[k].e.length, 2);
+  K.undo();
+  const rest = K.E().days[k].e;
+  assert.equal(rest.length, 1, "nur der zuletzt angelegte fällt weg");
+  assert.equal(rest[0].slot, "mi");
+});
+
+test("Braten: ein zweiter Tipp legt einen zweiten Eintrag an (nicht 20 g)", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, k = heute();
+  K.bratAdd("oil_sonne", "ab");
+  K.bratAdd("oil_sonne", "ab");
+  const l = K.E().days[k].e;
+  assert.equal(l.length, 2);
+  l.forEach(x => assert.equal(x.amt, 10));
+});
+
+test("Braten: die Knöpfe stehen in der Tagesansicht bei Mittag und Abend", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  h.ctx.renderEssen();
+  const htm = h.el("eSlots").innerHTML;
+  assert.ok(htm.includes('data-brat="oil_oliv|mi"'), "Olivenöl bei Mittag");
+  assert.ok(htm.includes('data-brat="oil_sonne|ab"'), "Sonnenblumenöl bei Abend");
+  assert.ok(!htm.includes('|fr"') && !htm.includes('|sn"'), "nicht bei Frühstück oder Snacks");
+  assert.ok(htm.includes("Olivenöl") && htm.includes("Sonnenblumenöl"));
+});

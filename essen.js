@@ -125,6 +125,26 @@ function iconOf(f){
   return `<span class="eic">🍽️</span>`;
 }
 
+/* ---------- Braten: Öl mit einem Tipp (07.11.2026) ----------
+   Beim Kochen wird Öl so gut wie nie abgewogen. Darum bei Mittag und Abend zwei feste Knöpfe,
+   ein Tipp trägt 10 g ein. Danach ist der Eintrag wie jeder andere (Menge, Vielfaches, Rückgängig). */
+const BRAT=[
+  {id:"oil_oliv",name:"Olivenöl",base:"g",kcal:882,p:0,c:0,f:99.6,fib:0,def:10,src:"own"},
+  {id:"oil_sonne",name:"Sonnenblumenöl",base:"g",kcal:884,p:0,c:0,f:99.8,fib:0,def:10,src:"own"}
+];
+const BRATSL={mi:1,ab:1};                 // nur Mittag und Abendessen
+const bratOf=id=>BRAT.find(x=>x.id===id)||null;
+const bratH=sl=>BRATSL[sl]?BRAT.map(f=>`<button class="echip ebr" data-brat="${f.id}|${sl}">${iconOf(E.foods[f.id]||f).replace('class="eic"','class="emini"')}<span>${esc(f.name)}</span><b>${nf(f.def)} g</b></button>`):[];
+function bratAdd(id,sl){
+  const f=bratOf(id);if(!f||!BRATSL[sl])return null;
+  if(!E.foods[f.id])E.foods[f.id]=Object.assign({},f);
+  const g=+E.foods[f.id].def||+f.def||10;
+  const ne={id:nid(),slot:sl,food:f.id,amt:g};
+  day(curDay).e.push(ne);esave();renderEssen();
+  undoBar(f.name+" "+nf(g)+" g · "+SLOTN[sl],()=>{const d=day(curDay);d.e=d.e.filter(x=>x!==ne);tidyDay(curDay);esave();renderEssen()});
+  return ne;
+}
+
 /* ---------- Bildschirm ---------- */
 let curDay=today(),open={},editId=null,nutId=null,facId=null,facGo=false,macro=null; // nutId = Eintrag mit aufgeklappten Nährwerten, facId = Zeile mit aufgeklapptem Vielfachen ("e:id" oder "g:id") – immer nur einer von dreien
 const MET={kcal:{n:"Kalorien",u:"kcal",c:"var(--accent)",goal:"kcal"},c:{n:"Kohlenhydrate",s:"KH",u:"g",c:"#FF5C93",goal:"c"},p:{n:"Eiweiß",s:"Eiweiß",u:"g",c:"#4DA3FF",goal:"p"},f:{n:"Fett",s:"Fett",u:"g",c:"#FF8A4C",goal:"f"}};
@@ -163,9 +183,9 @@ function renderEssen0(){
   SLOTS.forEach(([sl,name])=>{
     const list=d.e.filter(en=>en.slot===sl),ss=sumE(list);
     sh+=`<section class="eslot" data-slothead="${sl}"><div class="eshead"><h3>${name}</h3><span class="esk">${list.length?nf(ss.kcal)+" kcal":""}</span><button class="ic eadd" data-add="${sl}" aria-label="${name}: hinzufügen">${PLUS}</button></div>`;
-    if(!list.length){const sg=suggestions(sl,curDay);
-      if(sg.length)sh+=`<div class="echips">${sg.map((x,i)=>`<button class="echip" data-sg="${sl}|${i}">＋ ${esc(x.label)}</button>`).join("")}</div>`;
-    }else{
+    const chips=(list.length?[]:suggestions(sl,curDay).map((x,i)=>`<button class="echip" data-sg="${sl}|${i}">＋ ${esc(x.label)}</button>`)).concat(bratH(sl));
+    if(chips.length)sh+=`<div class="echips">${chips.join("")}</div>`;
+    if(list.length){
       sh+=`<div class="elist">`;const done={};
       list.forEach(en=>{
         if(en.g){if(done[en.g.id])return;done[en.g.id]=1;
@@ -398,6 +418,7 @@ function bindSlots(){
   S2.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{if(!sel.size)openSearch({kind:"day",slot:b.dataset.add})});
   S2.querySelectorAll("[data-sg]").forEach(b=>{const [sl,i]=b.dataset.sg.split("|"),x=()=>suggestions(sl,curDay)[+i];
     gesture(b,{tap:()=>useSuggestion(x(),sl),long:()=>{const y=x();if(y&&y.t==="tpl"){buzz();tplSheet(y.id)}}})});
+  S2.querySelectorAll("[data-brat]").forEach(b=>b.onclick=()=>{if(sel.size)return;const [id,sl]=b.dataset.brat.split("|");bratAdd(id,sl)});
   S2.querySelectorAll("[data-gm]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(!sel.size)grpView(b.dataset.gm,true)});
   S2.querySelectorAll("[data-gadd]").forEach(b=>b.onclick=()=>{const en=d.e.find(x=>x.g&&x.g.id===b.dataset.gadd);openSearch({kind:"grp",gid:b.dataset.gadd,slot:en?en.slot:"sn"})});
   S2.querySelectorAll("[data-e],[data-gt]").forEach(r=>{
@@ -1095,5 +1116,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,BRAT,BRATSL,bratAdd,bratH,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();

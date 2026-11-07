@@ -502,6 +502,9 @@ img.emini{background:#fff}
 .erow.eadded{box-shadow:inset 2px 0 0 var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--card))}
 .echips{display:flex;flex-wrap:wrap;gap:6px}
 .echip{border:1px dashed color-mix(in srgb,var(--accent) 50%,var(--line));background:none;color:var(--accent);border-radius:999px;min-height:38px;padding:0 12px;font-family:var(--f-display);font-size:.78rem;cursor:pointer}
+/* Braten: Öl-Knöpfe bei Mittag und Abend – durchgezogen und neutral, damit sie sich von den Vorschlägen unterscheiden */
+.ebr{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);color:var(--fg)}
+.ebr b{color:var(--muted);font-weight:400;font-size:.74rem}
 .esbar{display:flex;gap:8px;position:sticky;top:0;z-index:3;background:var(--card);padding:6px 0}
 /* 16px ist die Untergrenze für alles, was eine Tastatur auslöst (23.10.2026, am iPhone gemeldet):
    iOS Safari zoomt beim Antippen in jedes kleinere Eingabefeld und zoomt danach NICHT zurück –
