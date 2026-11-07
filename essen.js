@@ -206,8 +206,12 @@ function renderEssen0(anim){
   SLOTS.forEach(([sl,name])=>{
     const list=d.e.filter(en=>en.slot===sl);
     sh+=`<section class="eslot" data-slothead="${sl}"><div class="eshead"><h3>${name}</h3><button class="ic eadd" data-add="${sl}" aria-label="${name}: hinzufügen">${PLUS}</button></div>`;
-    const chips=list.length?[]:suggestions(sl,curDay).map((x,i)=>`<button class="echip" data-sg="${sl}|${i}">＋ ${esc(x.label)}</button>`);
-    if(chips.length)sh+=`<div class="echips">${chips.join("")}</div>`;
+    /* Vorschläge sieht man hier, also stellt man sie auch hier ein – der Weg über die Einstellungen war zu weit. */
+    if(!list.length){
+      const chips=suggestions(sl,curDay).map((x,i)=>`<button class="echip" data-sg="${sl}|${i}">＋ ${esc(x.label)}</button>`);
+      chips.push(`<button class="echip echipset" data-sgset="${sl}" aria-label="${name}: Vorschläge wählen">${TUNE}</button>`);
+      sh+=`<div class="echips">${chips.join("")}</div>`;
+    }
     if(list.length){
       sh+=`<div class="elist">`;const done={};
       list.forEach(en=>{
@@ -404,6 +408,7 @@ function bindUnits(inp,f,obj,onChange,done){
   wire();
 }
 const DOTS='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+const TUNE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7h9M18 7h1M5 17h3M12 17h7"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
 const PLUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const CAM='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/><path d="M8 9v6M11 9v6M14 9v6M16.5 9v6"/></svg>';
 const PASTE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6H9zM9 12h6M9 16h4"/></svg>';
@@ -464,6 +469,7 @@ function bindSlots(){
   S2.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{if(!sel.size)openSearch({kind:"day",slot:b.dataset.add})});
   S2.querySelectorAll("[data-sg]").forEach(b=>{const [sl,i]=b.dataset.sg.split("|"),x=()=>suggestions(sl,curDay)[+i];
     gesture(b,{tap:()=>useSuggestion(x(),sl),long:()=>{const y=x();if(y&&y.t==="tpl"){buzz();tplSheet(y.id)}}})});
+  S2.querySelectorAll("[data-sgset]").forEach(b=>b.onclick=()=>{if(!sel.size)sugSheet(b.dataset.sgset)});
   S2.querySelectorAll("[data-brat]").forEach(b=>b.onclick=()=>{if(!sel.size)bratAdd(b.dataset.brat)});
   S2.querySelectorAll("[data-gm]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(!sel.size)grpView(b.dataset.gm,true)});
   S2.querySelectorAll("[data-gadd]").forEach(b=>b.onclick=()=>{const en=d.e.find(x=>x.g&&x.g.id===b.dataset.gadd);openSearch({kind:"grp",gid:b.dataset.gadd,slot:en?en.slot:"sn"})});
@@ -918,6 +924,25 @@ function foodForm(f0,after){
 }
 
 /* ---------- Vorlagen verwalten ---------- */
+/* Welche Vorlagen in diesem Abschnitt vorgeschlagen werden – antippen schaltet um (07.11.2026).
+   Dasselbe Feld wie im Vorlagen-Fenster, nur von der anderen Seite aus bedient. */
+function sugSheet(sl){
+  if(!SLOTN[sl])return;
+  const zeichne=()=>{
+    const ms=Object.values(E.meals);
+    const zeile=m=>{const an=tplSlots(m).includes(sl),n=sumE(m.items);
+      return `<button class="erow${an?" sel":""}" data-sgm="${m.id}"><span class="emid"><span class="nm">${esc(m.name)}</span><span class="val">${m.items.length} Zutaten · ${nf(n.kcal)} kcal</span></span><span class="echeck">${an?"✓":""}</span></button>`};
+    return (ms.length?`<div class="list elist">${ms.map(zeile).join("")}</div>`
+                     :`<div class="note">Noch keine Vorlage. Eine Mahlzeit im Tagebuch gedrückt halten und „Als Vorlage speichern“.</div>`)
+      +`<button class="btn ghost" id="sgAll">Alle Vorlagen</button>`};
+  const binde=()=>{
+    $("shBody").querySelectorAll("[data-sgm]").forEach(b=>b.onclick=()=>{
+      tplSlotSet(E.meals[b.dataset.sgm],sl);$("shBody").innerHTML=zeichne();binde()});
+    $("sgAll").onclick=()=>tplList();
+  };
+  openSheet("Vorschläge",SLOTN[sl],zeichne(),{onClose:()=>renderEssen()});
+  binde();
+}
 function tplList(){
   const ms=Object.values(E.meals);
   /* Nach Abschnitt geordnet: so sieht man auf einen Blick, was wann vorgeschlagen wird.
@@ -1168,5 +1193,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,tplSlots,tplSlotSet,tplList,BRAT,bratAdd,bratH,bratSlot,suggestions,animSum,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,sugSheet,tplSlots,tplSlotSet,tplList,BRAT,bratAdd,bratH,bratSlot,suggestions,animSum,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();

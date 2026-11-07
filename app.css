@@ -534,6 +534,8 @@ img.emini{background:#fff}
 /* Pillen ohne Strichrand: eine ruhige Fläche im Ton des Abschnitts liest sich sauberer als gestrichelte Umrisse */
 .echip{border:0;background:color-mix(in srgb,var(--tint,var(--accent)) 13%,transparent);color:color-mix(in srgb,var(--tint,var(--accent)) 80%,var(--fg));border-radius:999px;min-height:38px;padding:0 14px;font-family:var(--f-display);font-size:.78rem;cursor:pointer}
 /* Braten: Öl-Knöpfe bei Mittag und Abend – durchgezogen und neutral, damit sie sich von den Vorschlägen unterscheiden */
+.echipset{min-height:38px;width:38px;padding:0;display:inline-grid;place-items:center;color:color-mix(in srgb,var(--tint) 70%,var(--fg))}
+.echipset svg{width:18px;height:18px}
 .ebr{display:inline-flex;align-items:center;gap:7px;background:color-mix(in srgb,var(--fg) 7%,transparent);color:var(--fg)}
 .ebr b{color:var(--muted);font-weight:400;font-size:.74rem}
 .esbar{display:flex;gap:8px;position:sticky;top:0;z-index:3;background:var(--card);padding:6px 0}

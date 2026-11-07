@@ -673,3 +673,32 @@ test("Auffüllen: die Animation läuft nur beim Betreten, nicht bei jeder Änder
   h.ctx.renderEssen(true);
   assert.ok(n > 0, "beim Betreten fängt sie an");
 });
+
+test("Vorschläge einstellen: direkt im Abschnitt an- und abwählen", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E();
+  Object.keys(E.meals).forEach(id => delete E.meals[id]);
+  E.meals.p1 = { id: "p1", name: "Pizza", slot: "fr", items: [{ food: "quark", amt: 200 }] };
+  E.meals.m1 = { id: "m1", name: "Mein Frühstück", items: [{ food: "hafer", amt: 80 }] };
+  h.ctx.renderEssen();
+  const tag = h.el("eSlots").innerHTML;
+  assert.ok(tag.includes('data-sgset="fr"'), "jeder leere Abschnitt hat den Knopf");
+  assert.equal((tag.match(/data-sgset=/g) || []).length, 4, "in allen vier Abschnitten");
+  K.sugSheet("fr");
+  const zeile = id => { const m = h.el("shBody").innerHTML.match(new RegExp('<button class="erow( sel)?" data-sgm="' + id + '"')); return m ? !!m[1] : null; };
+  assert.equal(zeile("p1"), true, "Pizza hängt am Frühstück");
+  assert.equal(zeile("m1"), false, "Mein Frühstück noch nicht");
+  /* was der Tipp auf die Zeile auslöst */
+  K.tplSlotSet(E.meals.p1, "fr"); K.tplSlotSet(E.meals.m1, "fr");
+  K.sugSheet("fr");
+  assert.equal(zeile("p1"), false);
+  assert.equal(zeile("m1"), true);
+  assert.equal(K.suggestions("fr", heute()).map(x => x.label).join(","), "Mein Frühstück");
+  assert.equal(K.suggestions("mi", heute()).length, 0, "Pizza hängt jetzt nirgends");
+});
+
+test("Vorschläge einstellen: unbekannter Abschnitt öffnet nichts", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  h.el("scrim").hidden = true;
+  K.sugSheet("xx");
+  assert.equal(h.el("scrim").hidden, true);
+});
