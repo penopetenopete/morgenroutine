@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="83"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="84"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -683,10 +683,20 @@ function bindTaps(list,fn){list.querySelectorAll("[data-tap]").forEach(m=>{m.onc
 /* =================== NAVIGATION =================== */
 const SCREENS=["home","routine","stats"];
 let screen="home";
+/* Seitenwechsel wie am Telefon: vorwärts kommt die neue Seite von rechts herein, zurück von links.
+   Die Wischgeste am Rand schiebt die alte Seite selbst hinaus – beides zusammen ergibt eine Bewegung. */
+const SCR_EASE="cubic-bezier(.32,.72,0,1)";
+function screenIn(s,d){
+  const el=$(s);if(!el||!el.animate)return;
+  if(window.matchMedia&&window.matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+  try{el.animate([{transform:`translateX(${d*30}%)`,opacity:.4},{transform:"none",opacity:1}],{duration:300,easing:SCR_EASE})}catch(_){}
+}
 function show(s,push=true){
+  const alt=screen;
   screen=s;SCREENS.forEach(x=>$(x).hidden=x!==s);window.scrollTo(0,0);
   if(push)history.pushState({s},"");
   if(s==="home")renderHome();if(s==="routine")renderRoutine();if(s==="stats")renderStats();if(s==="essen"&&window.renderEssen)renderEssen(true);
+  if(alt&&alt!==s)screenIn(s,push?1:-1);
 }
 document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>history.back());
 window.addEventListener("popstate",e=>{

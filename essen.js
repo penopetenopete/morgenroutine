@@ -216,8 +216,9 @@ function renderEssen0(anim){
 function renderSum(anim){
   const d=dayGet(curDay),s=sumE(d.e),G=E.goals,b=burned(curDay),goal=G.kcal+(E.burnIn?b.kcal:0),rest=goal-s.kcal;
   const left=(v,g)=>v<=g?nf(g-v)+" g übrig":nf(v)+"/"+nf(g)+" g";
-  $("eSum").innerHTML=`<button class="ekcal" data-m="kcal"><span><b class="num">${nf(s.kcal)}</b> / ${nf(goal)} kcal</span><span class="erest${rest<0?" over":""}">${rest>=0?"noch "+nf(rest):nf(-rest)+" drüber"}</span><i class="ebar"><i style="width:${Math.min(100,s.kcal/goal*100).toFixed(1)}%"></i></i></button>
-    <div class="erings">${ring("c",s.c,G.c,left(s.c,G.c))}${ring("p",s.p,G.p,left(s.p,G.p))}${ring("f",s.f,G.f,left(s.f,G.f))}</div>
+  const z=anim?{kcal:0,c:0,p:0,f:0}:s;   // beim Auffüllen leer anfangen, sonst blitzt der alte Stand auf
+  $("eSum").innerHTML=`<button class="ekcal" data-m="kcal"><span><b class="num">${nf(z.kcal)}</b> / ${nf(goal)} kcal</span><span class="erest${rest<0?" over":""}">${rest>=0?"noch "+nf(rest):nf(-rest)+" drüber"}</span><i class="ebar"><i style="width:${Math.min(100,z.kcal/goal*100).toFixed(1)}%"></i></i></button>
+    <div class="erings">${ring("c",z.c,G.c,left(s.c,G.c))}${ring("p",z.p,G.p,left(s.p,G.p))}${ring("f",z.f,G.f,left(s.f,G.f))}</div>
     ${b.kcal?`<button class="eburn" id="eBurn">🔥 ${nf(b.kcal)} kcal Training <b>${E.burnIn?"✓":"+"}</b></button>`:""}`;
   $("eSum").hidden=false;
   $("eSum").querySelectorAll("[data-m]").forEach(x=>x.onclick=()=>openMacro(x.dataset.m));
