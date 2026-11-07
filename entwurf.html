@@ -79,8 +79,31 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 .swatch{display:flex;gap:8px}
 .swatch i{display:block;height:28px;flex:1;border-radius:8px}
 .weg{font-size:.74rem;color:var(--muted);border-top:1px solid rgba(255,255,255,.07);margin-top:34px;padding-top:12px}
+
+/* Austausch mit Bewegungsunschärfe: der Filter verwischt nur längs der Bewegung */
+.tausch>span,.pille .inh>span{filter:url(#mblur)}
+/* Zwei Pillen, die verschmelzen – die Hülle liegt unter dem Text und wird zusammengeschmolzen */
+.huellen{position:absolute;inset:0;filter:url(#goo);pointer-events:none}
+.huellen i{position:absolute;top:0;height:100%;border-radius:999px;background:#223040;display:block;will-change:transform,width}
+.zwei{position:relative;min-height:46px;display:block;width:100%}
+.zwei .texte{position:relative;height:46px}
+.zwei .texte span{position:absolute;top:0;height:46px;display:flex;align-items:center;justify-content:center;gap:8px;
+  font-family:var(--f-display);font-size:.84rem;white-space:nowrap;will-change:transform,opacity}
+.zwei .texte svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
 </style></head>
 <body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <!-- Bewegungsunschärfe: nur senkrecht, weil der Austausch senkrecht läuft. stdDeviation wird aus JS gesetzt. -->
+  <filter id="mblur" x="-40%" y="-80%" width="180%" height="260%" color-interpolation-filters="sRGB">
+    <feGaussianBlur id="mblurB" stdDeviation="0 0"/>
+  </filter>
+  <!-- Verschmelzen: weichzeichnen, dann den Kontrast hochziehen – die weichen Ränder ziehen sich zusammen -->
+  <filter id="goo" color-interpolation-filters="sRGB">
+    <feGaussianBlur stdDeviation="7" result="w"/>
+    <feColorMatrix in="w" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -9"/>
+  </filter>
+</defs></svg>
 
 <h1>Runde 2 — mit Federn</h1>
 <p class="lead">Der Unterschied zu vorhin: rechts rechnet keine feste Kurve mehr, sondern eine Feder. Sie hat kein festes Ende — darum kannst du mitten in die Bewegung greifen und sie läuft weiter, statt neu anzufangen.</p>
@@ -122,7 +145,7 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 </div>
 
 <h2>3 · Austausch an gleicher Stelle</h2>
-<p class="hint">Wie in deinem Bild: der Knopf bleibt, sein Inhalt wechselt. Das Alte geht nach oben weg und wird kleiner, das Neue kommt von unten nach. Tipp drauf.</p>
+<p class="hint">Der Knopf bleibt, sein Inhalt wechselt — jetzt mit Bewegungsunschärfe längs der Bewegung (nicht rundum verwaschen) und die Pille zieht ihre Breite mit. Tipp drauf.</p>
 <div class="reihe" style="align-items:center">
   <button class="tausch" id="t1">
     <span data-an="1"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M4 7h16M4 12h10M4 17h13"/></svg></span>
@@ -130,10 +153,22 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
   </button>
   <button class="pille" id="t2"><span class="inh">
     <span data-an="1"><svg viewBox="0 0 24 24" style="width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><svg viewBox="0 0 24 24" style="width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M4 7h12M4 13h8M4 19h5"/></svg></span>
-    <span data-an="0"><b style="font-family:var(--f-display);font-size:.86rem">12 Sätze</b><span style="color:var(--muted);font-size:.78rem">42 min</span></span>
+    <span data-an="0"><b style="font-family:var(--f-display);font-size:.86rem">12 Sätze · 42 min gesamt</b></span>
+    <span data-an="0"><svg viewBox="0 0 24 24" style="width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M5 12h14M12 5v14"/></svg></span>
   </span></button>
   <span style="align-self:center;font-size:.76rem;color:var(--muted)">← antippen</span>
 </div>
+
+<h2>3b · Verschmelzen und trennen</h2>
+<p class="hint">Aus zwei Pillen wird eine und wieder zwei. Beim Zusammengehen ziehen sich die Ränder zueinander wie Tropfen, statt hart zu überlappen. Tipp drauf.</p>
+<button class="zwei" id="t3">
+  <span class="huellen"><i></i><i></i></span>
+  <span class="texte">
+    <span data-t="0"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg>Eintragen</span>
+    <span data-t="1"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Verwerfen</span>
+    <span data-t="2"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Gespeichert</span>
+  </span>
+</button>
 
 <h2>4 · Zurück-Wischen</h2>
 <p class="hint">Von der <b>linken Kante</b> des Kastens nach rechts ziehen. Die Seite darunter kommt mitgezogen heran und wird heller, statt einfach dazustehen. Loslassen: Feder entscheidet nach deiner Geschwindigkeit, nicht nach der Strecke — ein kurzer Schubs reicht also.</p>
@@ -279,30 +314,111 @@ document.querySelectorAll("[data-seg]").forEach(seg=>{
 });
 function gummi(ueber, mass, c=.55){ return (ueber*mass*c)/(mass + c*Math.abs(ueber)) }
 
-/* ---------- 3 · Austausch an gleicher Stelle ---------- */
+/* ---------- 3 · Austausch an gleicher Stelle ----------
+   Eine Feder treibt den Übergang von 0 nach 1. Daraus kommen drei Dinge zugleich:
+   die Position der beiden Inhalte, die Breite der Pille, und die Bewegungsunschärfe,
+   die aus der Geschwindigkeit der Feder selbst berechnet wird – schnell = unschärfer. */
+const mblurB = document.getElementById("mblurB");
+let blurSoll = 0;
+(function blurTakt(){                      // ein Filter für alle, einmal pro Bild gesetzt
+  mblurB.setAttribute("stdDeviation", "0 " + blurSoll.toFixed(2));
+  blurSoll = 0; requestAnimationFrame(blurTakt);
+})();
 function tausch(box){
   const sp = [...box.querySelectorAll("[data-an]")];
-  let an = sp.findIndex(s=>s.dataset.an==="1");
-  const mal = ()=> sp.forEach((s,j)=>{
-    const auf = j===an;
-    s.style.opacity = auf ? 1 : 0;
-    s.style.transform = auf ? "none" : "translateY(70%) scale(.72)";
-    s.style.pointerEvents = auf ? "auto" : "none";
-  });
-  sp.forEach(s=>s.style.transition = "transform .44s cubic-bezier(.32,.72,0,1),opacity .26s");
-  mal();
+  const pille = box.classList.contains("pille") ? box : null;
+  let an = sp.findIndex(s=>s.dataset.an==="1"); if(an<0) an=0;
+  let von = an;
+
+  // Breiten einmal messen: jeder Inhalt wird kurz sichtbar gemacht und vermessen
+  let breiten = [];
+  // frei schwebend und auf Inhaltsbreite messen, sonst gibt das Raster allen dieselbe Breite
+  const messen = ()=>{ breiten = sp.map(s=>{
+    const alt = s.getAttribute("style") || "";
+    s.style.cssText = "position:absolute;width:max-content;visibility:hidden";
+    const w = s.offsetWidth;
+    s.setAttribute("style", alt); return w }) };
+  if(pille) messen();
+
+  const mal = (q)=>{                        // q: 0 = noch beim alten, 1 = ganz beim neuen
+    sp.forEach((s,j)=>{
+      let y = 0, sk = .72, op = 0;
+      if(j === von){ y = -70*q; sk = 1-.28*q; op = 1-q }
+      else if(j === an){ y = 70*(1-q); sk = .72+.28*q; op = q }
+      else { s.style.opacity = 0; s.style.pointerEvents = "none"; return }
+      s.style.transform = "translateY("+y+"%) scale("+sk+")";
+      s.style.opacity = op; s.style.pointerEvents = (j===an && q>.5) ? "auto" : "none";
+    });
+    if(pille && breiten.length){
+      const w = breiten[von] + (breiten[an]-breiten[von])*q;
+      pille.style.width = (w + 8) + "px";    // 8 = Polsterung der Pille (der Inhalt bringt seine eigene mit)
+    }
+  };
+  const fd = feder(1, {daempfung:1, antwort:.42, auf:(x, v)=>{
+    mal(x);
+    // Unschärfe aus der Geschwindigkeit: der schnellste Teil der Bewegung verwischt am stärksten
+    blurSoll = Math.max(blurSoll, Math.min(7, Math.abs(v)*2.4));
+  }});
+  fd.setz(1); mal(1);
+  if(pille) pille.style.width = (breiten[an] + 8) + "px";
+
   box.addEventListener("click", ()=>{
-    const alt = sp[an]; an = (an+1)%sp.length; const neu = sp[an];
-    alt.style.transform = "translateY(-70%) scale(.72)"; alt.style.opacity = 0; alt.style.pointerEvents = "none";
-    neu.style.transition = "none"; neu.style.transform = "translateY(70%) scale(.72)"; neu.style.opacity = 0;
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      neu.style.transition = "transform .44s cubic-bezier(.32,.72,0,1),opacity .26s";
-      neu.style.transform = "none"; neu.style.opacity = 1; neu.style.pointerEvents = "auto";
-    }));
+    von = an; an = (an+1)%sp.length;
+    fd.setz(0); fd.zu(1);
     kurz();
   });
+  addEventListener("resize", ()=>{ if(pille){ messen(); mal(1) } });
 }
 tausch(document.getElementById("t1")); tausch(document.getElementById("t2"));
+
+/* ---------- 3b · Verschmelzen und trennen ----------
+   Zwei Hüllen liegen unter dem Text und werden vom Filter „goo" zusammengeschmolzen.
+   Wenn sie sich nähern, ziehen die weichen Ränder einander an – wie zwei Tropfen. */
+(()=>{
+  const box = document.getElementById("t3");
+  if(!box) return;
+  const [h1, h2] = box.querySelectorAll(".huellen i");
+  const texte = [...box.querySelectorAll(".texte span")];
+  /* drei Zustände: 0 = zwei Pillen nebeneinander, 1 = eine breite, 2 = eine schmale */
+  const lagen = [
+    {a:[0,.48], b:[.52,1], t:[0,1], eine:false},
+    {a:[0,1],   b:[0,1],   t:[2],   eine:true},
+    {a:[.22,.78], b:[.22,.78], t:[2], eine:true}
+  ];
+  let z = 0;
+  const W = ()=> box.getBoundingClientRect().width;
+  const setz = (q, vonL, nachL)=>{
+    const m = (p, n)=> p + (n-p)*q;
+    const w = W();
+    const a0 = m(vonL.a[0], nachL.a[0]), a1 = m(vonL.a[1], nachL.a[1]),
+          b0 = m(vonL.b[0], nachL.b[0]), b1 = m(vonL.b[1], nachL.b[1]);
+    h1.style.transform = "translateX("+(a0*w)+"px)"; h1.style.width = ((a1-a0)*w)+"px";
+    h2.style.transform = "translateX("+(b0*w)+"px)"; h2.style.width = ((b1-b0)*w)+"px";
+    texte.forEach((s,i)=>{
+      const drinVon = vonL.t.indexOf(i), drinNach = nachL.t.indexOf(i);
+      const op = (drinVon>=0 ? 1-q : 0) + (drinNach>=0 ? q : 0);
+      s.style.opacity = Math.max(0, Math.min(1, op));
+      // jeder Text sitzt über seiner Hülle
+      const lage = (k, L)=> k===0 ? L.a : L.b;
+      const iVon = drinVon>=0 ? lage(drinVon, vonL) : lage(0, vonL),
+            iNach = drinNach>=0 ? lage(drinNach, nachL) : lage(0, nachL);
+      const l = m(iVon[0], iNach[0]), r = m(iVon[1], iNach[1]);
+      s.style.left = (l*w)+"px"; s.style.width = ((r-l)*w)+"px";
+      s.style.transform = "scale("+(.9+.1*Math.max(drinVon>=0?1-q:0, drinNach>=0?q:0))+")";
+    });
+  };
+  let vonL = lagen[0], nachL = lagen[0];
+  const fd = feder(1, {daempfung:.82, antwort:.5, auf:(q, v)=>{
+    setz(Math.max(0, Math.min(1, q)), vonL, nachL);
+    blurSoll = Math.max(blurSoll, Math.min(5, Math.abs(v)*1.6));
+  }});
+  const neu = ()=>{ setz(1, nachL, nachL) };
+  neu(); addEventListener("resize", neu);
+  box.addEventListener("click", ()=>{
+    vonL = lagen[z]; z = (z+1)%lagen.length; nachL = lagen[z];
+    fd.setz(0); fd.zu(1); kurz();
+  });
+})();
 
 /* ---------- 4 · Zurück-Wischen mit Seite darunter ---------- */
 (()=>{
