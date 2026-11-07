@@ -62,21 +62,28 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
    statt überall gleich stark wie eine gezeichnete Linie. */
 .lg::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   padding:.6px;
-  background:linear-gradient(146deg,
-    rgba(255,255,255,.62) 0%,
-    rgba(255,255,255,.3)  16%,
-    rgba(255,255,255,.07) 38%,
-    rgba(255,255,255,.015) 54%,
-    rgba(255,255,255,.05) 72%,
-    rgba(255,255,255,.22) 92%,
-    rgba(255,255,255,.4)  100%);
+  background:
+    /* leuchtet mit dem Druck auf und bleibt über der hellen Fläche sichtbar */
+    linear-gradient(146deg,
+      rgba(255,255,255,calc(var(--glanz,0) * .98)) 0%,
+      rgba(255,255,255,calc(var(--glanz,0) * .8))  45%,
+      rgba(255,255,255,calc(var(--glanz,0) * .95)) 100%),
+    /* der ruhige, ungleichmäßige Lichtsaum */
+    linear-gradient(146deg,
+      rgba(255,255,255,.62) 0%,
+      rgba(255,255,255,.3)  16%,
+      rgba(255,255,255,.07) 38%,
+      rgba(255,255,255,.015) 54%,
+      rgba(255,255,255,.05) 72%,
+      rgba(255,255,255,.22) 92%,
+      rgba(255,255,255,.4)  100%);
   -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
   mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
   -webkit-mask-composite:xor;mask-composite:exclude}
 /* Beim Drücken füllt sich die ganze Fläche mit einem hellen, neutralgrauen Verlauf –
    oben links fast weiß, nach unten rechts mittelgrau. Keine Tönung, kein Schein nach außen.
    z-index -1 legt die Schicht über den Hintergrund, aber unter Text und Symbol. */
-.lg::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
+.lg::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-2;
   background:linear-gradient(145deg,#EDF0F2 0%,#C3C9CE 34%,#959CA3 64%,#6E757C 100%);
   opacity:var(--glanz,0)}
 
@@ -208,7 +215,7 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
     <button class="lg" style="flex:1;--glanz:1;transform:scale(1.06)">Gedrückt</button>
   </div>
 </div>
-<p class="hint">Hier wird der Knopf beim Drücken <b>größer</b>, nicht kleiner: das Glas wölbt sich unter dem Finger, und die <b>ganze Fläche füllt sich mit einem hellen neutralgrauen Verlauf</b> — oben links fast weiß, nach unten rechts mittelgrau, wie auf deinem Bild. Die Schrift dunkelt mit. Gedrückt halten und wegziehen — er geht zurück, ohne auszulösen. Die Kante ist dünner (0,9 px) und <b>ungleichmäßig</b>: oben links kräftig, nach rechts unten läuft sie fast auf null aus und kommt am Ende schwach zurück — so fällt Licht auf eine echte Glaskante. Vorher war der Ring überall gleich stark und sah dadurch gezeichnet aus. In der Fläche liegt ein ganz schwacher Verlauf.</p>
+<p class="hint">Hier wird der Knopf beim Drücken <b>größer</b>, nicht kleiner: das Glas wölbt sich unter dem Finger, und die <b>ganze Fläche füllt sich mit einem deckenden Silberverlauf</b> — oben links fast weiß, nach unten rechts mittelgrau. Der Rand bleibt dabei sichtbar und leuchtet mit auf. Die Schrift dunkelt mit. Gedrückt halten und wegziehen — er geht zurück, ohne auszulösen. Die Kante ist dünner (0,9 px) und <b>ungleichmäßig</b>: oben links kräftig, nach rechts unten läuft sie fast auf null aus und kommt am Ende schwach zurück — so fällt Licht auf eine echte Glaskante. Vorher war der Ring überall gleich stark und sah dadurch gezeichnet aus. In der Fläche liegt ein ganz schwacher Verlauf.</p>
 <div class="band">
   <div class="zeile"><b>Haferflocken</b><span>80 g · 304 kcal</span></div>
   <div class="zeile"><b>Magerquark</b><span>250 g · 170 kcal</span></div>
