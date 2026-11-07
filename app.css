@@ -163,7 +163,7 @@ h3{font-family:var(--f-display);font-size:.84rem;letter-spacing:-.004em;color:va
 .stage canvas{display:block;width:100%;height:100%;transition:transform .45s cubic-bezier(.6,0,.3,1)}
 .stage.trans{border-color:var(--rest)}
 .hud{position:absolute;left:10px;right:10px;top:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
-.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;border:0;background:rgba(11,15,20,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-family:var(--f-display);font-size:.8rem;font-weight:500;letter-spacing:0;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;border:0;background:color-mix(in srgb,var(--card) 72%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-family:var(--f-display);font-size:.8rem;font-weight:500;letter-spacing:0;color:var(--muted)}
 .chip.on{border-color:var(--accent);color:var(--accent)}
 .chip.warn{border-color:var(--rest);color:var(--rest)}
 .hint{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-family:var(--f-display);font-size:.85rem;color:var(--accent);pointer-events:none;text-shadow:0 0 10px #000}
@@ -206,13 +206,19 @@ h3{font-family:var(--f-display);font-size:.84rem;letter-spacing:-.004em;color:va
 .btn,.ic,.echip,.ering,.ekcal,.dtab,.sbtn,.eburn,.eaddin,.efac,.est,.emulb,.eunit{
   --druck:0;position:relative;isolation:isolate;
   transition:background .15s,border-color .15s;
-  color:color-mix(in srgb,#0B0F14 calc(var(--druck) * 90%),currentColor)}
+  /* Getönte Knöpfe behalten ihre Farbe und vertiefen sie nur; flächige Tasten
+     kippen auf dem Silber nach dunkel, sonst verschwindet die Schrift. */
+  color:color-mix(in srgb,#0B0F14 calc(var(--druck) * 35%),currentColor)}
+.btn{color:color-mix(in srgb,#0B0F14 calc(var(--druck) * 90%),currentColor)}
 /* die aufgehellte Fläche – liegt über dem Hintergrund, unter Text und Symbol */
 .btn::after,.ic::after,.echip::after,.ekcal::after,.dtab::after,.sbtn::after,
 .eburn::after,.eaddin::after,.efac::after,.est::after,.emulb::after,.eunit::after{
   content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-2;
-  background:linear-gradient(168deg,#C2C2C2 0%,#A6A6A6 42%,#8E8E8E 72%,#7D7D7D 100%);
-  opacity:var(--druck)}
+  opacity:var(--druck);
+  /* Getönte und runde Knöpfe hellen in ihrer eigenen Farbe auf: Weiß mit Lücke, die
+     Tönung scheint durch. Der gemessene Silberverlauf gilt nur für flächige Tasten. */
+  background:linear-gradient(168deg,rgba(255,255,255,.92) 0%,rgba(255,255,255,.78) 42%,rgba(255,255,255,.66) 72%,rgba(255,255,255,.58) 100%)}
+.btn::after{background:linear-gradient(168deg,#C2C2C2 0%,#A6A6A6 42%,#8E8E8E 72%,#7D7D7D 100%)}
 /* der Rand, der mitleuchtet */
 .btn::before,.ic::before,.echip::before,.ekcal::before,.dtab::before,.sbtn::before,
 .eburn::before,.eaddin::before,.efac::before,.est::before,.emulb::before,.eunit::before{
@@ -267,7 +273,7 @@ h3{font-family:var(--f-display);font-size:.84rem;letter-spacing:-.004em;color:va
 .res .rd .miss{color:var(--rest)}
 .res .rd .more{color:var(--ok)}
 .big-ok{font-family:var(--f-display);font-size:3rem;font-weight:700;color:var(--ok);line-height:1;letter-spacing:-.035em}
-.toast{position:fixed;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));transform:translate(-50%,40px);opacity:0;background:color-mix(in srgb,#1A2430 78%,transparent);
+.toast{position:fixed;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));transform:translate(-50%,40px);opacity:0;background:color-mix(in srgb,var(--card) 78%,transparent);
   backdrop-filter:blur(20px) saturate(170%);-webkit-backdrop-filter:blur(20px) saturate(170%);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 8px 26px rgba(0,0,0,.45);
   border:0;border-radius:999px;padding:11px 18px;font-family:var(--f-display);font-size:.88rem;font-weight:500;z-index:40;pointer-events:none;
@@ -525,9 +531,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .eshead h3{flex:1;color:color-mix(in srgb,var(--tint) 35%,var(--fg))}
 .esk{flex:1;font-family:var(--f-display);font-size:.75rem;color:var(--muted)}
 /* Plus als runde Taste im Ton des Abschnitts – mit Druckpunkt wie bei den Systemtasten am Telefon */
-.eshead .eadd{width:34px;height:34px;border-radius:999px;color:var(--tint);border:0;background:color-mix(in srgb,var(--tint) 14%,transparent)}
+.eshead .eadd{width:40px;height:40px;border-radius:999px;color:var(--tint);border:0;background:color-mix(in srgb,var(--tint) 14%,transparent)}
 .eshead .eadd svg{width:19px;height:19px;stroke-width:2.6}
-.eshead .eadd::after{content:"";position:absolute;inset:-7px}
 .eshead .eadd{position:relative}
 .elist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
 .eswipe{position:relative;border-top:1px solid var(--line);background:#3a1d14;overflow:hidden}
@@ -547,9 +552,8 @@ img.eic{background:#fff}
 .efoot .epaste{margin:0}
 .btn.ghost.epaste{display:flex;align-items:center;justify-content:center;gap:9px;margin:18px auto 4px;width:auto;min-width:min(260px,74%);border-radius:999px;border:0;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .epaste svg{width:19px;height:19px;flex:none}
-.efac{position:relative;flex:none;min-width:34px;height:34px;padding:0 6px;border-radius:999px;background:var(--bg);border:1px solid var(--line);display:grid;place-items:center;font-family:var(--f-display);font-size:.72rem;color:var(--muted)}
+.efac{position:relative;flex:none;min-width:40px;height:40px;padding:0 10px;border-radius:999px;background:var(--bg);border:1px solid var(--line);display:grid;place-items:center;font-family:var(--f-display);font-size:.72rem;color:var(--muted)}
 .efac.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
-.efac::after{content:"";position:absolute;inset:-8px -6px}
 .enm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
 .enm small{color:var(--muted)}
 .epill{flex:none;font-family:var(--f-display);font-size:.75rem;color:var(--muted);padding:3px 9px;border-radius:999px;background:var(--bg)}
@@ -628,16 +632,16 @@ img.emini{background:#fff}
 .eghost span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .eghost .eic{width:26px;height:26px}
 .edock{position:fixed;left:0;right:0;bottom:0;z-index:25;display:flex;flex-direction:column;gap:6px;padding:10px 12px max(12px,env(safe-area-inset-bottom));
-  background:color-mix(in srgb,#111821 72%,transparent);
+  background:color-mix(in srgb,var(--card) 72%,transparent);
   backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
   border:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 -10px 30px rgba(0,0,0,.4)}
-.edz{pointer-events:auto;min-height:72px;border-radius:16px;border:1px dashed var(--line);background:rgba(18,25,34,.95);display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--f-display);font-size:.78rem;color:var(--muted);transition:transform .12s,opacity .12s,background .12s}
+.edz{pointer-events:auto;min-height:72px;border-radius:16px;border:1px dashed var(--line);background:color-mix(in srgb,var(--card) 95%,transparent);display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--f-display);font-size:.78rem;color:var(--muted);transition:transform .12s,opacity .12s,background .12s}
 .edz b{font-size:1.6rem;font-weight:400;color:var(--accent);line-height:1}
 .edz.cal{flex-direction:column;gap:4px}
 .edz.cal svg{width:24px;height:24px;color:var(--accent)}
 .edz.drophot{border-style:solid;border-color:var(--accent);background:rgba(0,229,255,.16);color:var(--fg);transform:scale(1.04)}
 /* Kalender (ohne Abdunkeln) */
-.ecal{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:26;width:min(340px,calc(100% - 24px));padding:12px;border-radius:18px;background:color-mix(in srgb,#16202B 80%,transparent);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 14px 40px rgba(0,0,0,.55)}
+.ecal{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:26;width:min(340px,calc(100% - 24px));padding:12px;border-radius:18px;background:color-mix(in srgb,var(--card) 80%,transparent);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 14px 40px rgba(0,0,0,.55)}
 .ecalh{display:flex;align-items:center;justify-content:space-between;font-family:var(--f-display);font-size:.9rem;margin-bottom:6px}
 .ecalh b{font-weight:500}
 .ecalh button{width:40px;height:36px;border:0;background:none;color:var(--accent);font-size:1.3rem;cursor:pointer}
@@ -649,10 +653,10 @@ img.emini{background:#fff}
 .ecalg button.cur{outline:1px solid var(--line)}
 .ecalg button:active{background:rgba(0,229,255,.2)}
 /* Rückgängig */
-.eundo{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));z-index:24;display:flex;align-items:center;gap:14px;padding:8px 8px 8px 16px;border-radius:999px;background:color-mix(in srgb,#1A2430 80%,transparent);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border:0;font-size:.85rem;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 26px rgba(0,0,0,.45);max-width:calc(100% - 24px)}
+.eundo{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));z-index:24;display:flex;align-items:center;gap:14px;padding:8px 8px 8px 16px;border-radius:999px;background:color-mix(in srgb,var(--card) 80%,transparent);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border:0;font-size:.85rem;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 26px rgba(0,0,0,.45);max-width:calc(100% - 24px)}
 .eundo span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Werte-Karte beim Gedrückthalten in der Suche (24.10.2026): fährt von unten herein, fängt keine Berührung ab (sonst wäre das Loslassen nicht mehr auf der Zeile) */
-.einfo{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:35;width:min(420px,calc(100% - 24px));display:flex;flex-direction:column;gap:6px;padding:12px 16px;border-radius:16px;background:color-mix(in srgb,#1A2430 80%,transparent);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 26px rgba(0,0,0,.45);transform:translate(-50%,calc(100% + 40px));opacity:0;pointer-events:none;transition:transform .2s ease-out,opacity .2s}
+.einfo{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:35;width:min(420px,calc(100% - 24px));display:flex;flex-direction:column;gap:6px;padding:12px 16px;border-radius:16px;background:color-mix(in srgb,var(--card) 80%,transparent);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 26px rgba(0,0,0,.45);transform:translate(-50%,calc(100% + 40px));opacity:0;pointer-events:none;transition:transform .2s ease-out,opacity .2s}
 .einfo.show{transform:translate(-50%,0);opacity:1}
 .einfo .eit{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .einfo .eit .enm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400}
