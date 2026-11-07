@@ -46,53 +46,37 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 .band .zeile b{font-family:var(--f-display);font-weight:600}
 .band .zeile span{color:var(--muted);font-size:.78rem;font-family:var(--f-display)}
 
+/* Werte aus dem Screenshot gemessen (Bild bei dreifacher Pixeldichte):
+   Ruhe   – Fläche #0B0B0B (= Hintergrund, also durchsichtig), Rand #232323, 1 pt
+   Druck  – Fläche #BEBEBE oben bis #7D7D7D unten links, Rand #FFFFFF oben, #D9D9D9 unten, 0,7 pt */
 .lg{position:relative;min-height:52px;padding:0 20px;border-radius:999px;font-family:var(--f-display);font-weight:600;
-  /* Schrift dunkelt mit dem Druck mit, sonst verschwindet sie auf der hellen Fläche */
-  color:color-mix(in srgb,#0B0F14 calc(var(--glanz) * 88%),var(--fg));
-  isolation:isolate;will-change:transform;
-  /* ganz schwacher Verlauf in der Fläche – oben eine Spur heller, wie Licht auf Glas */
-  background:linear-gradient(to bottom,rgba(255,255,255,.075),rgba(255,255,255,.028));
-  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  /* Grundring kaum zu sehen; dahinter der Schein, der beim Drücken nach außen tritt.
-     Kein filter: drop-shadow – das würde das backdrop-filter des Glases aushebeln. */
   --glanz:0;
-  box-shadow:inset 0 0 0 .5px rgba(255,255,255,.035)}
-/* Die Lichtkante. Der Ring ist 1,6 px dick, aber seine Farbe läuft über den Umlauf von kräftig
-   nach fast nichts – dadurch wirkt er oben links dick und unten rechts verschwunden,
-   statt überall gleich stark wie eine gezeichnete Linie. */
+  color:color-mix(in srgb,#0B0F14 calc(var(--glanz) * 92%),var(--fg));
+  isolation:isolate;will-change:transform;
+  background:transparent;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+/* Rand: in Ruhe fast unsichtbar, beim Drücken deckend weiß – oben voll, unten etwas zurück */
 .lg::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  padding:.6px;
-  background:
-    /* leuchtet mit dem Druck auf und bleibt über der hellen Fläche sichtbar */
-    linear-gradient(146deg,
-      rgba(255,255,255,calc(var(--glanz,0) * .98)) 0%,
-      rgba(255,255,255,calc(var(--glanz,0) * .8))  45%,
-      rgba(255,255,255,calc(var(--glanz,0) * .95)) 100%),
-    /* der ruhige, ungleichmäßige Lichtsaum */
-    linear-gradient(146deg,
-      rgba(255,255,255,.62) 0%,
-      rgba(255,255,255,.3)  16%,
-      rgba(255,255,255,.07) 38%,
-      rgba(255,255,255,.015) 54%,
-      rgba(255,255,255,.05) 72%,
-      rgba(255,255,255,.22) 92%,
-      rgba(255,255,255,.4)  100%);
+  padding:1px;
+  background:linear-gradient(to bottom,
+    color-mix(in srgb,#FFFFFF calc(var(--glanz) * 100%),rgba(255,255,255,.1)),
+    color-mix(in srgb,#E4E4E4 calc(var(--glanz) * 100%),rgba(255,255,255,.07)) 60%,
+    color-mix(in srgb,#D9D9D9 calc(var(--glanz) * 100%),rgba(255,255,255,.08)));
   -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
   mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
   -webkit-mask-composite:xor;mask-composite:exclude}
-/* Beim Drücken füllt sich die ganze Fläche mit einem hellen, neutralgrauen Verlauf –
-   oben links fast weiß, nach unten rechts mittelgrau. Keine Tönung, kein Schein nach außen.
-   z-index -1 legt die Schicht über den Hintergrund, aber unter Text und Symbol. */
+/* Die Druckfläche: flacher neutralgrauer Verlauf, liegt unter dem Rand */
 .lg::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-2;
-  background:linear-gradient(145deg,#EDF0F2 0%,#C3C9CE 34%,#959CA3 64%,#6E757C 100%);
-  opacity:var(--glanz,0)}
-
-.lg.voll{background:linear-gradient(to bottom,rgba(0,229,255,.21),rgba(0,229,255,.12));
-  color:color-mix(in srgb,#021A1F calc(var(--glanz) * 88%),#CFF9FF);
-  box-shadow:inset 0 0 0 .5px rgba(0,229,255,.18)}
-.lg.voll::before{background:linear-gradient(146deg,
-    rgba(214,251,255,.7) 0%, rgba(214,251,255,.32) 16%, rgba(214,251,255,.07) 38%,
-    rgba(214,251,255,.02) 54%, rgba(214,251,255,.06) 72%, rgba(214,251,255,.26) 92%, rgba(214,251,255,.45) 100%)}
+  background:linear-gradient(168deg,#C2C2C2 0%,#A6A6A6 42%,#8E8E8E 72%,#7D7D7D 100%);
+  opacity:var(--glanz)}
+/* Der farbige Knopf behält beim Drücken seine Farbe, statt nach Weiß zu kippen */
+.lg.voll{background:linear-gradient(to bottom,rgba(0,229,255,.2),rgba(0,229,255,.11));
+  color:color-mix(in srgb,#02232B calc(var(--glanz) * 92%),#CFF9FF)}
+.lg.voll::after{background:linear-gradient(168deg,#9EE9F5 0%,#6FD2E2 42%,#4EBCCE 72%,#3BA7B9 100%)}
+.lg.voll::before{background:linear-gradient(to bottom,
+    color-mix(in srgb,#EAFDFF calc(var(--glanz) * 100%),rgba(0,229,255,.26)),
+    color-mix(in srgb,#B8F2FA calc(var(--glanz) * 100%),rgba(0,229,255,.16)) 60%,
+    color-mix(in srgb,#A6EAF5 calc(var(--glanz) * 100%),rgba(0,229,255,.2)))}
 /* Auf der hellen Druckfläche muss die Schrift mitdunkeln, sonst ist sie weg */
 .lg>*{position:relative;z-index:1}
 .lgreihe{display:flex;gap:10px}
@@ -215,7 +199,7 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
     <button class="lg" style="flex:1;--glanz:1;transform:scale(1.06)">Gedrückt</button>
   </div>
 </div>
-<p class="hint">Hier wird der Knopf beim Drücken <b>größer</b>, nicht kleiner: das Glas wölbt sich unter dem Finger, und die <b>ganze Fläche füllt sich mit einem deckenden Silberverlauf</b> — oben links fast weiß, nach unten rechts mittelgrau. Der Rand bleibt dabei sichtbar und leuchtet mit auf. Die Schrift dunkelt mit. Gedrückt halten und wegziehen — er geht zurück, ohne auszulösen. Die Kante ist dünner (0,9 px) und <b>ungleichmäßig</b>: oben links kräftig, nach rechts unten läuft sie fast auf null aus und kommt am Ende schwach zurück — so fällt Licht auf eine echte Glaskante. Vorher war der Ring überall gleich stark und sah dadurch gezeichnet aus. In der Fläche liegt ein ganz schwacher Verlauf.</p>
+<p class="hint">Hier wird der Knopf beim Drücken <b>größer</b>, nicht kleiner: das Glas wölbt sich unter dem Finger, und die <b>ganze Fläche füllt sich mit einem deckenden Silberverlauf</b> — oben links fast weiß, nach unten rechts mittelgrau. Der Rand bleibt dabei sichtbar und leuchtet mit auf. Die Schrift dunkelt mit. Gedrückt halten und wegziehen — er geht zurück, ohne auszulösen. Diesmal nicht geschätzt, sondern <b>aus deinem Screenshot gemessen</b>. In Ruhe ist die Fläche völlig durchsichtig und der Rand nur #232323 — kaum heller als der Grund. Beim Drücken ein flacher Grauverlauf (#C2C2C2 nach #7D7D7D) und der Rand wird <b>deckend weiß</b>, oben voll, unten etwas zurück. Der farbige Knopf bleibt dabei farbig, statt nach Weiß zu kippen.</p>
 <div class="band">
   <div class="zeile"><b>Haferflocken</b><span>80 g · 304 kcal</span></div>
   <div class="zeile"><b>Magerquark</b><span>250 g · 170 kcal</span></div>
