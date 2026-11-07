@@ -36,6 +36,39 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 .ic svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .reihe{display:flex;gap:8px}
 
+/* ============ 1b · Liquid Glass ============
+   Drei Schichten machen das Glas: die Fläche selbst (Unschärfe + Sättigung),
+   ein dichterer Saum am Rand – das ist die Andeutung der Linse – und die Lichtkante oben. */
+.band{border-radius:20px;padding:18px 16px;display:flex;flex-direction:column;gap:12px;
+  background:
+    radial-gradient(90% 120% at 15% 10%, #1B4C6B, transparent 60%),
+    radial-gradient(80% 110% at 85% 90%, #4A2B5E, transparent 60%),
+    linear-gradient(120deg,#13202C,#0E1620)}
+.band .streifen{display:flex;gap:6px}
+.band .streifen i{flex:1;height:22px;border-radius:7px}
+.lg{position:relative;min-height:52px;padding:0 20px;border-radius:999px;font-family:var(--f-display);font-weight:600;
+  color:#fff;isolation:isolate;will-change:transform;
+  background:rgba(255,255,255,.1);
+  backdrop-filter:blur(14px) saturate(190%);-webkit-backdrop-filter:blur(14px) saturate(190%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.5),        /* Licht fällt auf die Oberkante */
+    inset 0 -1px 1px rgba(255,255,255,.14),    /* schwaches Gegenlicht unten */
+    inset 0 0 0 .5px rgba(255,255,255,.22),    /* der Glasring */
+    0 8px 22px rgba(0,0,0,.4)}
+/* Der Saum: am Rand wird stärker verdichtet und aufgehellt – so wirkt die Kante wie geschliffen */
+.lg::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
+  backdrop-filter:blur(2px) brightness(1.45) saturate(280%);-webkit-backdrop-filter:blur(2px) brightness(1.45) saturate(280%);
+  -webkit-mask:radial-gradient(closest-side,transparent 56%,#000 88%);mask:radial-gradient(closest-side,transparent 56%,#000 88%)}
+/* Der Glanz, der beim Drücken aufzieht */
+.lg::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  opacity:calc(var(--glanz,0) * .85);
+  background:radial-gradient(130% 160% at 50% -30%,rgba(255,255,255,.5),transparent 55%)}
+.lg.voll{background:rgba(0,229,255,.3);color:#021A1F;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 0 0 .5px rgba(255,255,255,.3),0 8px 24px rgba(0,229,255,.3)}
+.lgreihe{display:flex;gap:10px}
+.lgic{min-height:52px;width:52px;padding:0;display:grid;place-items:center}
+.lgic svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+
 /* ============ 2 · Umschalter ============ */
 .seg{position:relative;display:flex;background:rgba(141,155,171,.12);border-radius:13px;padding:3px;touch-action:none;user-select:none;-webkit-user-select:none}
 .seg .knopf{position:absolute;z-index:0;top:3px;bottom:3px;left:3px;border-radius:10px;background:#2A3A4D;
@@ -80,8 +113,9 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 .swatch i{display:block;height:28px;flex:1;border-radius:8px}
 .weg{font-size:.74rem;color:var(--muted);border-top:1px solid rgba(255,255,255,.07);margin-top:34px;padding-top:12px}
 
-/* Austausch mit Bewegungsunschärfe: der Filter verwischt nur längs der Bewegung */
-.tausch>span,.pille .inh>span{filter:url(#mblur)}
+/* Bewegungsunschärfe nur WÄHREND der Bewegung – ein dauernd anliegender SVG-Filter
+   rastert den Text neu und hinterlässt bei langen Zeilen sichtbare Kanten */
+.verwischt>span,.verwischt .inh>span,.verwischt .texte span{filter:url(#mblur)}
 /* Zwei Pillen, die verschmelzen – die Hülle liegt unter dem Text und wird zusammengeschmolzen */
 .huellen{position:absolute;inset:0;filter:url(#goo);pointer-events:none}
 .huellen i{position:absolute;top:0;height:100%;border-radius:999px;background:#223040;display:block;will-change:transform,width}
@@ -125,6 +159,19 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
   <button class="ic" data-feder><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   <button class="ic" data-feder><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"/></svg></button>
   <span style="align-self:center;font-size:.76rem;color:var(--muted)">← auch Symbole</span>
+</div>
+
+<h2>1b · Liquid Glass — und der Knopf wächst</h2>
+<p class="hint">Hier wird der Knopf beim Drücken <b>größer</b>, nicht kleiner: das Glas wölbt sich unter dem Finger, der Saum zieht sich zusammen, der Glanz zieht auf. Gedrückt halten und wegziehen — er geht zurück, ohne auszulösen. Der bunte Grund ist nur da, damit du siehst, was durchs Glas kommt.</p>
+<div class="band">
+  <div class="streifen"><i style="background:var(--accent)"></i><i style="background:var(--rest)"></i><i style="background:var(--ok)"></i><i style="background:#FF6B9D"></i><i style="background:#7C8CFF"></i></div>
+  <div class="lgreihe">
+    <button class="lg voll" data-feder data-gross style="flex:1">Eintragen</button>
+    <button class="lg lgic" data-feder data-gross><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg></button>
+    <button class="lg lgic" data-feder data-gross><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <button class="lg" data-feder data-gross>Als Vorlage speichern</button>
+  <div class="streifen"><i style="background:#7C8CFF"></i><i style="background:var(--ok)"></i><i style="background:var(--rest)"></i><i style="background:#FF6B9D"></i><i style="background:var(--accent)"></i></div>
 </div>
 
 <h2>2 · Umschalter</h2>
@@ -224,16 +271,28 @@ const kurz=()=>{try{navigator.vibrate&&navigator.vibrate(7)}catch(_){}}
 /* ---------- 1 · Druckpunkt mit Feder ---------- */
 document.querySelectorAll("[data-feder]").forEach(el=>{
   const breit = ()=>el.getBoundingClientRect().width || 100;
-  // Aufhellung über eine eigene Fläche, damit der Knopf seine Farbe behält
-  const hell = document.createElement("span");
-  hell.style.cssText = "position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;border-radius:inherit";
-  if(getComputedStyle(el).position === "static") el.style.position = "relative";
-  el.style.overflow = "hidden"; el.appendChild(hell);
-  const zeichne = (x)=>{ el.style.transform = "scale("+x+")";
-    hell.style.opacity = String(Math.max(0, Math.min(.1, (1-x)/0.045*.1))) };
-  const f2 = feder(1, {daempfung:1, antwort:.34, auf:zeichne});
-  // gedrückte Tiefe: gleiche Pixel für alle, aber nie mehr als 4,5 %
-  const tief = ()=> Math.max(.955, 1 - 8/breit());
+  const gross = el.hasAttribute("data-gross");     // Glas wächst, alles andere geht ein
+  let hell = null;
+  if(gross){
+    // Beim Glas übernimmt der eingebaute Glanz (::after) die Rückmeldung
+    el.style.position = "relative";
+  }else{
+    // Aufhellung über eine eigene Fläche, damit der Knopf seine Farbe behält
+    hell = document.createElement("span");
+    hell.style.cssText = "position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;border-radius:inherit";
+    if(getComputedStyle(el).position === "static") el.style.position = "relative";
+    el.style.overflow = "hidden"; el.appendChild(hell);
+  }
+  const zeichne = (x)=>{
+    el.style.transform = "scale("+x+")";
+    // wie weit ist der Knopf gerade gedrückt, 0 bis 1
+    const t = Math.max(0, Math.min(1, Math.abs(x-1)/0.045));
+    if(hell) hell.style.opacity = String(t*.1);
+    else el.style.setProperty("--glanz", t);
+  };
+  const f2 = feder(1, {daempfung: gross ? .72 : 1, antwort: gross ? .38 : .34, auf:zeichne});
+  // Glas wölbt sich heraus, alles andere geht ein – beides gleich viele Pixel, nie über 4,5 %
+  const tief = ()=> gross ? Math.min(1.045, 1 + 8/breit()) : Math.max(.955, 1 - 8/breit());
   let drin = false;
   const an = ()=>{ drin = true; f2.zu(tief()) };
   const aus = ()=>{ if(!drin) return; drin = false; f2.zu(1) };
@@ -357,13 +416,14 @@ function tausch(box){
   const fd = feder(1, {daempfung:1, antwort:.42, auf:(x, v)=>{
     mal(x);
     // Unschärfe aus der Geschwindigkeit: der schnellste Teil der Bewegung verwischt am stärksten
-    blurSoll = Math.max(blurSoll, Math.min(7, Math.abs(v)*2.4));
-  }});
+    blurSoll = Math.max(blurSoll, Math.min(3.5, Math.abs(v)*1.2));
+  }, fertig:()=>box.classList.remove("verwischt")});
   fd.setz(1); mal(1);
   if(pille) pille.style.width = (breiten[an] + 8) + "px";
 
   box.addEventListener("click", ()=>{
     von = an; an = (an+1)%sp.length;
+    box.classList.add("verwischt");
     fd.setz(0); fd.zu(1);
     kurz();
   });
@@ -398,10 +458,13 @@ tausch(document.getElementById("t1")); tausch(document.getElementById("t2"));
       const drinVon = vonL.t.indexOf(i), drinNach = nachL.t.indexOf(i);
       const op = (drinVon>=0 ? 1-q : 0) + (drinNach>=0 ? q : 0);
       s.style.opacity = Math.max(0, Math.min(1, op));
-      // jeder Text sitzt über seiner Hülle
+      // Jeder Text sitzt über seiner Hülle. Ein Text, den es vorher (oder nachher) gar nicht
+      // gibt, bleibt an seiner einen gültigen Stelle stehen und blendet dort nur auf oder ab –
+      // sonst würde er aus einer Ecke angeflogen kommen statt mittig zu erscheinen.
       const lage = (k, L)=> k===0 ? L.a : L.b;
-      const iVon = drinVon>=0 ? lage(drinVon, vonL) : lage(0, vonL),
-            iNach = drinNach>=0 ? lage(drinNach, nachL) : lage(0, nachL);
+      const nurVon = drinVon>=0 && drinNach<0, nurNach = drinNach>=0 && drinVon<0;
+      const iVon  = nurNach ? lage(drinNach, nachL) : lage(Math.max(0,drinVon), vonL),
+            iNach = nurVon  ? lage(drinVon, vonL)   : lage(Math.max(0,drinNach), nachL);
       const l = m(iVon[0], iNach[0]), r = m(iVon[1], iNach[1]);
       s.style.left = (l*w)+"px"; s.style.width = ((r-l)*w)+"px";
       s.style.transform = "scale("+(.9+.1*Math.max(drinVon>=0?1-q:0, drinNach>=0?q:0))+")";
@@ -410,12 +473,13 @@ tausch(document.getElementById("t1")); tausch(document.getElementById("t2"));
   let vonL = lagen[0], nachL = lagen[0];
   const fd = feder(1, {daempfung:.82, antwort:.5, auf:(q, v)=>{
     setz(Math.max(0, Math.min(1, q)), vonL, nachL);
-    blurSoll = Math.max(blurSoll, Math.min(5, Math.abs(v)*1.6));
-  }});
+    blurSoll = Math.max(blurSoll, Math.min(2.5, Math.abs(v)*.8));
+  }, fertig:()=>box.classList.remove("verwischt")});
   const neu = ()=>{ setz(1, nachL, nachL) };
   neu(); addEventListener("resize", neu);
   box.addEventListener("click", ()=>{
     vonL = lagen[z]; z = (z+1)%lagen.length; nachL = lagen[z];
+    box.classList.add("verwischt");
     fd.setz(0); fd.zu(1); kurz();
   });
 })();
