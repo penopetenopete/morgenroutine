@@ -81,6 +81,13 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 .lgic{min-height:52px;width:52px;padding:0;display:grid;place-items:center}
 .lgic svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
 
+/* ============ 1c · Echte Brechung ============ */
+/* Ein Gitter unter dem Glas – an geraden Linien sieht man die Verbiegung am deutlichsten */
+.band.gitter{background:
+  repeating-linear-gradient(to right,rgba(255,255,255,.055) 0 1px,transparent 1px 22px),
+  repeating-linear-gradient(to bottom,rgba(255,255,255,.055) 0 1px,transparent 1px 22px),
+  #0E141B}
+
 /* ============ 2 · Umschalter ============ */
 .seg{position:relative;display:flex;background:rgba(141,155,171,.12);border-radius:13px;padding:3px;touch-action:none;user-select:none;-webkit-user-select:none}
 /* Der laufende Knopf: gleiche Sprache – flache Fläche, feiner Ring, 1 px Saum */
@@ -192,6 +199,24 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
   <button class="lg" data-feder data-gross>Als Vorlage speichern</button>
   <div class="zeile"><b>Banane</b><span>120 g · 107 kcal</span></div>
 </div>
+
+<h2>1c · Echte Brechung</h2>
+<p class="hint">Das ist der Unterschied, den du gesucht hast: das Glas <b>verbiegt</b>, was darunter liegt. Am Rand zieht es den Hintergrund nach außen wie eine Linse, in der Mitte bleibt alles gerade. Der Schalter nimmt die Brechung weg, damit du vergleichen kannst — achte auf das Gitter und die Linien, die unter dem Knopf durchlaufen.</p>
+<div class="band gitter">
+  <div class="zeile"><b>Haferflocken</b><span>80 g · 304 kcal</span></div>
+  <div class="lgreihe">
+    <button class="lg br" data-feder data-gross style="flex:1">Eintragen</button>
+    <button class="lg br lgic" data-feder data-gross><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg></button>
+  </div>
+  <button class="lg br" data-feder data-gross>Als Vorlage speichern</button>
+  <div class="zeile"><b>Magerquark</b><span>250 g · 170 kcal</span></div>
+  <div class="zeile"><b>Banane</b><span>120 g · 107 kcal</span></div>
+</div>
+<div class="reihe" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+  <button class="lg" id="brTog" style="min-height:40px;padding:0 14px;font-size:.8rem">Brechung: an</button>
+  <button class="lg" id="brMehr" style="min-height:40px;padding:0 14px;font-size:.8rem">Stärke: mittel</button>
+</div>
+<p class="hint" id="brInfo" style="margin-top:8px"></p>
 
 <h2>2 · Umschalter</h2>
 <p class="hint">Links wie im ersten Entwurf: antippen, fester Weg. Rechts kannst du den Knopf <b>gedrückt halten und schieben</b> — er folgt dem Finger und <b>dehnt sich in Laufrichtung</b>, je schneller desto mehr, wie ein gezogener Tropfen. Beim Anhalten wird er wieder rund. Der Knopf selbst ist aus Glas. Ein kurzer Schubs reicht.</p>
@@ -327,6 +352,98 @@ document.querySelectorAll("[data-feder]").forEach(el=>{
     if(innen && !drin) an(); else if(!innen && drin) aus();
   });
 });
+
+/* ---------- 1c · Echte Brechung ----------
+   Wir rechnen eine Karte aus, die für jede Stelle des Knopfes sagt, woher das Glas dort
+   sein Licht holt: Rot steuert die Verschiebung zur Seite, Grün die nach oben/unten.
+   128 heißt „gar nicht verschieben" – das ist die Mitte. Zum Rand hin zeigt die Verschiebung
+   nach außen, immer stärker, genau wie bei einer geschliffenen Kante.
+   Der Browser setzt das über feDisplacementMap in backdrop-filter um (nur Chromium). */
+
+// Abstand zur Kante einer abgerundeten Form; innen negativ, außen positiv
+function kante(x, y, bx, by, r){
+  const qx = Math.abs(x-bx) - bx + r, qy = Math.abs(y-by) - by + r;
+  return Math.min(Math.max(qx,qy), 0) + Math.hypot(Math.max(qx,0), Math.max(qy,0)) - r;
+}
+function glasKarte(w, h, r, saum, staerke){
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h));
+  const g = c.getContext("2d"), bild = g.createImageData(c.width, c.height), d = bild.data;
+  const bx = c.width/2, by = c.height/2;
+  for(let y=0; y<c.height; y++) for(let x=0; x<c.width; x++){
+    const i = (y*c.width + x)*4;
+    const tief = -kante(x+.5, y+.5, bx, by, r);        // wie weit drinnen, in Pixeln
+    let t = 1 - Math.min(1, Math.max(0, tief/saum));   // 1 am Rand, 0 in der Mitte
+    t = t*t*(3 - 2*t);                                  // weicher Übergang statt Knick
+    // Richtung nach außen: die Steigung des Abstandsfeldes
+    const nx = kante(x+1.5,y+.5,bx,by,r) - kante(x-.5,y+.5,bx,by,r),
+          ny = kante(x+.5,y+1.5,bx,by,r) - kante(x+.5,y-.5,bx,by,r),
+          l  = Math.hypot(nx,ny) || 1;
+    const k = t*staerke;
+    d[i]   = Math.round(128 + (nx/l)*k*127);
+    d[i+1] = Math.round(128 + (ny/l)*k*127);
+    d[i+2] = 128;
+    d[i+3] = 255;      // volle Deckung: bei 0 rechnet Chromium die Farben weg
+  }
+  g.putImageData(bild, 0, 0);
+  return c.toDataURL();
+}
+const NS = "http://www.w3.org/2000/svg";
+let filterNr = 0, brAn = true, brStaerke = 1;
+const brTopf = document.createElementNS(NS, "svg");
+brTopf.setAttribute("width","0"); brTopf.setAttribute("height","0");
+brTopf.style.cssText = "position:absolute;width:0;height:0";
+document.body.appendChild(brTopf);
+
+function brechung(el){
+  const r = el.getBoundingClientRect();
+  if(!r.width || !r.height) return;
+  if(!brAn){ el.style.backdropFilter = el.style.webkitBackdropFilter = "blur(12px)"; return }
+  const rad = Math.min(parseFloat(getComputedStyle(el).borderRadius) || 0, Math.min(r.width, r.height)/2);
+  // Jeder Neubau braucht eine neue Nummer – einen Filter unter altem Namen zu ersetzen wirkt nicht
+  const id = "br" + (++filterNr);
+  const f = document.createElementNS(NS, "filter");
+  f.setAttribute("id", id);
+  f.setAttribute("filterUnits", "userSpaceOnUse");
+  f.setAttribute("x", "0"); f.setAttribute("y", "0");
+  f.setAttribute("width", r.width); f.setAttribute("height", r.height);
+  f.setAttribute("color-interpolation-filters", "sRGB");   // sonst verschiebt schon das neutrale Grau
+  const bild = document.createElementNS(NS, "feImage");
+  bild.setAttribute("href", glasKarte(r.width, r.height, rad, Math.min(22, Math.min(r.width,r.height)/2), 1));
+  bild.setAttribute("x","0"); bild.setAttribute("y","0");
+  bild.setAttribute("width", r.width); bild.setAttribute("height", r.height);
+  bild.setAttribute("preserveAspectRatio","none");
+  bild.setAttribute("result","karte");
+  const ver = document.createElementNS(NS, "feDisplacementMap");
+  ver.setAttribute("in","SourceGraphic"); ver.setAttribute("in2","karte");
+  ver.setAttribute("scale", 26*brStaerke);
+  ver.setAttribute("xChannelSelector","R"); ver.setAttribute("yChannelSelector","G");
+  ver.setAttribute("result","gebogen");
+  const zus = document.createElementNS(NS, "feMerge");          // nur das Ergebnis zeigen, nicht die Karte
+  const kn = document.createElementNS(NS, "feMergeNode"); kn.setAttribute("in","gebogen");
+  zus.appendChild(kn);
+  f.append(bild, ver, zus); brTopf.appendChild(f);
+  if(el._brAlt){ const a = brTopf.querySelector("#"+el._brAlt); if(a) a.remove() }
+  el._brAlt = id;
+  const wert = "url(#"+id+") blur(2px) saturate(165%) brightness(1.06)";
+  el.style.backdropFilter = wert; el.style.webkitBackdropFilter = wert;
+}
+const brAlle = ()=> document.querySelectorAll(".lg.br").forEach(brechung);
+const kannBr = CSS.supports("backdrop-filter","url(#x)") || CSS.supports("-webkit-backdrop-filter","url(#x)");
+const brInfo = document.getElementById("brInfo");
+if(kannBr){
+  addEventListener("load", brAlle); requestAnimationFrame(brAlle);
+  let t = 0; addEventListener("resize", ()=>{ clearTimeout(t); t = setTimeout(brAlle, 180) });
+  brInfo.innerHTML = "Dein Browser kann die Brechung. Beim Drücken verzieht sie sich leicht — das Vergrößern dehnt auch den Filterraum mit; das ließe sich später über eine Formänderung statt Vergrößerung lösen.";
+}else{
+  brInfo.innerHTML = "<b>Dein Browser kann keine Brechung in <code>backdrop-filter</code>.</b> Das können heute nur Chromium-Browser (Chrome, Edge, Samsung Internet). Hier siehst du die Fassung ohne Brechung.";
+}
+const brT = document.getElementById("brTog"), brM = document.getElementById("brMehr");
+brT.onclick = ()=>{ brAn = !brAn; brT.textContent = "Brechung: " + (brAn ? "an" : "aus"); brAlle(); kurz() };
+const stufen = [[.55,"schwach"],[1,"mittel"],[1.8,"stark"]];
+let stufe = 1;
+brM.onclick = ()=>{ stufe = (stufe+1)%stufen.length; brStaerke = stufen[stufe][0];
+  brM.textContent = "Stärke: " + stufen[stufe][1]; brAlle(); kurz() };
 
 /* ---------- 2 · Umschalter ---------- */
 document.querySelectorAll("[data-seg]").forEach(seg=>{
