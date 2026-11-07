@@ -1,159 +1,350 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Knopf-Entwürfe</title>
+<title>Knopf-Entwürfe · Runde 2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0B0F14;--card:#121922;--line:#223040;--fg:#E6EDF3;--muted:#8D9BAB;--accent:#00E5FF;--rest:#FFB547;--ok:#5BE38C;
 --f-display:"Chakra Petch",system-ui,sans-serif;--f-body:"Barlow",system-ui,sans-serif;color-scheme:dark}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.45;padding:16px 16px 120px;max-width:560px;margin-inline:auto}
-button{font:inherit;color:inherit}
+html,body{overscroll-behavior-y:contain}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.45;
+  padding:16px 16px 130px;max-width:560px;margin-inline:auto;overflow-x:hidden}
+button{font:inherit;color:inherit;border:0;background:none;padding:0}
 h1{font-family:var(--f-display);font-size:1.4rem;margin:0 0 4px;letter-spacing:-.02em}
-.lead{color:var(--muted);font-size:.85rem;margin:0 0 22px}
-h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:26px 0 8px;font-weight:600}
-.hint{font-size:.78rem;color:var(--muted);margin:0 0 10px}
-.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:stretch}
-.pair>div{display:flex;flex-direction:column;gap:8px;min-width:0}
-.tag{font-family:var(--f-display);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.lead{color:var(--muted);font-size:.85rem;margin:0 0 6px}
+h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:30px 0 6px;font-weight:600}
+.hint{font-size:.79rem;color:var(--muted);margin:0 0 12px}
+.tag{font-family:var(--f-display);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:2px}
 .tag.neu{color:var(--accent)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+.pair>div{display:flex;flex-direction:column;gap:8px;min-width:0}
 
-/* ---------- JETZT ---------- */
-.a .btn{min-height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-family:var(--f-display);font-weight:600;letter-spacing:.04em;
-  transition:transform .13s cubic-bezier(.2,.8,.3,1),background .15s}
-.a .btn:active{transform:scale(.94)}
-.a .btn.big{min-height:60px;font-size:1.15rem;width:100%}
-.a .btn.primary{background:var(--accent);border-color:var(--accent);color:#03141A}
-.a .ic{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);display:grid;place-items:center;padding:0;
-  transition:transform .13s cubic-bezier(.2,.8,.3,1)}
-.a .ic:active{transform:scale(.94)}
-.a .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
-.a .list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
-.a .list button{min-height:50px;border:0;border-top:1px solid var(--line);background:var(--card);text-align:left;padding:6px 14px;width:100%}
-.a .list button:first-child{border-top:0}
-.a .sbtn{flex:1;min-height:42px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-family:var(--f-display);font-size:.85rem;padding:0 6px;transition:color .2s,background .2s,border-color .2s}
-.a .sbtn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.08)}
-.a .zahl{font-family:var(--f-display);font-size:2.4rem;font-weight:700;line-height:1.1;letter-spacing:.04em}
-
-/* ---------- NEU (Apple) ---------- */
-/* Druckpunkt: gleiche ABSOLUTE Einrückung statt gleichem Faktor; rein schnell, raus langsamer */
-.b .btn,.b .ic,.b .chip{
-  --dent:4;                         /* so viele Pixel geht der Knopf an jeder Seite ein */
-  transition:transform .26s cubic-bezier(.23,1,.32,1),background .2s,box-shadow .26s;
-  will-change:transform}
-/* gleiche absolute Einrückung – aber kleine Knöpfe gehen nie weiter als 4 % ein */
-.b .btn:active,.b .ic:active,.b .chip:active{
-  transform:scale(max(.96, calc(1 - (2 * var(--dent)) / var(--w))));
-  transition-duration:.11s}
-.b .btn{--w:260;min-height:48px;padding:0 16px;border-radius:14px;border:0;background:#18212C;
+/* ============ 1 · Druckpunkt: Kurve vs. Feder ============ */
+.k .btn{min-height:52px;padding:0 16px;border-radius:14px;background:#18212C;font-family:var(--f-display);font-weight:600;width:100%;
   box-shadow:0 1px 2px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
-  font-family:var(--f-display);font-weight:600;letter-spacing:.02em}
-.b .btn.big{--w:330;min-height:60px;font-size:1.15rem;width:100%;border-radius:16px;letter-spacing:0}
-.b .btn.primary{background:var(--accent);color:#03141A;box-shadow:0 2px 10px rgba(0,229,255,.22),inset 0 1px 0 rgba(255,255,255,.28)}
-.b .ic{--w:44;width:44px;height:44px;border-radius:999px;border:0;background:rgba(141,155,171,.14);display:grid;place-items:center;padding:0}
-.b .card{background:#141C26;border:0;border-radius:18px;padding:14px 16px;
-  box-shadow:0 1px 3px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.045)}
-.b .list{display:flex;flex-direction:column;border:0;border-radius:18px;overflow:hidden;background:#141C26;
-  box-shadow:0 1px 3px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.045)}
-.b .list button{min-height:50px;border:0;background:none;text-align:left;padding:6px 14px;width:100%;position:relative;transition:background .18s}
-.b .list button:active{background:rgba(255,255,255,.055);transition-duration:.05s}
-.b .list button+button::before{content:"";position:absolute;left:14px;right:0;top:0;height:1px;background:rgba(255,255,255,.06)}
-/* Segment mit gleitendem Knopf statt hartem Farbwechsel */
-.b .seg{position:relative;display:flex;gap:0;background:rgba(141,155,171,.12);border-radius:12px;padding:3px}
-.b .seg::before{content:"";position:absolute;z-index:0;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:9px;background:#223040;
-  box-shadow:0 1px 3px rgba(0,0,0,.4);transform:translateX(calc(var(--on,0) * 100%));transition:transform .34s cubic-bezier(.32,.72,0,1)}
-.b .seg .sbtn{position:relative;z-index:1;flex:1;min-height:36px;border:0;background:none;font-family:var(--f-display);font-size:.85rem;color:var(--muted);transition:color .2s}
-.b .seg .sbtn[aria-pressed="true"]{color:var(--fg)}
-.b .zahl{font-family:var(--f-display);font-size:2.4rem;font-weight:700;line-height:1.05;letter-spacing:-.025em}
+  transition:transform .13s cubic-bezier(.2,.8,.3,1)}
+.k .btn:active{transform:scale(.94)}
+/* Feder-Knopf: Skalierung und Aufhellung kommen aus JS, keine CSS-Transition */
+.f .btn{min-height:52px;padding:0 16px;border-radius:14px;background:#18212C;font-family:var(--f-display);font-weight:600;width:100%;
+  box-shadow:0 1px 2px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);position:relative;overflow:hidden;will-change:transform}
+.f .btn::before{content:"";position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.btn.prim{background:var(--accent);color:#03141A;box-shadow:0 2px 10px rgba(0,229,255,.22),inset 0 1px 0 rgba(255,255,255,.28)}
+.ic{width:46px;height:46px;border-radius:999px;background:rgba(141,155,171,.14);display:grid;place-items:center;flex:none;position:relative;overflow:hidden}
+.ic::before{content:"";position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.ic svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.reihe{display:flex;gap:8px}
 
-/* Glas */
-.glas{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));
-  background:rgba(14,20,27,.72);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);
-  border-top:1px solid rgba(255,255,255,.07)}
-.glas.alt{background:#111821;backdrop-filter:none;-webkit-backdrop-filter:none;border-top:1px solid var(--line)}
-.glas .btn{flex:1;--w:160;min-height:44px;border:0;border-radius:12px;background:rgba(141,155,171,.16);font-family:var(--f-display);font-weight:600;
-  transition:transform .26s cubic-bezier(.23,1,.32,1);}
-.glas .btn:active{transform:scale(.962);transition-duration:.11s}
-.glas .btn.primary{background:var(--accent);color:#03141A}
-.gtog{position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:6;min-height:38px;padding:0 14px;border-radius:999px;border:0;
-  background:rgba(141,155,171,.2);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font-family:var(--f-display);font-size:.78rem}
-.fuell{height:40vh;display:grid;place-items:center;color:var(--muted);font-size:.8rem}
-.swatch{display:flex;gap:8px;flex-wrap:wrap}
-.swatch i{display:block;height:26px;flex:1;border-radius:7px;min-width:40px}
+/* ============ 2 · Umschalter ============ */
+.seg{position:relative;display:flex;background:rgba(141,155,171,.12);border-radius:13px;padding:3px;touch-action:none;user-select:none;-webkit-user-select:none}
+.seg .knopf{position:absolute;z-index:0;top:3px;bottom:3px;left:3px;border-radius:10px;background:#2A3A4D;
+  box-shadow:0 1px 4px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.07);will-change:transform}
+.seg button{position:relative;z-index:1;flex:1;min-height:38px;font-family:var(--f-display);font-size:.85rem;color:var(--muted);
+  transition:color .22s;will-change:transform}
+.seg button[aria-pressed="true"]{color:var(--fg)}
+.seg.alt .knopf{transition:transform .22s cubic-bezier(.2,.8,.3,1)}
+
+/* ============ 3 · Knopf-Austausch an gleicher Stelle ============ */
+.tausch{display:grid;place-items:center;width:46px;height:46px;border-radius:999px;background:rgba(141,155,171,.14);position:relative;overflow:hidden;flex:none}
+.tausch>span{grid-area:1/1;display:grid;place-items:center;will-change:transform,opacity}
+.pille{display:flex;align-items:center;gap:2px;background:rgba(141,155,171,.14);border-radius:999px;padding:4px;min-height:46px;position:relative;overflow:hidden}
+.pille>.inh{display:grid}
+.pille .inh>span{grid-area:1/1;display:flex;align-items:center;gap:10px;padding:0 10px;white-space:nowrap;will-change:transform,opacity}
+
+/* ============ 4 · Glas ============ */
+.glas{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:10px;align-items:center;
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+  background:rgba(14,20,27,.62);backdrop-filter:blur(24px) saturate(200%);-webkit-backdrop-filter:blur(24px) saturate(200%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 -12px 30px rgba(0,0,0,.35)}
+.glas::after{content:"";position:absolute;left:0;right:0;top:-18px;height:18px;pointer-events:none;
+  background:linear-gradient(to top,rgba(11,15,20,.5),transparent)}
+.glas.schlicht{background:#111821;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:0 -10px 30px rgba(0,0,0,.45);border-top:1px solid var(--line)}
+.glas.schlicht::after{display:none}
+.glas .btn{flex:1}
+.gtog{position:fixed;right:16px;bottom:calc(90px + env(safe-area-inset-bottom));z-index:6;min-height:38px;padding:0 14px;border-radius:999px;
+  background:rgba(141,155,171,.22);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font-family:var(--f-display);font-size:.78rem}
+
+/* ============ 5 · Zurück-Wischen mit Seite darunter ============ */
+.buehne{position:relative;height:230px;border-radius:18px;overflow:hidden;background:#0E141B;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 1px 3px rgba(0,0,0,.4);touch-action:pan-y}
+.buehne .seite{position:absolute;inset:0;padding:14px;display:flex;flex-direction:column;gap:10px;will-change:transform}
+.buehne .unten{background:#0E141B}
+.buehne .oben{background:#141C26;box-shadow:-14px 0 30px rgba(0,0,0,.5)}
+.buehne .dunkel{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+.buehne h4{font-family:var(--f-display);margin:0;font-size:1.05rem}
+.buehne p{margin:0;font-size:.82rem;color:var(--muted)}
+.zeile{height:38px;border-radius:10px;background:rgba(255,255,255,.045)}
+.fuell{height:34vh;display:grid;place-items:center;color:var(--muted);font-size:.78rem;text-align:center}
+.swatch{display:flex;gap:8px}
+.swatch i{display:block;height:28px;flex:1;border-radius:8px}
+.weg{font-size:.74rem;color:var(--muted);border-top:1px solid rgba(255,255,255,.07);margin-top:34px;padding-top:12px}
 </style></head>
 <body>
 
-<h1>Knöpfe nach Apple-Maßstab</h1>
-<p class="lead">Links wie jetzt, rechts der Vorschlag. Beide antippen und das Gefühl vergleichen — der Unterschied steckt im Drücken, nicht im Bild.</p>
+<h1>Runde 2 — mit Federn</h1>
+<p class="lead">Der Unterschied zu vorhin: rechts rechnet keine feste Kurve mehr, sondern eine Feder. Sie hat kein festes Ende — darum kannst du mitten in die Bewegung greifen und sie läuft weiter, statt neu anzufangen.</p>
 
 <h2>1 · Druckpunkt</h2>
-<p class="hint">Jetzt schrumpft alles um denselben Faktor, der große Knopf bewegt sich dadurch 21 px, das kleine Symbol 2,6 px. Rechts geht jeder Knopf gleich viele Pixel ein, egal wie groß er ist — und federt langsamer zurück als er eingeht.</p>
+<p class="hint">Beide gedrückt halten, mit dem Finger wegziehen und wieder drauf, mehrfach schnell tippen. Links springt die Kurve jedes Mal zurück auf Anfang, rechts fängt die Feder dort weiter, wo sie gerade ist. Rechts hellt sich der Knopf außerdem auf, solange der Finger liegt.</p>
 <div class="pair">
-  <div class="a"><span class="tag">Jetzt</span>
-    <button class="btn big primary">Workout starten</button>
+  <div class="k"><span class="tag">Kurve (wie jetzt)</span>
+    <button class="btn prim">Eintragen</button>
     <button class="btn">Pause</button>
-    <div style="display:flex;gap:8px"><button class="ic">＋</button><button class="ic">✕</button><button class="ic">⟳</button></div>
   </div>
-  <div class="b"><span class="tag neu">Vorschlag</span>
-    <button class="btn big primary">Workout starten</button>
-    <button class="btn">Pause</button>
-    <div style="display:flex;gap:8px"><button class="ic">＋</button><button class="ic">✕</button><button class="ic">⟳</button></div>
+  <div class="f"><span class="tag neu">Feder</span>
+    <button class="btn prim" data-feder>Eintragen</button>
+    <button class="btn" data-feder>Pause</button>
   </div>
 </div>
-
-<h2>2 · Flächen: Linie oder Material</h2>
-<p class="hint">In der Ernährung hast du die Umrisslinien schon rausgeworfen. Rechts dasselbe für den Rest: keine Linie, sondern ein flacher Schatten und eine hauchdünne helle Oberkante.</p>
-<div class="pair">
-  <div class="a"><span class="tag">Jetzt</span>
-    <div class="card"><b style="font-family:var(--f-display)">Brust &amp; Trizeps</b><span style="color:var(--muted);font-size:.84rem">5 Übungen · 42 min</span></div>
-    <div class="list"><button>Bankdrücken</button><button>Fliegende</button><button>Dips</button></div>
-  </div>
-  <div class="b"><span class="tag neu">Vorschlag</span>
-    <div class="card"><b style="font-family:var(--f-display)">Brust &amp; Trizeps</b><span style="color:var(--muted);font-size:.84rem">5 Übungen · 42 min</span></div>
-    <div class="list"><button>Bankdrücken</button><button>Fliegende</button><button>Dips</button></div>
-  </div>
+<div class="reihe" style="margin-top:10px">
+  <button class="ic" data-feder><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button class="ic" data-feder><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  <button class="ic" data-feder><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"/></svg></button>
+  <span style="align-self:center;font-size:.76rem;color:var(--muted)">← auch Symbole</span>
 </div>
 
-<h2>3 · Umschalter</h2>
-<p class="hint">Liste/Timeline und Spotify haben schon einen gleitenden Knopf. Diese hier wechseln hart die Farbe. Rechts gleicht es sich an.</p>
+<h2>2 · Umschalter</h2>
+<p class="hint">Links wie im ersten Entwurf: antippen, fester Weg. Rechts kannst du den Knopf <b>gedrückt halten und schieben</b> — er folgt dem Finger, wird dabei etwas breiter, und beim Loslassen fliegt er mit deiner Geschwindigkeit ins nächste Feld. Ein kurzer Schubs reicht.</p>
 <div class="pair">
-  <div class="a"><span class="tag">Jetzt</span>
-    <div style="display:flex;gap:6px">
-      <button class="sbtn" aria-pressed="true">Gramm</button><button class="sbtn" aria-pressed="false">Stück</button></div>
+  <div><span class="tag">Fester Weg</span>
+    <div class="seg alt" id="segA" data-seg><span class="knopf"></span>
+      <button aria-pressed="true">Gramm</button><button aria-pressed="false">Stück</button></div>
   </div>
-  <div class="b"><span class="tag neu">Vorschlag</span>
-    <div class="seg" id="seg" style="--on:0">
-      <button class="sbtn" aria-pressed="true">Gramm</button><button class="sbtn" aria-pressed="false">Stück</button></div>
+  <div><span class="tag neu">Feder + schiebbar</span>
+    <div class="seg" id="segB" data-seg data-zieh><span class="knopf"></span>
+      <button aria-pressed="true">Gramm</button><button aria-pressed="false">Stück</button></div>
   </div>
 </div>
+<div style="margin-top:10px"><span class="tag neu">Drei Felder</span>
+  <div class="seg" id="segC" data-seg data-zieh><span class="knopf"></span>
+    <button aria-pressed="true">Liste</button><button aria-pressed="false">Timeline</button><button aria-pressed="false">Plan</button></div>
+</div>
 
-<h2>4 · Große Zahlen</h2>
-<p class="hint">Je größer die Schrift, desto enger muss sie stehen — sonst zerfällt sie. Jetzt steht überall dieselbe Laufweite.</p>
-<div class="pair">
-  <div class="a"><span class="tag">Jetzt</span><div class="zahl">1 847 kcal</div></div>
-  <div class="b"><span class="tag neu">Vorschlag</span><div class="zahl">1 847 kcal</div></div>
+<h2>3 · Austausch an gleicher Stelle</h2>
+<p class="hint">Wie in deinem Bild: der Knopf bleibt, sein Inhalt wechselt. Das Alte geht nach oben weg und wird kleiner, das Neue kommt von unten nach. Tipp drauf.</p>
+<div class="reihe" style="align-items:center">
+  <button class="tausch" id="t1">
+    <span data-an="1"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M4 7h16M4 12h10M4 17h13"/></svg></span>
+    <span data-an="0"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="m14 6-6 6 6 6"/></svg></span>
+  </button>
+  <button class="pille" id="t2"><span class="inh">
+    <span data-an="1"><svg viewBox="0 0 24 24" style="width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><svg viewBox="0 0 24 24" style="width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M4 7h12M4 13h8M4 19h5"/></svg></span>
+    <span data-an="0"><b style="font-family:var(--f-display);font-size:.86rem">12 Sätze</b><span style="color:var(--muted);font-size:.78rem">42 min</span></span>
+  </span></button>
+  <span style="align-self:center;font-size:.76rem;color:var(--muted)">← antippen</span>
+</div>
+
+<h2>4 · Zurück-Wischen</h2>
+<p class="hint">Von der <b>linken Kante</b> des Kastens nach rechts ziehen. Die Seite darunter kommt mitgezogen heran und wird heller, statt einfach dazustehen. Loslassen: Feder entscheidet nach deiner Geschwindigkeit, nicht nach der Strecke — ein kurzer Schubs reicht also.</p>
+<div class="buehne" id="buehne">
+  <div class="seite unten" id="unten"><h4>Ernährung</h4><p>Die Seite darunter</p><div class="zeile"></div><div class="zeile"></div><div class="zeile"></div><div class="dunkel" id="dunkel"></div></div>
+  <div class="seite oben" id="oben"><h4>Haferflocken</h4><p>Von links nach rechts ziehen</p><div class="zeile"></div><div class="zeile"></div><div class="zeile"></div></div>
 </div>
 
 <h2>5 · Glas</h2>
-<p class="hint">Die Leiste klebt unten am Bildschirm. Tipp unten rechts auf den Schalter, dann wechselt sie zwischen deckend (jetzt) und Glas (Vorschlag) — am besten beim Scrollen, damit du siehst, wie der Inhalt darunter durchscheint.</p>
-<div class="fuell">↓ scroll, dann unten umschalten ↓</div>
+<p class="hint">Die Leiste klebt unten. Der Schalter darüber wechselt zwischen deckend und Glas — beim Scrollen vergleichen.</p>
+<div class="fuell">↓ scrollen und unten umschalten ↓</div>
 <div class="swatch"><i style="background:var(--accent)"></i><i style="background:var(--rest)"></i><i style="background:var(--ok)"></i><i style="background:#7C8CFF"></i></div>
 <div class="fuell">Inhalt, der unter der Leiste durchläuft</div>
-<div class="swatch"><i style="background:var(--accent)"></i><i style="background:var(--rest)"></i><i style="background:var(--ok)"></i><i style="background:#7C8CFF"></i></div>
-<div class="fuell">noch mehr Inhalt</div>
+<div class="swatch"><i style="background:var(--rest)"></i><i style="background:#7C8CFF"></i><i style="background:var(--ok)"></i><i style="background:var(--accent)"></i></div>
+<div class="fuell">noch etwas Inhalt</div>
+
+<p class="weg"><b>Was hier fehlt:</b> echtes Liquid Glass bricht das Licht an den Kanten wie eine Linse. Das kann der Browser nicht; die Leiste unten ist eine Annäherung aus Unschärfe, Sättigung und hellem Oberrand. Die Brechung selbst bräuchte WebGL und würde am Handy Strom und Bildrate kosten.</p>
 
 <button class="gtog" id="gtog">Glas: an</button>
-<div class="glas" id="glas"><button class="btn">Abbrechen</button><button class="btn primary">Eintragen</button></div>
+<div class="glas" id="glas"><button class="btn" data-feder>Abbrechen</button><button class="btn prim" data-feder>Eintragen</button></div>
 
 <script>
-document.getElementById("seg").addEventListener("click",e=>{
-  const b=e.target.closest(".sbtn");if(!b)return;
-  const s=e.currentTarget,bs=[...s.querySelectorAll(".sbtn")];
-  bs.forEach((x,i)=>{const on=x===b;x.setAttribute("aria-pressed",on);if(on)s.style.setProperty("--on",i)});
-  try{navigator.vibrate&&navigator.vibrate(8)}catch(_){}
+"use strict";
+/* ---------- Feder: Apples zwei Regler, Dämpfung und Ansprechzeit ----------
+   daempfung 1 = kein Überschwingen, <1 federt nach. antwort = Sekunden bis es im Ziel ist.
+   Läuft pro Bild, startet immer beim aktuellen Wert und nimmt die aktuelle Geschwindigkeit mit –
+   darum kann man mitten hineingreifen, ohne dass es springt. */
+function feder(wert, {daempfung=1, antwort=.4, auf, fertig}={}){
+  const w0 = 2*Math.PI/antwort;                 // Eigenfrequenz
+  let x = wert, v = 0, ziel = wert, raf = 0, t0 = 0;
+  const schritt = (t)=>{
+    const dt = Math.min(.064, (t - t0)/1000); t0 = t;      // große Sprünge abfangen
+    // halb-implizites Euler, in kleinen Schritten für ruhige Bewegung
+    const n = Math.max(1, Math.ceil(dt/.004)), h = dt/n;
+    for(let i=0;i<n;i++){
+      const a = -w0*w0*(x-ziel) - 2*daempfung*w0*v;
+      v += a*h; x += v*h;
+    }
+    auf(x, v);
+    if(Math.abs(x-ziel) < .0005 && Math.abs(v) < .005){ x = ziel; v = 0; auf(x, v); raf = 0; fertig && fertig(); return }
+    raf = requestAnimationFrame(schritt);
+  };
+  return {
+    zu(z, startV){ ziel = z; if(startV!==undefined) v = startV;
+      if(!raf){ t0 = performance.now(); raf = requestAnimationFrame(schritt) } },
+    setz(z){ x = z; v = 0; ziel = z; auf(x, v) },
+    get wert(){ return x }, get tempo(){ return v },
+    halt(){ if(raf) cancelAnimationFrame(raf); raf = 0; v = 0 }
+  };
+}
+const kurz=()=>{try{navigator.vibrate&&navigator.vibrate(7)}catch(_){}}
+
+/* ---------- 1 · Druckpunkt mit Feder ---------- */
+document.querySelectorAll("[data-feder]").forEach(el=>{
+  const breit = ()=>el.getBoundingClientRect().width || 100;
+  // Aufhellung über eine eigene Fläche, damit der Knopf seine Farbe behält
+  const hell = document.createElement("span");
+  hell.style.cssText = "position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;border-radius:inherit";
+  if(getComputedStyle(el).position === "static") el.style.position = "relative";
+  el.style.overflow = "hidden"; el.appendChild(hell);
+  const zeichne = (x)=>{ el.style.transform = "scale("+x+")";
+    hell.style.opacity = String(Math.max(0, Math.min(.1, (1-x)/0.045*.1))) };
+  const f2 = feder(1, {daempfung:1, antwort:.34, auf:zeichne});
+  // gedrückte Tiefe: gleiche Pixel für alle, aber nie mehr als 4,5 %
+  const tief = ()=> Math.max(.955, 1 - 8/breit());
+  let drin = false;
+  const an = ()=>{ drin = true; f2.zu(tief()) };
+  const aus = ()=>{ if(!drin) return; drin = false; f2.zu(1) };
+  el.addEventListener("pointerdown", e=>{ el.setPointerCapture(e.pointerId); an() });
+  el.addEventListener("pointerup", ()=>{ aus(); kurz() });
+  el.addEventListener("pointercancel", aus);
+  el.addEventListener("pointerleave", aus);
+  // Wegziehen und zurückkommen, ohne loszulassen
+  el.addEventListener("pointermove", e=>{
+    if(!e.buttons && e.pointerType === "mouse") return;
+    const r = el.getBoundingClientRect(),
+          innen = e.clientX > r.left-16 && e.clientX < r.right+16 && e.clientY > r.top-16 && e.clientY < r.bottom+16;
+    if(innen && !drin) an(); else if(!innen && drin) aus();
+  });
 });
-const g=document.getElementById("glas"),t=document.getElementById("gtog");
-t.onclick=()=>{g.classList.toggle("alt");t.textContent="Glas: "+(g.classList.contains("alt")?"aus":"an")};
+
+/* ---------- 2 · Umschalter ---------- */
+document.querySelectorAll("[data-seg]").forEach(seg=>{
+  const knopf = seg.querySelector(".knopf"), bs = [...seg.querySelectorAll("button")];
+  const n = bs.length; let i = bs.findIndex(b=>b.getAttribute("aria-pressed")==="true"); if(i<0) i=0;
+  const mass = ()=>{ const b = seg.getBoundingClientRect().width - 6; return {feld: b/n, b} };
+  const legen = ()=>{ const {feld} = mass(); knopf.style.width = feld+"px" };
+  legen(); addEventListener("resize", legen);
+  const zieh = seg.hasAttribute("data-zieh");
+
+  if(!zieh){                                   // links: fester Weg, CSS macht es
+    const setz = (k)=>{ i = k; knopf.style.transform = "translateX("+(mass().feld*k)+"px)";
+      bs.forEach((b,j)=>b.setAttribute("aria-pressed", j===k)) };
+    setz(i);
+    bs.forEach((b,j)=>b.addEventListener("click", ()=>{ setz(j); kurz() }));
+    addEventListener("resize", ()=>setz(i));
+    return;
+  }
+
+  // rechts: Feder, und man kann den Knopf schieben
+  const fd = feder(0, {daempfung:1, antwort:.36, auf:(x)=>{
+    knopf.style.transform = "translateX("+x+"px) scaleX("+dehn+")" }});
+  let dehn = 1;
+  const setz = (k, v)=>{ i = k; bs.forEach((b,j)=>b.setAttribute("aria-pressed", j===k));
+    fd.zu(mass().feld*k, v) };
+  fd.setz(mass().feld*i); bs.forEach((b,j)=>b.setAttribute("aria-pressed", j===i));
+  addEventListener("resize", ()=>fd.setz(mass().feld*i));
+
+  let greif = null;
+  seg.addEventListener("pointerdown", e=>{
+    const {feld} = mass(), x = e.clientX - seg.getBoundingClientRect().left - 3;
+    const aufKnopf = x > fd.wert && x < fd.wert + feld;
+    seg.setPointerCapture(e.pointerId);
+    greif = {x0: e.clientX, start: fd.wert, aufKnopf, bewegt: false, t: performance.now(), lx: e.clientX, v: 0};
+    if(aufKnopf){ fd.halt(); dehn = 1.06; knopf.style.transform = "translateX("+fd.wert+"px) scaleX(1.06)" }
+  });
+  seg.addEventListener("pointermove", e=>{
+    if(!greif || !greif.aufKnopf) return;
+    const dx = e.clientX - greif.x0; if(Math.abs(dx) > 3) greif.bewegt = true;
+    const jetzt = performance.now(), dt = jetzt - greif.t;
+    if(dt > 0){ greif.v = (e.clientX - greif.lx)/dt*1000; greif.t = jetzt; greif.lx = e.clientX }
+    const {feld} = mass(), max = feld*(n-1);
+    let z = greif.start + dx;
+    // an den Enden nachgeben statt hart stehenbleiben
+    if(z < 0) z = -gummi(-z, feld);
+    if(z > max) z = max + gummi(z-max, feld);
+    fd.setz(z);
+  });
+  const los = (e)=>{
+    if(!greif) return; const g = greif; greif = null; dehn = 1;
+    const {feld} = mass(), max = feld*(n-1);
+    if(!g.aufKnopf){                                  // daneben getippt: dorthin springen
+      const x = (e.clientX ?? 0) - seg.getBoundingClientRect().left - 3;
+      setz(Math.max(0, Math.min(n-1, Math.floor(x/feld)))); kurz(); return;
+    }
+    if(!g.bewegt){ setz((i+1)%n); kurz(); return }     // nur getippt: weiterschalten
+    // geschoben: dahin, wo der Schwung hinführt (Apples Hochrechnung)
+    const ziel = Math.max(0, Math.min(max, fd.wert + g.v/1000*.998/(1-.998)));
+    const k = Math.max(0, Math.min(n-1, Math.round(ziel/feld)));
+    const vorher = i; setz(k, g.v); if(k !== vorher) kurz();
+  };
+  seg.addEventListener("pointerup", los); seg.addEventListener("pointercancel", ()=>{ if(greif){ const k=greif; greif=null; dehn=1; setz(i) } });
+});
+function gummi(ueber, mass, c=.55){ return (ueber*mass*c)/(mass + c*Math.abs(ueber)) }
+
+/* ---------- 3 · Austausch an gleicher Stelle ---------- */
+function tausch(box){
+  const sp = [...box.querySelectorAll("[data-an]")];
+  let an = sp.findIndex(s=>s.dataset.an==="1");
+  const mal = ()=> sp.forEach((s,j)=>{
+    const auf = j===an;
+    s.style.opacity = auf ? 1 : 0;
+    s.style.transform = auf ? "none" : "translateY(70%) scale(.72)";
+    s.style.pointerEvents = auf ? "auto" : "none";
+  });
+  sp.forEach(s=>s.style.transition = "transform .44s cubic-bezier(.32,.72,0,1),opacity .26s");
+  mal();
+  box.addEventListener("click", ()=>{
+    const alt = sp[an]; an = (an+1)%sp.length; const neu = sp[an];
+    alt.style.transform = "translateY(-70%) scale(.72)"; alt.style.opacity = 0; alt.style.pointerEvents = "none";
+    neu.style.transition = "none"; neu.style.transform = "translateY(70%) scale(.72)"; neu.style.opacity = 0;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      neu.style.transition = "transform .44s cubic-bezier(.32,.72,0,1),opacity .26s";
+      neu.style.transform = "none"; neu.style.opacity = 1; neu.style.pointerEvents = "auto";
+    }));
+    kurz();
+  });
+}
+tausch(document.getElementById("t1")); tausch(document.getElementById("t2"));
+
+/* ---------- 4 · Zurück-Wischen mit Seite darunter ---------- */
+(()=>{
+  const b = document.getElementById("buehne"), oben = document.getElementById("oben"),
+        unten = document.getElementById("unten"), dunkel = document.getElementById("dunkel");
+  const W = ()=> b.getBoundingClientRect().width;
+  const mal = (x)=>{                                 // x: 0 = zu, 1 = ganz weggezogen
+    oben.style.transform = "translateX("+(x*W())+"px)";
+    unten.style.transform = "translateX("+((x-1)*W()*.3)+"px)";   // Seite darunter kommt mit
+    dunkel.style.opacity = String((1-x)*.45);
+  };
+  const fd = feder(0, {daempfung:1, antwort:.38, auf:mal});
+  fd.setz(0);
+  let g = null;
+  b.addEventListener("pointerdown", e=>{
+    const r = b.getBoundingClientRect();
+    if(e.clientX - r.left > 40 && fd.wert < .02) return;          // nur von der linken Kante
+    b.setPointerCapture(e.pointerId); fd.halt();
+    g = {x0: e.clientX, start: fd.wert, t: performance.now(), lx: e.clientX, v: 0};
+  });
+  b.addEventListener("pointermove", e=>{
+    if(!g) return; e.preventDefault();
+    const jetzt = performance.now(), dt = jetzt - g.t;
+    if(dt > 0){ g.v = (e.clientX - g.lx)/dt*1000; g.t = jetzt; g.lx = e.clientX }
+    let x = g.start + (e.clientX - g.x0)/W();
+    if(x < 0) x = -gummi(-x*W(), W())/W();
+    if(x > 1) x = 1 + gummi((x-1)*W(), W())/W();
+    fd.setz(x);
+  });
+  const los = ()=>{
+    if(!g) return; const v = g.v; g = null;
+    const ziel = fd.wert + (v/1000*.998/(1-.998))/W();            // wohin der Schwung trägt
+    fd.zu(ziel > .5 ? 1 : 0, v/W());
+    kurz();
+  };
+  b.addEventListener("pointerup", los); b.addEventListener("pointercancel", los);
+  addEventListener("resize", ()=>fd.setz(fd.wert));
+})();
+
+/* ---------- 5 · Glas ---------- */
+const glas = document.getElementById("glas"), gt = document.getElementById("gtog");
+gt.onclick = ()=>{ glas.classList.toggle("schlicht");
+  gt.textContent = "Glas: " + (glas.classList.contains("schlicht") ? "aus" : "an") };
 </script>
 </body></html>
