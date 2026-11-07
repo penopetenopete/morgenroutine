@@ -105,10 +105,15 @@ function usage(slot){
       if(en.g&&en.g.tpl&&!seen[en.g.id]){seen[en.g.id]=1;me[en.g.tpl]=(me[en.g.tpl]||0)+1}})}
   return {fo,me};
 }
+/* Vorschläge (07.11.2026, zweite Runde): bewusst wenige – die alte Liste war zu voll.
+   Frühstück zeigt die Frühstücks-Vorlagen („Mein Frühstück“) und „wie gestern“,
+   Mittag und Abendessen nur „wie gestern“, Snacks gar nichts. */
 function suggestions(slot,k){
-  const u=usage(slot),out=[];
-  Object.values(E.meals).filter(m=>u.me[m.id]||m.slot===slot).sort((a,b)=>(u.me[b.id]||0)-(u.me[a.id]||0)).slice(0,3).forEach(m=>out.push({t:"tpl",id:m.id,label:m.name}));
-  const y=addDays(k,-1),ye=dayGet(y).e.filter(en=>en.slot===slot);
+  if(slot==="sn")return [];
+  const out=[];
+  if(slot==="fr"){const u=usage(slot);
+    Object.values(E.meals).filter(m=>m.slot==="fr").sort((a,b)=>(u.me[b.id]||0)-(u.me[a.id]||0)).slice(0,2).forEach(m=>out.push({t:"tpl",id:m.id,label:m.name}))}
+  const ye=dayGet(addDays(k,-1)).e.filter(en=>en.slot===slot);
   if(ye.length)out.push({t:"yday",label:"wie gestern",n:ye.length});
   return out;
 }
@@ -132,11 +137,12 @@ const BRAT=[
   {id:"oil_oliv",name:"Olivenöl",base:"g",kcal:882,p:0,c:0,f:99.6,fib:0,def:10,src:"own"},
   {id:"oil_sonne",name:"Sonnenblumenöl",base:"g",kcal:884,p:0,c:0,f:99.8,fib:0,def:10,src:"own"}
 ];
-const BRATSL={mi:1,ab:1};                 // nur Mittag und Abendessen
 const bratOf=id=>BRAT.find(x=>x.id===id)||null;
-const bratH=sl=>BRATSL[sl]?BRAT.map(f=>`<button class="echip ebr" data-brat="${f.id}|${sl}">${iconOf(E.foods[f.id]||f).replace('class="eic"','class="emini"')}<span>${esc(f.name)}</span><b>${nf(f.def)} g</b></button>`):[];
+const bratSlot=()=>{const s=slotNow();return s==="mi"||s==="ab"?s:"sn"};   // mittags und abends dorthin, sonst zu den Snacks
+const bratH=()=>`<div class="ebrats">${BRAT.map(f=>`<button class="echip ebr" data-brat="${f.id}">${iconOf(E.foods[f.id]||f).replace('class="eic"','class="emini"')}<span>${esc(f.name)}</span><b>${nf(f.def)} g</b></button>`).join("")}</div>`;
 function bratAdd(id,sl){
-  const f=bratOf(id);if(!f||!BRATSL[sl])return null;
+  sl=sl||bratSlot();
+  const f=bratOf(id);if(!f||!SLOTN[sl])return null;
   if(!E.foods[f.id])E.foods[f.id]=Object.assign({},f);
   const g=+E.foods[f.id].def||+f.def||10;
   const ne={id:nid(),slot:sl,food:f.id,amt:g};
@@ -165,8 +171,8 @@ function nutBlock(i){
 }
 const dayLab=k=>{const t=today();return k===t?"Heute":k===addDays(t,-1)?"Gestern":k===addDays(t,1)?"Morgen":new Date(k+"T12:00").toLocaleDateString("de-DE",{weekday:"short",day:"numeric",month:"numeric"})};
 const gv=(n,m)=>m==="kcal"?nf(n.kcal):nf(n[m],1);
-function renderEssen(){const y=window.scrollY;renderEssen0();if(Math.abs(window.scrollY-y)>1)window.scrollTo(0,y)}
-function renderEssen0(){
+function renderEssen(anim){const y=window.scrollY;renderEssen0(anim);if(Math.abs(window.scrollY-y)>1)window.scrollTo(0,y)}
+function renderEssen0(anim){
   const el=$("essen");if(!el)return;
   const st=history.state;macro=st&&st.s==="essen"&&st.m?st.m:null;
   const t=today();
@@ -178,12 +184,12 @@ function renderEssen0(){
   $("eDays").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{curDay=b.dataset.d;editId=nutId=facId=null;renderEssen()});
   const sd=$("eDays").querySelector('[aria-selected="true"]'),bar=$("eDays");if(sd)bar.scrollLeft=sd.offsetLeft-bar.offsetLeft-(bar.clientWidth-sd.offsetWidth)/2; // nur waagerecht, Seite bleibt stehen
   if(macro){renderMacro();renderSelBar();essenMeta();return}
-  renderSum();
+  renderSum(anim);
   const d=dayGet(curDay);let sh="";
   SLOTS.forEach(([sl,name])=>{
-    const list=d.e.filter(en=>en.slot===sl),ss=sumE(list);
-    sh+=`<section class="eslot" data-slothead="${sl}"><div class="eshead"><h3>${name}</h3><span class="esk">${list.length?nf(ss.kcal)+" kcal":""}</span><button class="ic eadd" data-add="${sl}" aria-label="${name}: hinzufügen">${PLUS}</button></div>`;
-    const chips=(list.length?[]:suggestions(sl,curDay).map((x,i)=>`<button class="echip" data-sg="${sl}|${i}">＋ ${esc(x.label)}</button>`)).concat(bratH(sl));
+    const list=d.e.filter(en=>en.slot===sl);
+    sh+=`<section class="eslot" data-slothead="${sl}"><div class="eshead"><h3>${name}</h3><button class="ic eadd" data-add="${sl}" aria-label="${name}: hinzufügen">${PLUS}</button></div>`;
+    const chips=list.length?[]:suggestions(sl,curDay).map((x,i)=>`<button class="echip" data-sg="${sl}|${i}">＋ ${esc(x.label)}</button>`);
     if(chips.length)sh+=`<div class="echips">${chips.join("")}</div>`;
     if(list.length){
       sh+=`<div class="elist">`;const done={};
@@ -200,14 +206,14 @@ function renderEssen0(){
     }
     sh+=`</section>`;
   });
-  sh+=`<button class="btn ghost epaste" id="dPaste">${PASTE}<span>Von Claude einfügen</span></button>`;
+  sh+=`<div class="efoot">${bratH()}<button class="btn ghost epaste" id="dPaste">${PASTE}<span>Von Claude einfügen</span></button></div>`;
   $("eSlots").innerHTML=sh;
   /* Einfügen direkt am Tag: ein Tipp, und das Diktierte steht da – im Abschnitt, der zur Uhrzeit passt. */
   $("dPaste").onclick=()=>pasteEssen({auto:true,sofort:true});
   bindSlots();
   essenMeta();
 }
-function renderSum(){
+function renderSum(anim){
   const d=dayGet(curDay),s=sumE(d.e),G=E.goals,b=burned(curDay),goal=G.kcal+(E.burnIn?b.kcal:0),rest=goal-s.kcal;
   const left=(v,g)=>v<=g?nf(g-v)+" g übrig":nf(v)+"/"+nf(g)+" g";
   $("eSum").innerHTML=`<button class="ekcal" data-m="kcal"><span><b class="num">${nf(s.kcal)}</b> / ${nf(goal)} kcal</span><span class="erest${rest<0?" over":""}">${rest>=0?"noch "+nf(rest):nf(-rest)+" drüber"}</span><i class="ebar"><i style="width:${Math.min(100,s.kcal/goal*100).toFixed(1)}%"></i></i></button>
@@ -216,6 +222,28 @@ function renderSum(){
   $("eSum").hidden=false;
   $("eSum").querySelectorAll("[data-m]").forEach(x=>x.onclick=()=>openMacro(x.dataset.m));
   if($("eBurn"))$("eBurn").onclick=()=>{E.burnIn=!E.burnIn;esave();renderEssen();toast(E.burnIn?"Training aufs Ziel draufgerechnet":"Training nur als Info")};
+  if(anim)animSum(s,goal,G);
+}
+/* Beim Öffnen der Ernährung füllen sich Leiste und Ringe einmal auf, und die Zahlen zählen mit (07.11.2026).
+   Nur beim Betreten des Bildschirms – bei jeder kleinen Änderung würde das Zappeln statt Freude machen. */
+const EASE=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+let sumRaf=0;
+function animSum(s,goal,G){
+  const box=$("eSum"),raf=window.requestAnimationFrame;if(!box||!raf)return;
+  const bar=box.querySelector(".ebar i"),kc=box.querySelector(".ekcal .num"),
+        rs=["c","p","f"].map(k=>({k,fg:box.querySelector(`.ering[data-m="${k}"] .rfg`),b:box.querySelector(`.ering[data-m="${k}"] .rin b`)})).filter(x=>x.fg);
+  const t0=Date.now(),DUR=620;
+  if(sumRaf&&window.cancelAnimationFrame)window.cancelAnimationFrame(sumRaf);
+  const schritt=()=>{
+    const q=Math.min(1,(Date.now()-t0)/DUR),e=EASE(q);
+    if(kc)kc.textContent=nf(s.kcal*e);
+    if(bar)bar.style.width=Math.min(100,s.kcal*e/goal*100).toFixed(1)+"%";
+    rs.forEach(x=>{const v=s[x.k]*e,p=G[x.k]?Math.min(1,v/G[x.k]):0;
+      x.fg.setAttribute("stroke-dashoffset",(RC*(1-p)).toFixed(1));
+      if(x.b)x.b.textContent=(G[x.k]?Math.round(v/G[x.k]*100):0)+"%"});
+    sumRaf=q<1?raf(schritt):0;
+  };
+  sumRaf=raf(schritt);
 }
 /* Detailansicht pro Nährwert (wie in der alten App) – eigener Verlaufs-Eintrag, Zurück schließt sie */
 function openMacro(m){history.pushState({s:"essen",m},"");renderEssen();window.scrollTo(0,0)}
@@ -418,7 +446,7 @@ function bindSlots(){
   S2.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{if(!sel.size)openSearch({kind:"day",slot:b.dataset.add})});
   S2.querySelectorAll("[data-sg]").forEach(b=>{const [sl,i]=b.dataset.sg.split("|"),x=()=>suggestions(sl,curDay)[+i];
     gesture(b,{tap:()=>useSuggestion(x(),sl),long:()=>{const y=x();if(y&&y.t==="tpl"){buzz();tplSheet(y.id)}}})});
-  S2.querySelectorAll("[data-brat]").forEach(b=>b.onclick=()=>{if(sel.size)return;const [id,sl]=b.dataset.brat.split("|");bratAdd(id,sl)});
+  S2.querySelectorAll("[data-brat]").forEach(b=>b.onclick=()=>{if(!sel.size)bratAdd(b.dataset.brat)});
   S2.querySelectorAll("[data-gm]").forEach(b=>b.onclick=e=>{e.stopPropagation();if(!sel.size)grpView(b.dataset.gm,true)});
   S2.querySelectorAll("[data-gadd]").forEach(b=>b.onclick=()=>{const en=d.e.find(x=>x.g&&x.g.id===b.dataset.gadd);openSearch({kind:"grp",gid:b.dataset.gadd,slot:en?en.slot:"sn"})});
   S2.querySelectorAll("[data-e],[data-gt]").forEach(r=>{
@@ -1116,5 +1144,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,BRAT,BRATSL,bratAdd,bratH,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,BRAT,bratAdd,bratH,bratSlot,suggestions,animSum,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();

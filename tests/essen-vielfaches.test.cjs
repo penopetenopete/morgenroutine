@@ -9,6 +9,7 @@ const { loadApp } = require("./harness.cjs");
 
 const OPT = { withEssenSpotify: true };
 const heute = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+const gestern = () => { const d = new Date(Date.now() - 864e5); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 const nah = (a, b) => Math.abs(a - b) < 1e-9;
 const gespeichert = h => JSON.parse(h.dump().essen_v1);
 
@@ -569,14 +570,11 @@ test("Braten: beide Öle, und die Werte landen in der Tagessumme", () => {
   assert.ok(kcal > 170 && kcal < 180, "zwei mal 10 g Öl sind ~177 kcal, war " + kcal);
 });
 
-test("Braten: nur Mittag und Abend, nicht Frühstück oder Snacks", () => {
+test("Braten: der Abschnitt richtet sich nach der Uhrzeit", () => {
   const h = loadApp({}, OPT), K = h.ctx.__essen;
-  assert.equal(Object.keys(K.BRATSL).sort().join(","), "ab,mi");
-  ["mi", "ab"].forEach(sl => assert.equal(K.bratH(sl).length, 2, sl + " zeigt zwei Knöpfe"));
-  ["fr", "sn"].forEach(sl => assert.equal(K.bratH(sl).length, 0, sl + " zeigt keine"));
-  assert.equal(K.bratAdd("oil_oliv", "fr"), null, "beim Frühstück wird nichts angelegt");
-  assert.equal(K.bratAdd("quark", "mi"), null, "fremde Kennung legt nichts an");
+    assert.equal(K.bratAdd("quark"), null, "fremde Kennung legt nichts an");
   assert.equal(K.E().days[heute()], undefined);
+  assert.ok(["mi", "ab", "sn"].includes(K.bratSlot()), "der Abschnitt richtet sich nach der Uhrzeit, nie Frühstück");
 });
 
 test("Braten: Rückgängig nimmt genau diesen Eintrag zurück", () => {
@@ -603,8 +601,46 @@ test("Braten: die Knöpfe stehen in der Tagesansicht bei Mittag und Abend", () =
   const h = loadApp({}, OPT), K = h.ctx.__essen;
   h.ctx.renderEssen();
   const htm = h.el("eSlots").innerHTML;
-  assert.ok(htm.includes('data-brat="oil_oliv|mi"'), "Olivenöl bei Mittag");
-  assert.ok(htm.includes('data-brat="oil_sonne|ab"'), "Sonnenblumenöl bei Abend");
-  assert.ok(!htm.includes('|fr"') && !htm.includes('|sn"'), "nicht bei Frühstück oder Snacks");
+  assert.equal((htm.match(/data-brat=/g) || []).length, 2, "die beiden Öle stehen genau einmal da");
+  assert.ok(htm.includes('data-brat="oil_oliv"') && htm.includes('data-brat="oil_sonne"'));
+  assert.ok(htm.indexOf("ebrats") < htm.indexOf("dPaste"), "über dem Einfügen-Knopf");
   assert.ok(htm.includes("Olivenöl") && htm.includes("Sonnenblumenöl"));
+});
+
+/* ---------- Tagesansicht ruhiger (07.11.2026) ---------- */
+
+test("Vorschläge: Frühstück zeigt die Frühstücks-Vorlage und „wie gestern“, sonst nur „wie gestern“", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E(), k = heute(), g = gestern();
+  E.meals.m1 = { id: "m1", name: "Mein Frühstück", slot: "fr", items: [{ food: "quark", amt: 250 }] };
+  E.meals.m2 = { id: "m2", name: "Reispfanne", slot: "mi", items: [{ food: "quark", amt: 100 }] };
+  E.days[g] = { e: [{ id: "a", slot: "fr", food: "quark", amt: 100 }, { id: "b", slot: "mi", food: "quark", amt: 100 }], acts: [] };
+  const lab = sl => K.suggestions(sl, k).map(x => x.label).join(" | ");
+  const fr = K.suggestions("fr", k);
+  assert.ok(fr.length <= 3, "höchstens drei Vorschläge, war " + fr.length);
+  assert.ok(fr.some(x => x.t === "tpl" && x.label.includes("Frühstück")), "die Frühstücks-Vorlage ist dabei");
+  assert.equal(fr[fr.length - 1].label, "wie gestern", "„wie gestern“ steht am Ende");
+  assert.ok(!fr.some(x => x.label === "Reispfanne"), "fremde Abschnitte bleiben draußen");
+  assert.equal(lab("mi"), "wie gestern", "keine Vorlagen bei Mittag");
+  assert.equal(lab("ab"), "", "gestern gab es abends nichts");
+  assert.equal(lab("sn"), "", "Snacks schlagen nie etwas vor");
+});
+
+test("Tagesansicht: keine Kalorienzahl mehr an der Abschnitts-Überschrift", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, k = heute();
+  K.bratAdd("oil_oliv", "mi");
+  h.ctx.renderEssen();
+  const htm = h.el("eSlots").innerHTML;
+  assert.ok(!htm.includes('class="esk"'), "der Kopf trägt keine Summe mehr");
+  assert.ok(h.el("eSum").innerHTML.includes("kcal"), "die Tagessumme oben bleibt");
+});
+
+test("Auffüllen: die Animation läuft nur beim Betreten, nicht bei jeder Änderung", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  let n = 0;
+  h.ctx.requestAnimationFrame = fn => { n++; return n };
+  h.ctx.cancelAnimationFrame = () => {};
+  h.ctx.renderEssen();
+  assert.equal(n, 0, "ein gewöhnlicher Aufbau animiert nicht");
+  h.ctx.renderEssen(true);
+  assert.ok(n > 0, "beim Betreten fängt sie an");
 });

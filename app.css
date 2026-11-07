@@ -184,8 +184,8 @@ h3{font-family:var(--f-display);font-size:.78rem;letter-spacing:.14em;text-trans
 .subctrl .btn{min-height:38px;font-size:.85rem;padding:0 14px}
 
 /* Sheet */
-.scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;display:flex;align-items:flex-end;justify-content:center}
-.sheet{width:100%;max-width:560px;background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;padding:14px 16px max(20px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;max-height:90vh;max-height:90dvh}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;display:flex;align-items:flex-end;justify-content:center;padding-bottom:var(--kb,0px);transition:padding-bottom .12s ease-out}
+.sheet{width:100%;max-width:560px;background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;padding:14px 16px max(20px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;max-height:90vh;max-height:calc(90dvh - var(--kb,0px))}
 .shhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .shhead>.shback{flex:none;margin:-4px 0 0 -8px}
 .shhead>.shback+div{flex:1;min-width:0}
@@ -437,12 +437,25 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .emsub{font-family:var(--f-display);font-size:.75rem;color:var(--muted)}
 .emsub b{font-weight:600}
 /* Mahlzeiten-Abschnitte */
-.eslot{display:flex;flex-direction:column;gap:6px;border-radius:14px;transition:background .15s}
+/* Tagesabschnitte als eigene Karten (07.11.2026): eine Fläche je Abschnitt statt Karte-in-Karte,
+   mit einem leichten Eigenton, damit man sie beim Scrollen auseinanderhält. Die Liste darin ist rahmenlos. */
+.eslot{display:flex;flex-direction:column;gap:4px;border-radius:16px;padding:4px 10px 8px;--tint:var(--muted);--slotbg:color-mix(in srgb,var(--tint) 7%,var(--card));
+  background:var(--slotbg);border:1px solid color-mix(in srgb,var(--tint) 16%,var(--line));transition:background .15s}
+.eslot[data-slothead="fr"]{--tint:var(--rest)}
+.eslot[data-slothead="mi"]{--tint:var(--accent)}
+.eslot[data-slothead="ab"]{--tint:#7C8CFF}
+.eslot[data-slothead="sn"]{--tint:var(--ok)}
+.eslot .elist{border:0;background:none;border-radius:0}
+.eslot .erow{background:var(--slotbg)}
+.eslot .egrp{background:color-mix(in srgb,var(--tint) 5%,var(--slotbg))}
+.efoot{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.ebrats{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .eslot.drophot{background:rgba(0,229,255,.08);outline:1px dashed var(--accent);outline-offset:4px}
-.eshead{display:flex;align-items:center;gap:10px;min-height:36px}
+.eshead{display:flex;align-items:center;gap:10px;min-height:42px}
+.eshead h3{flex:1;color:color-mix(in srgb,var(--tint) 45%,var(--fg))}
 .esk{flex:1;font-family:var(--f-display);font-size:.75rem;color:var(--muted)}
-.eshead .eadd{width:36px;height:36px;color:var(--accent);background:none;border-color:transparent}
-.eshead .eadd svg{width:18px;height:18px}
+.eshead .eadd{width:44px;height:44px;margin-right:-6px;color:var(--tint);background:none;border-color:transparent}
+.eshead .eadd svg{width:24px;height:24px}
 .elist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
 .eswipe{position:relative;border-top:1px solid var(--line);background:#3a1d14;overflow:hidden}
 .elist>.eswipe:first-child,.egin>.eswipe:first-child{border-top:0}
@@ -458,6 +471,7 @@ img.eic{background:#fff}
 /* Einfügen am Ende des Tages (05.11.2026): ein Tipp, und das Diktierte steht im Abschnitt zur Uhrzeit. */
 /* Einfügen-Feld: steht oben im Fenster, damit zwischen Feld und Tastatur nichts mehr zu scrollen ist. */
 .epaster{display:block;width:100%;min-height:92px;resize:none}
+.efoot .epaste{margin:0}
 .epaste{display:flex;align-items:center;justify-content:center;gap:9px;margin:18px auto 4px;width:auto;min-width:min(260px,74%);border-radius:999px;border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .epaste svg{width:19px;height:19px;flex:none}
 .efac{position:relative;flex:none;min-width:34px;height:34px;padding:0 6px;border-radius:999px;background:var(--bg);border:1px solid var(--line);display:grid;place-items:center;font-family:var(--f-display);font-size:.72rem;color:var(--muted)}

@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="82"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="83"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -219,8 +219,20 @@ let sheetClose=null,sheetLocked=false,lastEditorRender=null; // lastEditorRender
 function stopPreview(){if(F.previewStop()&&!$("player").hidden&&W){shownKey="";stepUI();size()}}
 window.openSheet=(...a)=>openSheet(...a);window.closeSheet=()=>closeSheet();
 let sheetBack=null;
+/* Tastatur (07.11.2026): Das Sheet klebt am unteren Bildschirmrand – die Tastatur schiebt es nicht hoch,
+   sie legt sich darüber. Darum messen wir, wieviel sie wegnimmt, und halten den Scrim genau darüber (--kb).
+   Scrollen half nicht: ein festes Element lässt sich nicht wegscrollen. */
+let kbAuf=null;
+const kbSet=v=>{const sc=$("scrim");if(sc&&sc.style&&sc.style.setProperty)sc.style.setProperty("--kb",v)};
+function kbMess(){
+  const vv=window.visualViewport;if(!vv)return;
+  const kb=Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop));
+  kbSet(kb+"px");
+}
+function kbAn(){const vv=window.visualViewport;if(!vv||kbAuf)return;kbAuf=vv;vv.addEventListener("resize",kbMess);vv.addEventListener("scroll",kbMess);kbMess()}
+function kbAus(){const vv=kbAuf;kbAuf=null;if(vv){vv.removeEventListener("resize",kbMess);vv.removeEventListener("scroll",kbMess)}kbSet("0px")}
 function openSheet(eyebrow,title,html,{onClose,locked,back}={}){
-  stopPreview();
+  stopPreview();kbAn();
   /* Einstellungs-Panel retten, bevor der Inhalt ersetzt wird – sonst ist es weg und das Zahnrad tut nichts mehr */
   const sp=$("shBody").querySelector("#setPanel");if(sp)$("setHold").appendChild(sp);
   $("shEyebrow").textContent=eyebrow||"";$("shTitle").textContent=title||"";$("shBody").innerHTML=html;
@@ -236,7 +248,7 @@ function setSheetBack(fn){
   b.hidden=!fn;
 }
 window.setSheetBack=setSheetBack;
-function closeSheet(){if($("scrim").hidden)return;stopPreview();$("scrim").hidden=true;sheetBack=null;const f=sheetClose;sheetClose=null;if(f)f()}
+function closeSheet(){if($("scrim").hidden)return;stopPreview();kbAus();$("scrim").hidden=true;sheetBack=null;const f=sheetClose;sheetClose=null;if(f)f()}
 $("shClose").onclick=closeSheet;
 $("scrim").addEventListener("click",e=>{if(e.target===$("scrim")&&!sheetLocked)closeSheet()});
 
@@ -674,7 +686,7 @@ let screen="home";
 function show(s,push=true){
   screen=s;SCREENS.forEach(x=>$(x).hidden=x!==s);window.scrollTo(0,0);
   if(push)history.pushState({s},"");
-  if(s==="home")renderHome();if(s==="routine")renderRoutine();if(s==="stats")renderStats();if(s==="essen"&&window.renderEssen)renderEssen();
+  if(s==="home")renderHome();if(s==="routine")renderRoutine();if(s==="stats")renderStats();if(s==="essen"&&window.renderEssen)renderEssen(true);
 }
 document.querySelectorAll("[data-back]").forEach(b=>b.onclick=()=>history.back());
 window.addEventListener("popstate",e=>{
