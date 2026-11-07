@@ -48,13 +48,23 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 
 .lg{position:relative;min-height:52px;padding:0 20px;border-radius:999px;font-family:var(--f-display);font-weight:600;
   color:var(--fg);isolation:isolate;will-change:transform;
-  background:rgba(255,255,255,.055);
+  /* ganz schwacher Verlauf in der Fläche – oben eine Spur heller, wie Licht auf Glas */
+  background:linear-gradient(to bottom,rgba(255,255,255,.075),rgba(255,255,255,.028));
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.085)}     /* der feine Ring, mehr nicht */
-/* 1 px Saum: nur eine Spur heller als der Ring, damit die Kante lebt statt gezeichnet zu wirken */
-.lg::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
-  padding:1px;
-  backdrop-filter:brightness(1.18);-webkit-backdrop-filter:brightness(1.18);
+  box-shadow:inset 0 0 0 .5px rgba(255,255,255,.055)}   /* Grundring, kaum zu sehen */
+/* Die Lichtkante. Der Ring ist 1,6 px dick, aber seine Farbe läuft über den Umlauf von kräftig
+   nach fast nichts – dadurch wirkt er oben links dick und unten rechts verschwunden,
+   statt überall gleich stark wie eine gezeichnete Linie. */
+.lg::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  padding:1.6px;
+  background:linear-gradient(146deg,
+    rgba(255,255,255,.62) 0%,
+    rgba(255,255,255,.3)  16%,
+    rgba(255,255,255,.07) 38%,
+    rgba(255,255,255,.015) 54%,
+    rgba(255,255,255,.05) 72%,
+    rgba(255,255,255,.22) 92%,
+    rgba(255,255,255,.4)  100%);
   -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
   mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
   -webkit-mask-composite:xor;mask-composite:exclude}
@@ -62,7 +72,11 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 .lg::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   opacity:calc(var(--glanz,0) * .4);
   background:linear-gradient(to bottom,rgba(255,255,255,.3),transparent 45%)}
-.lg.voll{background:rgba(0,229,255,.16);color:#CFF9FF;box-shadow:inset 0 0 0 1px rgba(0,229,255,.3)}
+.lg.voll{background:linear-gradient(to bottom,rgba(0,229,255,.21),rgba(0,229,255,.12));color:#CFF9FF;
+  box-shadow:inset 0 0 0 .5px rgba(0,229,255,.18)}
+.lg.voll::before{background:linear-gradient(146deg,
+    rgba(214,251,255,.7) 0%, rgba(214,251,255,.32) 16%, rgba(214,251,255,.07) 38%,
+    rgba(214,251,255,.02) 54%, rgba(214,251,255,.06) 72%, rgba(214,251,255,.26) 92%, rgba(214,251,255,.45) 100%)}
 .lgreihe{display:flex;gap:10px}
 .lgic{min-height:52px;width:52px;padding:0;display:grid;place-items:center}
 .lgic svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
@@ -71,13 +85,15 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 .seg{position:relative;display:flex;background:rgba(141,155,171,.12);border-radius:13px;padding:3px;touch-action:none;user-select:none;-webkit-user-select:none}
 /* Der laufende Knopf: gleiche Sprache – flache Fläche, feiner Ring, 1 px Saum */
 .seg .knopf{position:absolute;z-index:0;top:3px;bottom:3px;left:3px;border-radius:10px;
-  background:rgba(255,255,255,.07);
+  background:linear-gradient(to bottom,rgba(255,255,255,.085),rgba(255,255,255,.04));
   backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1),0 1px 5px rgba(0,0,0,.28);
+  box-shadow:inset 0 0 0 .5px rgba(255,255,255,.06),0 1px 5px rgba(0,0,0,.26);
   will-change:transform,width}
 .seg .knopf::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  padding:1px;
-  backdrop-filter:brightness(1.16);-webkit-backdrop-filter:brightness(1.16);
+  padding:1.4px;
+  background:linear-gradient(146deg,
+    rgba(255,255,255,.58) 0%, rgba(255,255,255,.26) 18%, rgba(255,255,255,.06) 40%,
+    rgba(255,255,255,.015) 56%, rgba(255,255,255,.05) 74%, rgba(255,255,255,.2) 92%, rgba(255,255,255,.36) 100%);
   -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
   mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
   -webkit-mask-composite:xor;mask-composite:exclude}
@@ -164,7 +180,7 @@ h2{font-family:var(--f-display);font-size:.72rem;letter-spacing:.14em;text-trans
 </div>
 
 <h2>1b · Liquid Glass — und der Knopf wächst</h2>
-<p class="hint">Hier wird der Knopf beim Drücken <b>größer</b>, nicht kleiner: das Glas wölbt sich unter dem Finger, der Saum zieht sich zusammen, der Glanz zieht auf. Gedrückt halten und wegziehen — er geht zurück, ohne auszulösen. Jetzt auf dem Maß, das die Claude-App selbst fährt: flache, leicht aufgehellte Fläche und ein hauchdünner heller Ring. Der Glassaum ist auf 1 px geschrumpft und sehr leise — er lässt die Kante leben, statt sie zu zeichnen.</p>
+<p class="hint">Hier wird der Knopf beim Drücken <b>größer</b>, nicht kleiner: das Glas wölbt sich unter dem Finger, der Saum zieht sich zusammen, der Glanz zieht auf. Gedrückt halten und wegziehen — er geht zurück, ohne auszulösen. Die Kante ist jetzt <b>ungleichmäßig</b>: oben links kräftig, nach rechts unten läuft sie fast auf null aus und kommt am Ende schwach zurück — so fällt Licht auf eine echte Glaskante. Vorher war der Ring überall gleich stark und sah dadurch gezeichnet aus. In der Fläche liegt ein ganz schwacher Verlauf.</p>
 <div class="band">
   <div class="zeile"><b>Haferflocken</b><span>80 g · 304 kcal</span></div>
   <div class="zeile"><b>Magerquark</b><span>250 g · 170 kcal</span></div>
