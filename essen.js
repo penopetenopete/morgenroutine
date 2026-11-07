@@ -248,7 +248,9 @@ function renderSum(anim){
 }
 /* Beim Öffnen der Ernährung füllen sich Leiste und Ringe einmal auf, und die Zahlen zählen mit (07.11.2026).
    Nur beim Betreten des Bildschirms – bei jeder kleinen Änderung würde das Zappeln statt Freude machen. */
-const EASE=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+/* Eintritt gehört auf ease-out: schnell los, sanft ankommen. Vorher ease-in-out –
+   das startete träge, genau in dem Moment, in dem man hinsieht (07.11.2026). */
+const EASE=t=>1-Math.pow(1-t,3);
 let sumRaf=0;
 function animSum(s,goal,G){
   const box=$("eSum"),raf=window.requestAnimationFrame;if(!box||!raf)return;
@@ -515,12 +517,25 @@ function bindSlots(){
   renderSelBar();
 }
 const buzz=()=>{try{navigator.vibrate&&navigator.vibrate(12)}catch(_){}};
+/* Auf das Ende einer Bewegung warten statt die Dauer zu raten; die Zeit ist nur die Notbremse,
+   falls das Ereignis ausbleibt (Tab im Hintergrund, Bewegung abgeschaltet). */
+/* Löst der Wisch aus? Entweder weit genug gezogen, oder kurz und schnell geschubst –
+   nach Apples Maß 0,11 px je ms. Vorher zählte nur die Strecke, darum verpuffte ein
+   schneller Schubs (07.11.2026). Eigene Funktion, damit sie prüfbar ist. */
+const wischAus=(dx,tempo)=>dx<-90||(tempo<-.11&&dx<-30);
+function nachUebergang(el,fn,notbremse){
+  let fertig=false;
+  const ab=()=>{if(fertig)return;fertig=true;el.removeEventListener("transitionend",ab);fn()};
+  el.addEventListener("transitionend",ab);
+  setTimeout(ab,notbremse||300);
+}
 /* Gesten: tippen · nach links wischen = löschen · lange drücken = auswählen (long optional)
    rel (24.10.2026, optional): kommt beim Loslassen bzw. Abbruch NACH einem langen Drücken – für „solange gehalten“-Anzeigen */
 function gesture(el,{tap,long,swipe,rel}){
   el.addEventListener("pointerdown",ev=>{
     if(ev.button>0||ev.target.closest(".egm"))return;
     const x0=ev.clientX,y0=ev.clientY;let mode=null,dx=0;
+    let lx=ev.clientX,lt2=ev.timeStamp||Date.now(),tempo=0;   // Tempo der letzten Bewegung, px je ms
     const lt=long?setTimeout(()=>{mode="long";long()},420):0;
     const mv=e=>{
       const ddx=e.clientX-x0,ddy=e.clientY-y0;
@@ -529,14 +544,22 @@ function gesture(el,{tap,long,swipe,rel}){
         else if(Math.hypot(ddx,ddy)>9){clearTimeout(lt);end(false);return}
         else return;
       }
-      if(mode==="swipe"){dx=Math.min(0,ddx);el.style.transform=`translateX(${dx}px)`;el.parentElement.classList.toggle("armed",dx<-90)}
+      if(mode==="swipe"){
+        const jetzt=e.timeStamp||Date.now(),dt=jetzt-lt2;
+        if(dt>0){tempo=(e.clientX-lx)/dt;lt2=jetzt;lx=e.clientX}
+        dx=Math.min(0,ddx);el.style.transform=`translateX(${dx}px)`;el.parentElement.classList.toggle("armed",dx<-90)}
     };
     const end=(fire,e)=>{
       clearTimeout(lt);document.removeEventListener("pointermove",mv);document.removeEventListener("pointerup",up);document.removeEventListener("pointercancel",cc);
       if(mode==="long"&&rel)rel();
       if(mode==="swipe"){el.parentElement.classList.remove("armed");
-        if(fire&&dx<-90){el.style.transition="transform .18s";el.style.transform="translateX(-110%)";setTimeout(swipe,170)}
-        else{el.style.transition="transform .18s";el.style.transform="";setTimeout(()=>el.style.transition="",200)}
+        if(fire&&wischAus(dx,tempo)){
+          el.style.transition="transform .2s cubic-bezier(.23,1,.32,1)";el.style.transform="translateX(-110%)";
+          nachUebergang(el,swipe,260);
+        }else{
+          el.style.transition="transform .2s cubic-bezier(.23,1,.32,1)";el.style.transform="";
+          nachUebergang(el,()=>{el.style.transition=""},260);
+        }
         return}
       if(fire&&!mode)tap(e);
     };
@@ -1193,5 +1216,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,sugSheet,tplSlots,tplSlotSet,tplList,BRAT,bratAdd,bratH,bratSlot,suggestions,animSum,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,wischAus,sugSheet,tplSlots,tplSlotSet,tplList,BRAT,bratAdd,bratH,bratSlot,suggestions,animSum,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
 })();

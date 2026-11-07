@@ -184,11 +184,44 @@ h3{font-family:var(--f-display);font-size:.78rem;letter-spacing:.14em;text-trans
 .subctrl .btn{min-height:38px;font-size:.85rem;padding:0 14px}
 
 /* Sheet */
-/* Druckpunkt (07.11.2026): alles Antippbare geht beim Drücken kurz ein und federt zurück.
-   Bewusst nur auf Tasten, nicht auf Listenzeilen – die werden zum Wischen selbst verschoben. */
-.btn,.ic,.echip,.ering,.ekcal,.dtab,.sbtn,.eburn,.eaddin,.efac{transition:transform .13s cubic-bezier(.2,.8,.3,1),background .15s,color .15s,border-color .15s}
-.btn:active,.ic:active,.echip:active,.ering:active,.ekcal:active,.dtab:active,.sbtn:active,.eburn:active,.eaddin:active,.efac:active{transform:scale(.94)}
-.btn.big:active,.ekcal:active{transform:scale(.975)}
+/* Druckpunkt (07.11.2026, neu gefasst): alles Antippbare wölbt sich beim Drücken heraus,
+   die Fläche hellt auf und der Rand leuchtet deckend weiß. Werte aus einem Screenshot gemessen.
+   Die Bewegung treibt eine Feder in app.js über --druck (0 = los, 1 = ganz gedrückt);
+   hier steht nur, wie es aussieht. Bewusst nur auf Tasten, nicht auf Listenzeilen –
+   die werden zum Wischen selbst verschoben. */
+.btn,.ic,.echip,.ering,.ekcal,.dtab,.sbtn,.eburn,.eaddin,.efac,.est,.emulb,.eunit{
+  --druck:0;position:relative;isolation:isolate;
+  transition:background .15s,border-color .15s;
+  color:color-mix(in srgb,#0B0F14 calc(var(--druck) * 90%),currentColor)}
+/* die aufgehellte Fläche – liegt über dem Hintergrund, unter Text und Symbol */
+.btn::after,.ic::after,.echip::after,.ekcal::after,.dtab::after,.sbtn::after,
+.eburn::after,.eaddin::after,.efac::after,.est::after,.emulb::after,.eunit::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-2;
+  background:linear-gradient(168deg,#C2C2C2 0%,#A6A6A6 42%,#8E8E8E 72%,#7D7D7D 100%);
+  opacity:var(--druck)}
+/* der Rand, der mitleuchtet */
+.btn::before,.ic::before,.echip::before,.ekcal::before,.dtab::before,.sbtn::before,
+.eburn::before,.eaddin::before,.efac::before,.est::before,.emulb::before,.eunit::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;padding:1px;
+  background:linear-gradient(to bottom,
+    rgba(255,255,255,calc(var(--druck) * 1)),
+    rgba(228,228,228,calc(var(--druck) * .92)) 60%,
+    rgba(217,217,217,calc(var(--druck) * .88)));
+  -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
+  mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  opacity:var(--druck)}
+/* farbige Tasten bleiben beim Drücken farbig, statt nach Weiß zu kippen */
+.btn.primary::after,.done-btn::after,.trans-btn::after{
+  background:linear-gradient(168deg,#9EE9F5 0%,#6FD2E2 42%,#4EBCCE 72%,#3BA7B9 100%)}
+.btn.primary::before,.done-btn::before,.trans-btn::before{
+  background:linear-gradient(to bottom,
+    rgba(234,253,255,calc(var(--druck) * 1)),
+    rgba(184,242,250,calc(var(--druck) * .92)) 60%,
+    rgba(166,234,245,calc(var(--druck) * .88)))}
+.btn.primary,.done-btn,.trans-btn{color:color-mix(in srgb,#02232B calc(var(--druck) * 90%),#03141A)}
+/* Ringe tragen ihre Zeichnung selbst – dort nur aufhellen, keine Fläche darüber */
+.ering::after{display:none}
 /* Fenster kommt von unten herein, der dunkle Grund blendet auf */
 .sheet{animation:shUp .34s cubic-bezier(.32,.72,0,1)}
 .scrim:not([hidden]){animation:shFade .22s ease-out}
@@ -220,7 +253,7 @@ h3{font-family:var(--f-display);font-size:.78rem;letter-spacing:.14em;text-trans
 .toast.show{opacity:1;transform:translate(-50%,0)}
 @media (prefers-reduced-motion:reduce){.stage canvas,.toast,.bar i{transition:none}.resume .dot{animation:none}
   .sheet,.scrim:not([hidden]){animation:none}
-  .btn:active,.ic:active,.echip:active,.ering:active,.ekcal:active,.dtab:active,.sbtn:active,.eburn:active,.eaddin:active,.efac:active{transform:none}}
+  .btn,.ic,.echip,.ering,.ekcal,.dtab,.sbtn,.eburn,.eaddin,.efac,.est,.emulb,.eunit{transform:none!important}}
 
 /* Mehrfachauswahl im Katalog */
 .row.pick{grid-template-columns:28px 44px minmax(0,1fr);padding-left:8px;cursor:pointer}
@@ -428,7 +461,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .rwrap.big{width:min(124px,34vw);flex:none}
 .rwrap svg{width:100%;height:100%;transform:rotate(-90deg)}
 .rbg{fill:none;stroke:var(--line);stroke-width:5}
-.rfg{fill:none;stroke:var(--rc);stroke-width:5;stroke-linecap:round;transition:stroke-dashoffset .4s}
+/* keine Transition: animSum in essen.js setzt stroke-dashoffset pro Bild selbst,
+   eine Transition würde dagegen laufen und den Ring hinterherhinken lassen (07.11.2026) */
+.rfg{fill:none;stroke:var(--rc);stroke-width:5;stroke-linecap:round}
 .rin{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
 .rin b{font-family:var(--f-display);font-size:.95rem;font-weight:600;color:var(--rc)}
 .rwrap.big .rin b{font-size:1.5rem}
@@ -571,7 +606,7 @@ img.emini{background:#fff}
 .eghost span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .eghost .eic{width:26px;height:26px}
 .edock{position:fixed;left:0;right:0;bottom:0;z-index:25;display:flex;flex-direction:column;gap:6px;padding:10px 12px max(12px,env(safe-area-inset-bottom));background:#111821;border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(0,0,0,.45)}
-.edz{pointer-events:auto;min-height:72px;border-radius:16px;border:1px dashed var(--line);background:rgba(18,25,34,.95);display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--f-display);font-size:.78rem;color:var(--muted);transition:all .12s}
+.edz{pointer-events:auto;min-height:72px;border-radius:16px;border:1px dashed var(--line);background:rgba(18,25,34,.95);display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--f-display);font-size:.78rem;color:var(--muted);transition:transform .12s,opacity .12s,background .12s}
 .edz b{font-size:1.6rem;font-weight:400;color:var(--accent);line-height:1}
 .edz.cal{flex-direction:column;gap:4px}
 .edz.cal svg{width:24px;height:24px;color:var(--accent)}
@@ -896,7 +931,11 @@ html[data-theme="hell"] .tlsw[aria-checked="true"] .tlswk::after{background:#fff
 /* Ansicht Liste | Timeline: großer Schalter im Apple-Stil, der Knopf gleitet mit (auch beim Wischen) */
 .seg.vtog{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:0;padding:3px;border-radius:13px;background:color-mix(in srgb,var(--fg) 8%,transparent);isolation:isolate;flex:none}
 .seg.vtog::before{content:"";position:absolute;z-index:0;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:10px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.25),0 3px 10px rgba(0,0,0,.18),inset 0 0 0 1px color-mix(in srgb,var(--fg) 7%,transparent);
-  transform:translateX(calc(var(--pos,0) * 100% + var(--pull,0px)));transition:transform .32s cubic-bezier(.3,1.25,.5,1)}
+  /* Die Feder in app.js treibt --posx, --dehn und --quer; --pos ist der Rückfall ohne JS.
+     Der Knopf dehnt sich beim Laufen in Laufrichtung und wird dabei flacher – wie ein gezogener
+     Tropfen – und wird beim Anhalten wieder rund (07.11.2026). */
+  transform:translateX(calc(var(--posx,calc(var(--pos,0) * 100%)) + var(--pull,0px))) scaleX(var(--dehn,1)) scaleY(var(--quer,1));
+  transform-origin:center}
 .seg.vtog[data-on="tl"]{--pos:1}
 .seg.vtog.drag::before{transition:none}
 .seg.vtog .sbtn{position:relative;z-index:1;min-height:40px;border:0!important;background:none!important;border-radius:10px;color:var(--muted);font-size:.92rem;letter-spacing:.02em;transition:color .2s}

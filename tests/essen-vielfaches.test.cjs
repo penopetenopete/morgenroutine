@@ -702,3 +702,19 @@ test("Vorschläge einstellen: unbekannter Abschnitt öffnet nichts", () => {
   K.sugSheet("xx");
   assert.equal(h.el("scrim").hidden, true);
 });
+
+test("Wischen: ein kurzer schneller Schubs löst auch aus, nicht nur die lange Strecke", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen;
+  // weit genug gezogen, egal wie langsam
+  assert.equal(K.wischAus(-120, 0), true);
+  assert.equal(K.wischAus(-91, -0.01), true);
+  // kurz, aber schnell genug (über 0,11 px je ms)
+  assert.equal(K.wischAus(-45, -0.3), true);
+  assert.equal(K.wischAus(-31, -0.12), true);
+  // kurz und langsam: nichts passiert
+  assert.equal(K.wischAus(-45, -0.05), false);
+  // schnell, aber kaum bewegt: nichts passiert
+  assert.equal(K.wischAus(-20, -0.9), false);
+  // nach rechts gewischt löst nie aus
+  assert.equal(K.wischAus(80, 0.5), false);
+});

@@ -16,7 +16,7 @@ const uidGen=()=>"i"+now().toString(36)+Math.random().toString(36).slice(2,6);
 const KEY="training_v1", ACT="training_active_v1", CAT="uebungen_v1", OLD="morgenroutine_v1"; // dazu training_defekt_v1: Rohkopie unlesbarer Daten (12.10.2026)
 const MAX_SLOTS=99;
 const DEF_SET={umbau:10,satz:60,wechsel:15,confirm:true};
-const APP_VER="86"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
+const APP_VER="87"; // = Nummer in sw.js (training-vNN) – in den Einstellungen sichtbar, damit man sieht, ob das Update da ist
 const G_DEF={shade:2,sound:true,vib:true,rest:120,side:10,confirm:true,lead:true,tips:true};
 
 /* Morgenroutine – Ablauf und Startwerte genau wie bisher (abgenommen 05.10.2026) */
@@ -201,6 +201,114 @@ function lastText(rid,uid){
   return "Letztes Mal: "+t;
 }
 const dateText=d=>new Date(d).toLocaleDateString("de-DE",{weekday:"short",day:"numeric",month:"short"});
+
+/* =================== FEDER =================== */
+/* Eine Feder statt einer festen Kurve (07.11.2026). Der Unterschied: eine Kurve hat eine feste
+   Dauer und einen festen Weg und muss bei neuer Eingabe von vorne anfangen. Eine Feder hat nur
+   ein Ziel – sie rechnet immer vom aktuellen Wert mit der aktuellen Geschwindigkeit weiter.
+   Darum kann man mitten in eine Bewegung greifen, ohne dass sie springt.
+   Zwei Regler, wie bei Apple: daempfung 1 = kein Überschwingen, kleiner = federt nach;
+   antwort = Sekunden bis zum Ziel (keine Dauer – die ergibt sich). */
+function feder(wert,{daempfung=1,antwort=.4,auf,fertig}={}){
+  const w0=2*Math.PI/antwort;
+  let x=wert,v=0,ziel=wert,raf=0,t0=0;
+  const raF=window.requestAnimationFrame,caF=window.cancelAnimationFrame;
+  const schritt=t=>{
+    const dt=Math.min(.064,(t-t0)/1000);t0=t;                 // nach Hintergrund-Phasen nicht springen
+    const n=Math.max(1,Math.ceil(dt/.004)),h=dt/n;            // kleine Schritte, sonst wird es unruhig
+    for(let i=0;i<n;i++){const a=-w0*w0*(x-ziel)-2*daempfung*w0*v;v+=a*h;x+=v*h}
+    auf(x,v);
+    if(Math.abs(x-ziel)<.0005&&Math.abs(v)<.005){x=ziel;v=0;auf(x,v);raf=0;if(fertig)fertig();return}
+    raf=raF(schritt);
+  };
+  return {
+    zu(z,startV){ziel=z;if(startV!==undefined)v=startV;if(!raf&&raF){t0=performance.now();raf=raF(schritt)}},
+    setz(z){x=z;v=0;ziel=z;auf(x,v)},
+    halt(){if(raf&&caF)caF(raf);raf=0;v=0},
+    get wert(){return x},get tempo(){return v}
+  };
+}
+/* Widerstand an einer Grenze: je weiter darüber hinaus, desto weniger folgt es – statt hart zu stehen */
+const gummi=(ueber,mass,c=.55)=>(ueber*mass*c)/(mass+c*Math.abs(ueber));
+const sanft=()=>window.matchMedia&&window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+/* =================== DRUCKPUNKT =================== */
+/* Alles Antippbare wölbt sich beim Drücken heraus, hellt auf und der Rand leuchtet weiß –
+   Werte aus einem Screenshot gemessen (07.11.2026): Fläche #C2C2C2 oben bis #7D7D7D unten,
+   Rand deckend weiß. Eine Feder treibt das, darum darf man mitten im Zurückfedern neu drücken.
+   Eine einzige Stelle für die ganze App: keine Sonderwege je Knopf. */
+const DRUCK=".btn,.ic,.echip,.ering,.ekcal,.dtab,.sbtn,.eburn,.eaddin,.efac,.est,.emulb,.eunit";
+const druckFedern=new WeakMap();
+function druckAn(el){
+  let f=druckFedern.get(el);
+  if(!f){
+    const zeichne=(x)=>{
+      const t=Math.max(0,Math.min(1,(x-1)/.06));                 // 0 = los, 1 = ganz gedrückt
+      el.style.setProperty("--druck",t.toFixed(3));
+      if(!sanft())el.style.transform="scale("+x+")";
+    };
+    f=feder(1,{daempfung:.74,antwort:.36,auf:zeichne,
+      fertig:()=>{if(Math.abs(f.wert-1)<.001){el.style.transform="";el.style.removeProperty("--druck")}}});
+    druckFedern.set(el,f);
+  }
+  const b=el.getBoundingClientRect().width||100;
+  f.zu(Math.min(1.06,1+10/b));
+  return f;
+}
+const druckAus=el=>{const f=druckFedern.get(el);if(f)f.zu(1)};
+(function druckBinden(){
+  let aktiv=null;
+  const treffer=e=>{const el=e.target&&e.target.closest&&e.target.closest(DRUCK);return el&&!el.disabled?el:null};
+  document.addEventListener("pointerdown",e=>{
+    if(e.button>0)return;
+    const el=treffer(e);if(!el)return;
+    aktiv=el;druckAn(el);
+  },true);
+  const loesen=()=>{if(aktiv){druckAus(aktiv);aktiv=null}};
+  document.addEventListener("pointerup",loesen,true);
+  document.addEventListener("pointercancel",loesen,true);
+  /* Wegziehen bricht ab, Zurückkommen drückt wieder – wie bei Apple */
+  document.addEventListener("pointermove",e=>{
+    if(!aktiv)return;
+    const r=aktiv.getBoundingClientRect(),
+          drin=e.clientX>r.left-18&&e.clientX<r.right+18&&e.clientY>r.top-18&&e.clientY<r.bottom+18;
+    const f=druckFedern.get(aktiv);if(!f)return;
+    if(drin&&f.wert<1.001)druckAn(aktiv);
+    else if(!drin&&f.wert>1.001)f.zu(1);
+  },true);
+  /* Beim Scrollen loslassen, sonst bleibt ein Knopf gedrückt hängen */
+  addEventListener("scroll",loesen,true);
+})();
+
+/* =================== GLEITENDE UMSCHALTER =================== */
+/* Liste | Timeline: der laufende Knopf wird von einer Feder getrieben und dehnt sich dabei
+   in Laufrichtung, je schneller desto mehr. Ein Beobachter auf data-on fängt jeden Wechsel,
+   egal von welcher Stelle er kommt – so braucht keine Render-Funktion einen Sonderweg. */
+const segFedern=new WeakMap();
+const segIdx=(tog,wert)=>{const bs=[...tog.querySelectorAll(".sbtn")],i=bs.findIndex(b=>b.dataset.v===wert);return i<0?0:i};
+function segMal(tog,x,v){
+  /* Die Feder läuft hier in Feld-Einheiten (0, 1, 2 …), nicht in Pixeln – der Teiler ist
+     darauf abgestimmt: bei voller Fahrt rund 4 Felder je Sekunde ergibt das die 16 % Dehnung. */
+  const d=sanft()?0:Math.min(.16,Math.abs(v)/26);
+  tog.style.setProperty("--posx",(x*100).toFixed(2)+"%");
+  tog.style.setProperty("--dehn",(1+d).toFixed(3));
+  tog.style.setProperty("--quer",(1-d*.55).toFixed(3));
+}
+function segLauf(tog,vonWert){
+  let f=segFedern.get(tog);
+  if(!f){
+    f=feder(segIdx(tog,vonWert!==undefined?vonWert:tog.dataset.on),{daempfung:.82,antwort:.34,auf:(x,v)=>segMal(tog,x,v)});
+    segFedern.set(tog,f);
+  }
+  f.zu(segIdx(tog,tog.dataset.on));
+}
+if(window.MutationObserver)new MutationObserver(ms=>{
+  ms.forEach(m=>{
+    const t=m.target;
+    if(t.nodeType!==1||!t.classList.contains("vtog"))return;
+    segLauf(t,m.oldValue===null?undefined:m.oldValue);
+  });
+}).observe(document.documentElement,{subtree:true,attributes:true,attributeFilter:["data-on"],attributeOldValue:true});
 
 /* =================== KLEINE HELFER =================== */
 let toastT=null;
