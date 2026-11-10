@@ -170,7 +170,13 @@ function bratAdd(id,sl){
 
 /* ---------- Bildschirm ---------- */
 let curDay=today(),open={},editId=null,nutId=null,facId=null,facGo=false,macro=null; // nutId = Eintrag mit aufgeklappten Nährwerten, facId = Zeile mit aufgeklapptem Vielfachen ("e:id" oder "g:id") – immer nur einer von dreien
-const MET={kcal:{n:"Kalorien",u:"kcal",c:"var(--accent)",goal:"kcal"},c:{n:"Kohlenhydrate",s:"KH",u:"g",c:"#FF5C93",goal:"c"},p:{n:"Eiweiß",s:"Eiweiß",u:"g",c:"#4DA3FF",goal:"p"},f:{n:"Fett",s:"Fett",u:"g",c:"#FF8A4C",goal:"f"}};
+const MET={kcal:{n:"Kalorien",u:"kcal",c:"var(--accent)",goal:"kcal"},c:{n:"Kohlenhydrate",s:"KH",u:"g",c:"#FF5C93",goal:"c"},p:{n:"Eiweiß",s:"Eiweiß",u:"g",c:"#4DA3FF",goal:"p"},f:{n:"Fett",s:"Fett",u:"g",c:"#FF8A4C",goal:"f"},fib:{n:"Ballaststoffe",s:"Fasern",u:"g",c:"#55C27E",goal:"fib"}};
+/* Ballaststoffe lassen sich nicht aus den Makros ableiten – sie sind ein eigener Nährstoff.
+   Aus den Kalorien dagegen schon: die gängige Regel sind 14 g je 1000 kcal, die DGE empfiehlt
+   mindestens 30 g am Tag. Beides zusammen ergibt die Vorgabe; ein eigener Wert in E.goals.fib
+   schlägt sie (10.11.2026). */
+const fibZiel=()=>Math.max(30,Math.round((+E.goals.kcal||0)*14/1000));
+const zielFuer=k=>k==="fib"?(+E.goals.fib||fibZiel()):E.goals[k];
 const RC=2*Math.PI*34;
 function ringSvg(v,goal){const p=goal?Math.min(1,v/goal):0;return `<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" class="rbg"/><circle cx="40" cy="40" r="34" class="rfg" stroke-dasharray="${RC.toFixed(1)}" stroke-dashoffset="${(RC*(1-p)).toFixed(1)}"/></svg>`}
 function ring(key,v,goal,sub){
@@ -237,9 +243,10 @@ function renderEssen0(anim){
 function renderSum(anim){
   const d=dayGet(curDay),s=sumE(d.e),G=E.goals,b=burned(curDay),goal=G.kcal+(E.burnIn?b.kcal:0),rest=goal-s.kcal;
   const left=(v,g)=>v<=g?nf(g-v)+" g übrig":nf(v)+"/"+nf(g)+" g";
-  const z=anim?{kcal:0,c:0,p:0,f:0}:s;   // beim Auffüllen leer anfangen, sonst blitzt der alte Stand auf
+  const Gfib=zielFuer("fib");
+  const z=anim?{kcal:0,c:0,p:0,f:0,fib:0}:s;   // beim Auffüllen leer anfangen, sonst blitzt der alte Stand auf
   $("eSum").innerHTML=`<button class="ekcal" data-m="kcal"><span><b class="num">${nf(z.kcal)}</b> / ${nf(goal)} kcal</span><span class="erest${rest<0?" over":""}">${rest>=0?"noch "+nf(rest):nf(-rest)+" drüber"}</span><i class="ebar"><i style="width:${Math.min(100,z.kcal/goal*100).toFixed(1)}%"></i></i></button>
-    <div class="erings">${ring("c",z.c,G.c,left(s.c,G.c))}${ring("p",z.p,G.p,left(s.p,G.p))}${ring("f",z.f,G.f,left(s.f,G.f))}</div>
+    <div class="erings">${ring("c",z.c,G.c,left(s.c,G.c))}${ring("p",z.p,G.p,left(s.p,G.p))}${ring("f",z.f,G.f,left(s.f,G.f))}${ring("fib",z.fib,Gfib,left(s.fib,Gfib))}</div>
     ${b.kcal?`<button class="eburn" id="eBurn">🔥 ${nf(b.kcal)} kcal Training <b>${E.burnIn?"✓":"+"}</b></button>`:""}`;
   $("eSum").hidden=false;
   $("eSum").querySelectorAll("[data-m]").forEach(x=>x.onclick=()=>openMacro(x.dataset.m));
@@ -255,16 +262,16 @@ let sumRaf=0;
 function animSum(s,goal,G){
   const box=$("eSum"),raf=window.requestAnimationFrame;if(!box||!raf)return;
   const bar=box.querySelector(".ebar i"),kc=box.querySelector(".ekcal .num"),
-        rs=["c","p","f"].map(k=>({k,fg:box.querySelector(`.ering[data-m="${k}"] .rfg`),b:box.querySelector(`.ering[data-m="${k}"] .rin b`)})).filter(x=>x.fg);
+        rs=["c","p","f","fib"].map(k=>({k,fg:box.querySelector(`.ering[data-m="${k}"] .rfg`),b:box.querySelector(`.ering[data-m="${k}"] .rin b`)})).filter(x=>x.fg);
   const t0=Date.now(),DUR=620;
   if(sumRaf&&window.cancelAnimationFrame)window.cancelAnimationFrame(sumRaf);
   const schritt=()=>{
     const q=Math.min(1,(Date.now()-t0)/DUR),e=EASE(q);
     if(kc)kc.textContent=nf(s.kcal*e);
     if(bar)bar.style.width=Math.min(100,s.kcal*e/goal*100).toFixed(1)+"%";
-    rs.forEach(x=>{const v=s[x.k]*e,p=G[x.k]?Math.min(1,v/G[x.k]):0;
+    rs.forEach(x=>{const g=zielFuer(x.k),v=s[x.k]*e,p=g?Math.min(1,v/g):0;
       x.fg.setAttribute("stroke-dashoffset",(RC*(1-p)).toFixed(1));
-      if(x.b)x.b.textContent=(G[x.k]?Math.round(v/G[x.k]*100):0)+"%"});
+      if(x.b)x.b.textContent=(g?Math.round(v/g*100):0)+"%"});
     sumRaf=q<1?raf(schritt):0;
   };
   sumRaf=raf(schritt);
@@ -272,7 +279,7 @@ function animSum(s,goal,G){
 /* Detailansicht pro Nährwert (wie in der alten App) – eigener Verlaufs-Eintrag, Zurück schließt sie */
 function openMacro(m){history.pushState({s:"essen",m},"");renderEssen();window.scrollTo(0,0)}
 function renderMacro(){
-  const m=macro,M=MET[m],d=dayGet(curDay),s=sumE(d.e),G=E.goals,goal=G[M.goal]+(m==="kcal"&&E.burnIn?burned(curDay).kcal:0),v=s[m];
+  const m=macro,M=MET[m],d=dayGet(curDay),s=sumE(d.e),goal=zielFuer(M.goal)+(m==="kcal"&&E.burnIn?burned(curDay).kcal:0),v=s[m];
   $("eSum").hidden=false;
   $("eSum").innerHTML=`<div class="emac" style="--rc:${M.c}"><span class="rwrap big">${ringSvg(v,goal)}<span class="rin"><b>${goal?Math.round(v/goal*100):0}%</b><small>${M.s||"kcal"}</small></span></span>
     <div class="emacr"><div class="emsel">${Object.keys(MET).map(k=>`<button class="emb${k===m?" on":""}" data-mm="${k}" style="--rc:${MET[k].c}">${MET[k].s||"kcal"}</button>`).join("")}</div>
@@ -1014,7 +1021,7 @@ function moreSheet(){
   const G=E.goals;
   const num=(id,label,v)=>`<label class="field"><span>${label}</span><input id="${id}" type="number" inputmode="decimal" step="any" min="0" value="${v}"></label>`;
   openSheet("Ernährung","Einstellungen",
-    `<h3>Tagesziele</h3><div class="egrid">${num("gK","Kalorien",G.kcal)}${num("gP","Eiweiß (g)",G.p)}${num("gF","Fett (g)",G.f)}${num("gC","Kohlenhydrate (g)",G.c)}${num("gKg","Körpergewicht (kg)",E.kg||87)}</div>
+    `<h3>Tagesziele</h3><div class="egrid">${num("gK","Kalorien",G.kcal)}${num("gP","Eiweiß (g)",G.p)}${num("gF","Fett (g)",G.f)}${num("gC","Kohlenhydrate (g)",G.c)}${num("gFib","Ballaststoffe (g)",zielFuer("fib"))}${num("gKg","Körpergewicht (kg)",E.kg||87)}</div>
      <label class="toggle"><span>Training einrechnen<small>Verbrannte Kalorien (grob geschätzt) aufs Ziel draufrechnen</small></span><input type="checkbox" id="gBurn"${E.burnIn?" checked":""}></label>
      <button class="btn" id="mTpl">Mahlzeiten-Vorlagen</button>
      <button class="btn" id="mFood">Meine Lebensmittel</button>
@@ -1024,8 +1031,8 @@ function moreSheet(){
      <div class="note esrc">Nährwerte: BLS 4.0 – Max Rubner-Institut (2025), CC BY 4.0, DOI 10.25826/Data20251217-134202-0 · Open Food Facts, ODbL</div>`,
     {onClose:()=>renderEssen()});
   const sv=()=>{const v=id=>{const x=parseFloat(String($(id).value).replace(",","."));return x>0?x:null};
-    G.kcal=v("gK")||G.kcal;G.p=v("gP")||G.p;G.f=v("gF")||G.f;G.c=v("gC")||G.c;E.kg=v("gKg")||E.kg;esave()};
-  ["gK","gP","gF","gC","gKg"].forEach(id=>$(id).addEventListener("change",sv));
+    G.kcal=v("gK")||G.kcal;G.p=v("gP")||G.p;G.f=v("gF")||G.f;G.c=v("gC")||G.c;G.fib=v("gFib")||G.fib;E.kg=v("gKg")||E.kg;esave()};
+  ["gK","gP","gF","gC","gFib","gKg"].forEach(id=>$(id).addEventListener("change",sv));
   $("gBurn").onchange=e=>{E.burnIn=e.target.checked;esave()};
   $("mTpl").onclick=tplList;$("mFood").onclick=foodList;
   $("mPaste").onclick=()=>pasteEssen({sofort:true});$("mShare").onclick=shareEssen;
@@ -1216,5 +1223,5 @@ if(K.hSwipe)K.hSwipe($("essen"),d=>{if(macro||sel.size)return;const t=today(),nk
   curDay=nk;editId=nutId=facId=null;renderEssen();K.slideIn($("eSlots"),d);K.slideIn($("eSum"),d)});
 essenMeta();checkEssen();
 setTimeout(()=>{const go=()=>loadBLS().catch(()=>{});window.requestIdleCallback?requestIdleCallback(go,{timeout:15000}):go()},6000); // vorladen, aber erst wenn die App ruhig ist (nicht beim Start)
-window.__essen={E:()=>E,wischAus,sugSheet,tplSlots,tplSlotSet,tplList,BRAT,bratAdd,bratH,bratSlot,suggestions,animSum,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,setDay:k=>{curDay=k;renderEssen()}};
+window.__essen={E:()=>E,wischAus,sugSheet,tplSlots,tplSlotSet,tplList,BRAT,bratAdd,bratH,bratSlot,suggestions,animSum,prepImport,applyImport,readE,pasteCtx,paste:pasteEssen,pasteGo,slotNow,pasteLike,undo:()=>undoLast&&undoLast(),parseAmt,bindAmt,bindAmtObj,nut,nutInfo,nutH,onPill,sel:()=>sel,unitAdd,unitDel,unitSet,unitAmt,unitsUsable,cleanUnits,unH,bindUnits,shareEssen,openSearch,holdH,grpView,tplSheet,scaleEntries,mulH,setFac,parseFac,facN,facB,facReset,facList,macroSplit,nutBlock,unHold,fibZiel,zielFuer,setDay:k=>{curDay=k;renderEssen()}};
 })();

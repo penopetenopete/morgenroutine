@@ -483,9 +483,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .ekcal .ebar{grid-column:1/3;display:block;height:4px;border-radius:4px;background:var(--line);overflow:hidden}
 .ekcal .ebar i{display:block;height:100%;background:var(--accent);border-radius:4px}
 .erest{color:var(--accent);white-space:nowrap}.erest.over{color:var(--rest)}
-.erings{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.erings{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .ering{border:0;background:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--fg)}
-.rwrap{position:relative;width:min(76px,22vw);aspect-ratio:1}
+.rwrap{position:relative;width:min(72px,20vw);aspect-ratio:1}
 .rwrap.big{width:min(124px,34vw);flex:none}
 .rwrap svg{width:100%;height:100%;transform:rotate(-90deg)}
 .rbg{fill:none;stroke:var(--line);stroke-width:5}

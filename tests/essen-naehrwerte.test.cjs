@@ -528,3 +528,32 @@ test("holdH: dieselben drei Ringe wie das Panel unter der Zeile (derselbe Block)
   const leer = K.holdH({ id: "own:n", name: "Nur kcal", base: "g", kcal: 40, p: 0, c: 0, f: 0 });
   assert.ok(leer.includes(">40<") && !leer.includes("erg") && !leer.includes("<svg"), "ohne Makros keine Ringe");
 });
+
+/* V89: Ballaststoffe als vierter Ring. Das Ziel steht nicht in den Makros – es kommt aus den
+   Kalorien (14 g je 1000 kcal) mit der DGE-Untergrenze von 30 g, und ein eigener Wert schlägt es. */
+test("Ballaststoff-Ziel: aus den Kalorien abgeleitet, mindestens 30 g, eigener Wert schlägt die Ableitung", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E();
+  assert.equal(E.goals.kcal, 2250);
+  assert.equal(K.fibZiel(), 32, "2250 kcal -> 31,5 -> 32 g");
+  assert.equal(K.zielFuer("fib"), 32, "ohne eigenen Wert gilt die Ableitung");
+  E.goals.kcal = 1200;
+  assert.equal(K.fibZiel(), 30, "16,8 g läge unter der Untergrenze – es bleiben 30 g");
+  E.goals.kcal = 3500;
+  assert.equal(K.fibZiel(), 49, "3500 kcal -> 49 g");
+  E.goals.fib = 40;
+  assert.equal(K.zielFuer("fib"), 40, "eigener Wert schlägt die Ableitung");
+  E.goals.fib = 0;
+  assert.equal(K.zielFuer("fib"), 49, "eine 0 gilt nicht als eigener Wert");
+  assert.equal(K.zielFuer("p"), E.goals.p, "die Makros kommen unverändert aus den Zielen");
+});
+
+test("Ballaststoffe: vierter Ring in der Tagesübersicht, mit Prozent und Rest", () => {
+  const h = loadApp({}, OPT), K = h.ctx.__essen, E = K.E(), d = K.setDay && null;
+  E.days[new Date().toISOString().slice(0, 10)] = { e: [{ id: "x", food: "hafer", amt: 100 }], acts: [] };
+  h.ctx.renderEssen();
+  const sum = h.el("eSum").innerHTML;
+  assert.ok(sum.includes('data-m="fib"'), "der Ring ist da und antippbar");
+  assert.equal((sum.match(/class="ering"/g) || []).length, 4, "vier Ringe, nicht drei");
+  assert.ok(sum.includes("Fasern"), "mit kurzer Beschriftung");
+  assert.ok(/1[0-9] g übrig/.test(sum) || /g übrig/.test(sum), "darunter steht, wie viel noch fehlt");
+});
